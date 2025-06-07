@@ -18,8 +18,8 @@ class FCN(nn.Module):
         super().__init__()
         
         
-        if len(h_dims) < 4:
-            raise ValueError('This module is designed for networks deeper than 4 layers.')
+        if len(h_dims) < 2:
+            raise ValueError('This module is designed for networks deeper than 2 layers.')
         
         self.input_dim = input_dim
         self.h_dims = h_dims
@@ -45,52 +45,6 @@ class FCN(nn.Module):
             self.metric = metric
             
     
-    def reuse_weights(self, old_state: dict):
-        """
-        Load weights from a smaller FCN model state_dict into this wider model.
-        Copies the first `old_hidden` neurons exactly, and leaves the rest of the weights as they are initialized.
-
-        Args:
-            old_model_or_state: state dict of an FCN instance.
-            init_std: standard deviation for normal init of new weights.
-        """
-        # TODO implement this function
-            
-    def reuse_weights_and_freeze(self, old_state: dict):
-        """
-        Load weights from a smaller FC4 model state_dict into this wider model,
-        and **freeze** the loaded weights (prevent them from training) using
-        gradient hooks.
-
-        Args:
-            old_state: state dict of a smaller FCN instance.
-        """
-
-        self.reuse_weights(old_state)
-
-        # TODO implement this function
-
-
-    def remove_freeze_hooks(self):
-        """Removes any gradient hooks previously attached by reuse_weights_and_freeze."""
-        if hasattr(self, '_freeze_handles'):
-            for handle in self._freeze_handles:
-                handle.remove()
-        self._freeze_handles = []
-
-
-    def log_stats(self):
-        """
-        Calculates and returns a dictionary containing the mean and standard deviation
-        of the reused and non-reused weights and biases.
-
-        Returns:
-            dict: A dictionary where keys are parameter names (e.g., 'h1.weight_reused_mean')
-                  and values are the corresponding statistics.
-        """
-    
-        # TODO implement this function
-
 
     def training_step(self, x, y, use_amp=False):        
         with autocast('cuda', enabled=use_amp):

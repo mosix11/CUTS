@@ -3,7 +3,7 @@ from torchvision import datasets
 import torchvision.transforms.v2 as transforms
 from torch.utils.data import Dataset, DataLoader, random_split
 from torch.utils.data import Subset
-from .utils import LabelRemapper, NoisyDataset
+from .utils import LabelRemapper, NoisyDataset, apply_label_noise
 
 import os
 import sys
@@ -144,92 +144,7 @@ class MNIST:
     #         dataset.is_noisy = noise_mask
     #     return dataset
     
-    def _apply_label_noise(self, dataset):
-        # Create a temporary list to store the original indices for noise mapping
-        # and a reference to the actual base dataset where targets reside.
-        base_dataset = dataset
-        original_indices = []
-        is_subset_from_split = False
 
-        # Traverse wrappers to find the original MNIST dataset and its original indices
-        while isinstance(base_dataset, Subset) or isinstance(base_dataset, LabelRemapper):
-            if isinstance(base_dataset, LabelRemapper):
-                # We need to go through LabelRemapper to get to its base
-                base_dataset = base_dataset.base
-            elif isinstance(base_dataset, Subset):
-                # If we're inside a Subset, store its indices and move to its base dataset
-                # This ensures we get the chain of indices correct
-                if not original_indices: # First Subset encountered
-                    original_indices = list(base_dataset.indices)
-                else: # Nested Subset, update indices
-                    # Map the current Subset's indices through the previous Subset's indices
-                    original_indices = [original_indices[i] for i in base_dataset.indices]
-                
-                base_dataset = base_dataset.dataset # Move to the wrapped dataset
-
-                # Special handling: if random_split creates the Subset, it's a critical point
-                # because the targets within this Subset are 'viewed' from its parent.
-                # The 'num_samples' for noise generation should be based on THIS subset's length.
-                # However, noise should be applied to the 'targets' attribute of the *base* dataset.
-                if len(original_indices) == len(dataset): # This Subset corresponds to the 'current' dataset being passed in
-                    is_subset_from_split = True
-
-        # `base_dataset` is now the actual MNIST dataset (or the result of initial class subsetting if it was a Subset of MNIST initially).
-        # `original_indices` now contains the indices that map from the `dataset` being passed in
-        # back to the `base_dataset`'s `targets` array.
-
-        # If `original_indices` is empty, it means `dataset` was not a `Subset` or `LabelRemapper`
-        # and is directly the base_dataset (e.g., if no subsampling, no random_split, no class subset).
-        if not original_indices:
-            # If no subsets were involved before this point, just use direct indices
-            original_indices = list(range(len(dataset)))
-        
-        # num_samples should be the length of the dataset currently being processed,
-        # not the full base_dataset, as we only want to apply noise to the samples
-        # present in this particular split (e.g., the training split from random_split).
-        num_samples = len(dataset)
-
-
-        num_classes = len(self.class_subset) if self.class_subset else 10
-
-        # Generate random numbers to decide which labels to flip for the *current* batch of samples
-        noise_mask_for_current_samples = torch.rand(num_samples, generator=self.generator) < self.label_noise
-
-        # Get the original labels for the samples in the current dataset
-        # We need to map `dataset.indices` (which map into its `base`'s targets)
-        # to the actual `targets` array of the `base_dataset`.
-        
-        # Get labels from the base_dataset, using the correct original_indices
-        original_labels = base_dataset.targets[original_indices].clone().detach()
-
-        # Generate random incorrect labels
-        random_labels = torch.randint(0, num_classes, (num_samples,), generator=self.generator)
-
-        # Ensure the random labels are different from the original labels
-        incorrect_mask = (random_labels == original_labels)
-        while incorrect_mask.any():
-            new_random_labels = torch.randint(0, num_classes, (incorrect_mask.sum(),), generator=self.generator)
-            random_labels[incorrect_mask] = new_random_labels
-            incorrect_mask = (random_labels == original_labels)
-
-        # Apply the noise to the labels for the *current* samples
-        noisy_labels_for_current_samples = torch.where(noise_mask_for_current_samples, random_labels, original_labels)
-
-        # Update the dataset targets on the `base_dataset` using the `original_indices`
-        # This is where the actual modification of the underlying MNIST targets happens.
-        base_dataset.targets[original_indices] = noisy_labels_for_current_samples
-
-        # Initialize or update the `is_noisy` flag on the `base_dataset`
-        if not hasattr(base_dataset, 'is_noisy'):
-            base_dataset.is_noisy = torch.zeros(len(base_dataset.targets), dtype=torch.bool)
-        
-        # Set the `is_noisy` flag for the specific samples that had their labels flipped.
-        # This mask must also be applied using the `original_indices` mapping to the base_dataset.
-        base_dataset.is_noisy[original_indices] = noise_mask_for_current_samples
-
-        # The function should return the original `dataset` object (which might be a wrapper)
-        # because the changes were applied to its base.
-        return dataset
 
     def _init_loaders(self):
         train_dataset = datasets.MNIST(
@@ -289,7 +204,7 @@ class MNIST:
             
             
         if self.label_noise > 0.0:
-            trainset = self._apply_label_noise(trainset)
+            trainset = apply_label_noise(trainset)
             
         trainset = NoisyDataset(trainset, is_noisy_applied=self.label_noise > 0.0)
         if valset is not None:
