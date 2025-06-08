@@ -1,44 +1,40 @@
 import torch
 from torchvision import datasets
 import torchvision.transforms.v2 as transforms
-from torch.utils.data import Dataset, DataLoader, random_split
-from torch.utils.data import Subset
+from torch.utils.data import Dataset, DataLoader, random_split, Subset
+
 from .utils import LabelRemapper, NoisyDataset, apply_label_noise
 
 import os
-import sys
 from pathlib import Path
 import random
 import numpy as np
-from typing import Tuple, List
+from typing import Tuple, List, Union, Dict
 
 class CIFAR10:
-    
-
     def __init__(
         self,
         data_dir: Path = Path("./data").absolute(),
         batch_size: int = 256,
         img_size: tuple = (32, 32),
-        subsample_size: Tuple[int, int] = (-1, -1), # (TrainSet size, TestSet size)
+        subsample_size: Tuple[int, int] = (-1, -1),
         class_subset: list = [],
         remap_labels: bool = False,
         balance_classes: bool = False,
         label_noise: float = 0.0,
+        heldout_conf: Union[None, Tuple[float, bool], Dict[int, Tuple[float, bool]]] = None,
         grayscale: bool = False,
         augmentations: list = [],
         normalize_imgs: bool = False,
-        flatten: bool = False,  # Whether to flatten images to vectors
+        flatten: bool = False,
         valset_ratio: float = 0.05,
         num_workers: int = 2,
         seed: int = None,
     ) -> None:
-
         super().__init__()
 
-        
         data_dir.mkdir(exist_ok=True, parents=True)
-        dataset_dir = data_dir / Path("CIFAR10")
+        dataset_dir = data_dir / "CIFAR10"
         dataset_dir.mkdir(exist_ok=True, parents=True)
         self.dataset_dir = dataset_dir
 
@@ -46,18 +42,24 @@ class CIFAR10:
         self.img_size = img_size
         self.num_workers = num_workers
         self.subsample_size = subsample_size
-        self.class_subset = class_subset
+        self.class_subset = sorted(class_subset) if class_subset else None
         self.remap_labels = remap_labels
         self.balance_classes = balance_classes
         self.label_noise = label_noise
+        self.heldout_conf = heldout_conf
         self.grayscale = grayscale
         self.augmentations = augmentations
         self.normalize_imgs = normalize_imgs
-        
-        self.flatten = flatten  # Store the flatten argument
-        self.trainset_ration = 1 - valset_ratio
+        self.flatten = flatten
         self.valset_ratio = valset_ratio
-        
+        self.trainset_ratio = 1 - self.valset_ratio
+
+        # *** FIX: Define the universe of available classes ***
+        if self.class_subset:
+            self.available_classes = self.class_subset
+        else:
+            self.available_classes = list(range(10)) # All CIFAR-10 classes
+
         self.generator = None
         if seed:
             self.seed = seed
@@ -65,44 +67,27 @@ class CIFAR10:
             np.random.seed(seed)
             torch.manual_seed(seed)
             torch.cuda.manual_seed_all(seed)
-            self.generator = torch.Generator()
-            self.generator.manual_seed(self.seed)
+            self.generator = torch.Generator().manual_seed(self.seed)
 
         self._init_loaders()
-        
+
     def get_transforms(self, train=True):
         trnsfrms = []
-
         if self.img_size != (32, 32):
             trnsfrms.append(transforms.Resize(self.img_size))
-
         if self.grayscale:
             trnsfrms.append(transforms.Grayscale(num_output_channels=1))
-
         if len(self.augmentations) > 0 and train:
-            print('Augmentation active')
-            # trnsfrms.append(transforms.RandomCrop(32, padding=4))
-            # trnsfrms.append(transforms.RandomHorizontalFlip())    
-            trnsfrms.extend(self.augmentations) 
-
+            trnsfrms.extend(self.augmentations)
         trnsfrms.extend([
-            transforms.ToImage(),  # Convert PIL Image/NumPy to tensor
-            transforms.ToDtype(
-                torch.float32, scale=True
-            ),  # Scale to [0.0, 1.0] and set dtype
+            transforms.ToImage(),
+            transforms.ToDtype(torch.float32, scale=True),
         ])
-
         if self.normalize_imgs:
-            mean, std = (
-                (0.5,), (0.5,)
-                if self.grayscale
-                else ((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)) # Values Specific to CIFAR
-            )
+            mean, std = ((0.5,), (0.5,)) if self.grayscale else ((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
             trnsfrms.append(transforms.Normalize(mean, std))
-
         if self.flatten:
-            trnsfrms.append(transforms.Lambda(lambda x: torch.flatten(x)))  # Use Lambda for flattening
-
+            trnsfrms.append(transforms.Lambda(lambda x: torch.flatten(x)))
         return transforms.Compose(trnsfrms)
 
     def get_train_dataloader(self):
@@ -113,24 +98,21 @@ class CIFAR10:
 
     def get_test_dataloader(self):
         return self.test_loader
+
+    def get_heldout_dataloader(self):
+        return self.heldout_loader
     
+    # ... (other methods like get_identifier, _get_balanced_subset remain the same) ...
     def get_identifier(self):
         identifier = 'cifar10|'
         identifier += f'ln{self.label_noise}|'
         identifier += 'aug|' if len(self.augmentations) > 0 else 'noaug|'
         identifier += f'subsample{self.subsample_size}' if self.subsample_size != (-1, -1) else 'full'
         return identifier
-
-
-
+    
     def _get_balanced_subset(self, dataset: Dataset, total_size: int, class_subset: list, generator: torch.Generator) -> Subset:
-        """
-        Performs stratified sampling to get a balanced subset of data.
-        """
         num_classes = len(class_subset)
         if total_size == -1 or total_size is None:
-             # If subsample size for this split is not specified, do nothing.
-             # This can happen if subsample_size is e.g. (1000, -1)
              return dataset
 
         if total_size % num_classes != 0:
@@ -140,100 +122,156 @@ class CIFAR10:
             )
         
         samples_per_class = total_size // num_classes
-        print(f"Performing balanced sampling: {samples_per_class} samples per class for {num_classes} classes.")
-
-        targets = torch.tensor(dataset.targets)
         
+        # This approach is robust to `dataset` being a Subset
+        labels = [dataset[i][1] for i in range(len(dataset))]
+        indices_by_class = {cls: [] for cls in class_subset}
+        for i, label in enumerate(labels):
+            if label in indices_by_class:
+                indices_by_class[label].append(i)
+
         final_indices = []
         for class_label in class_subset:
-            # Find all indices in the original dataset for the current class
-            class_indices = torch.where(targets == class_label)[0]
-            
+            class_indices = indices_by_class[class_label]
             if len(class_indices) < samples_per_class:
                 raise ValueError(
-                    f"Cannot sample {samples_per_class} instances for class {class_label}, "
-                    f"as only {len(class_indices)} are available in the dataset."
+                    f"Cannot sample {samples_per_class} for class {class_label}, "
+                    f"as only {len(class_indices)} are available in the filtered dataset."
                 )
-                
-            # Randomly select 'samples_per_class' indices
-            perm = torch.randperm(len(class_indices), generator=generator)
-            selected_indices = class_indices[perm[:samples_per_class]]
-            final_indices.extend(selected_indices.tolist())
             
-        # Shuffle the final list to ensure batches are not ordered by class
-        final_indices_tensor = torch.tensor(final_indices)
-        shuffled_perm = torch.randperm(len(final_indices_tensor), generator=generator)
-        shuffled_final_indices = final_indices_tensor[shuffled_perm].tolist()
+            perm = torch.randperm(len(class_indices), generator=generator)
+            selected_indices = [class_indices[i] for i in perm[:samples_per_class]]
+            final_indices.extend(selected_indices)
+            
+        shuffled_perm = torch.randperm(len(final_indices), generator=generator)
+        shuffled_final_indices = torch.tensor(final_indices)[shuffled_perm].tolist()
 
         return Subset(dataset, shuffled_final_indices)
 
     def _init_loaders(self):
-        train_dataset = datasets.CIFAR10(
-            root=self.dataset_dir, train=True, transform=self.get_transforms(train=True), download=True
-        )
-        test_dataset = datasets.CIFAR10(
-            root=self.dataset_dir, train=False, transform=self.get_transforms(train=False), download=True
-        )
-        
-        
-        use_balanced_sampling = self.balance_classes and self.class_subset and self.subsample_size != (-1, -1)
+        # The logic in this method is mostly the same, as the fixes are concentrated
+        # in __init__ and _split_heldout_set.
+        full_train_dataset = datasets.CIFAR10(root=self.dataset_dir, train=True, transform=self.get_transforms(train=True), download=True)
+        test_dataset = datasets.CIFAR10(root=self.dataset_dir, train=False, transform=self.get_transforms(train=False), download=True)
 
-        if use_balanced_sampling:
-            # The new balanced (stratified) subsampling path
+        if self.class_subset:
+            test_idxs = [i for i, lbl in enumerate(test_dataset.targets) if lbl in self.class_subset]
+            test_dataset = Subset(test_dataset, test_idxs)
+        
+        if self.subsample_size[1] != -1:
+            test_indices = torch.randperm(len(test_dataset), generator=self.generator)[:self.subsample_size[1]]
+            test_dataset = Subset(test_dataset, test_indices.tolist())
+
+        train_dataset = full_train_dataset
+
+        if self.class_subset:
+            train_idxs = [i for i, lbl in enumerate(train_dataset.targets) if lbl in self.class_subset]
+            train_dataset = Subset(train_dataset, train_idxs)
+        
+        if self.balance_classes and self.class_subset and self.subsample_size[0] != -1:
             train_dataset = self._get_balanced_subset(train_dataset, self.subsample_size[0], self.class_subset, self.generator)
-            test_dataset = self._get_balanced_subset(test_dataset, self.subsample_size[1], self.class_subset, self.generator)
-        else:
-            # The original path for unbalanced or no subsampling
-            if self.class_subset:
-                train_idxs = [i for i, lbl in enumerate(train_dataset.targets) if lbl in self.class_subset]
-                train_dataset = Subset(train_dataset, train_idxs)
+        elif self.subsample_size[0] != -1:
+            train_indices = torch.randperm(len(train_dataset), generator=self.generator)[:self.subsample_size[0]]
+            train_dataset = Subset(train_dataset, train_indices.tolist())
 
-                test_idxs = [i for i, lbl in enumerate(test_dataset.targets) if lbl in self.class_subset]
-                test_dataset = Subset(test_dataset, test_idxs)
-            
-            if self.subsample_size != (-1, -1):
-                if self.subsample_size[0] != -1:
-                    train_indices = torch.randperm(len(train_dataset), generator=self.generator)[:self.subsample_size[0]]
-                    train_dataset = Subset(train_dataset, train_indices.tolist())
-                if self.subsample_size[1] != -1:
-                    test_indices = torch.randperm(len(test_dataset), generator=self.generator)[:self.subsample_size[1]]
-                    test_dataset = Subset(test_dataset, test_indices.tolist())
+        self.heldout_set = None
+        noisy_heldout = False
+        if self.heldout_conf is not None:
+            if isinstance(self.heldout_conf, tuple):
+                noisy_heldout = self.heldout_conf[1]
+            elif isinstance(self.heldout_conf, dict):
+                noisy_heldout = all(v[1] for v in self.heldout_conf.values())
 
+            if not noisy_heldout:
+                train_dataset, self.heldout_set = self._split_heldout_set(train_dataset)
 
-        if self.valset_ratio == 0.0:
-            trainset = train_dataset
-            valset = None
-        else:
-            trainset, valset = random_split(
-                train_dataset, [self.trainset_ration, self.valset_ratio], generator=self.generator
-            )
-        testset = test_dataset
+        if self.label_noise > 0.0:
+            train_dataset = apply_label_noise(train_dataset, self.label_noise, self.available_classes, self.generator)
         
-        if self.class_subset and self.remap_labels:
+        if self.heldout_conf is not None and noisy_heldout:
+            train_dataset, self.heldout_set = self._split_heldout_set(train_dataset)
+        
+        if self.valset_ratio > 0.0 and len(train_dataset) > 1:
+            trainset, valset = random_split(train_dataset, [self.trainset_ratio, self.valset_ratio], generator=self.generator)
+        else:
+            trainset, valset = train_dataset, None
+
+        if self.remap_labels and self.class_subset:
             mapping = {orig: new for new, orig in enumerate(self.class_subset)}
             trainset = LabelRemapper(trainset, mapping)
-            if valset is not None:
-                valset = LabelRemapper(valset, mapping)
-            testset  = LabelRemapper(testset,  mapping)
-   
-        if self.label_noise > 0.0:
-            trainset = apply_label_noise(trainset, self.label_noise, self.class_subset, self.generator)
-            
-        trainset = NoisyDataset(trainset, is_noisy_applied=self.label_noise > 0.0)
-        if valset is not None:
-            valset = NoisyDataset(valset, is_noisy_applied=False)
-        testset = NoisyDataset(testset, is_noisy_applied=False)
-        
-        self.train_loader = self._build_dataloader(trainset)
-        self.val_loader = self._build_dataloader(valset) if valset else None
-        self.test_loader = self._build_dataloader(testset)
+            if valset: valset = LabelRemapper(valset, mapping)
+            test_dataset = LabelRemapper(test_dataset, mapping)
+            if self.heldout_set: self.heldout_set = LabelRemapper(self.heldout_set, mapping)
 
-    def _build_dataloader(self, dataset):
+        self.trainset = NoisyDataset(trainset, is_noisy_applied=self.label_noise > 0.0)
+        self.valset = NoisyDataset(valset, is_noisy_applied=False) if valset else None
+        self.testset = NoisyDataset(test_dataset, is_noisy_applied=False)
+        if self.heldout_set:
+            is_noisy = noisy_heldout and self.label_noise > 0.0
+            self.heldout_set = NoisyDataset(self.heldout_set, is_noisy_applied=is_noisy)
+        
+        self.train_loader = self._build_dataloader(self.trainset, shuffle=True)
+        self.val_loader = self._build_dataloader(self.valset) if self.valset else None
+        self.test_loader = self._build_dataloader(self.testset)
+        self.heldout_loader = self._build_dataloader(self.heldout_set) if self.heldout_set else None
+
+
+    def _split_heldout_set(self, dataset: Dataset):
+        """
+        Splits a dataset into a training part and a held-out part based on heldout_conf.
+        This method is now robust and performs stratified sampling for tuple configurations.
+        """
+        indices_in_view = list(range(len(dataset)))
+        labels_in_view = [dataset[i][1] for i in indices_in_view]
+        
+        indices_by_class = {}
+        for idx, label in zip(indices_in_view, labels_in_view):
+            label_item = label.item() if isinstance(label, torch.Tensor) else label
+            if label_item not in indices_by_class:
+                indices_by_class[label_item] = []
+            indices_by_class[label_item].append(idx)
+        
+        heldout_view_indices = []
+        if isinstance(self.heldout_conf, tuple):
+            # *** FIX: Perform stratified sampling for tuples ***
+            # Hold out a portion of *each available class*.
+            ratio, _ = self.heldout_conf
+            for class_label in self.available_classes:
+                if class_label in indices_by_class:
+                    class_view_indices = indices_by_class[class_label]
+                    num_to_hold = int(len(class_view_indices) * ratio)
+                    if num_to_hold > 0:
+                        perm = torch.randperm(len(class_view_indices), generator=self.generator)
+                        heldout_view_indices.extend([class_view_indices[i] for i in perm[:num_to_hold]])
+
+        elif isinstance(self.heldout_conf, dict):
+            # *** FIX: Robustly handle dicts with or without class_subset ***
+            # Sanitize keys to be integers, just in case
+            safe_conf = {int(k): v for k, v in self.heldout_conf.items()}
+            for class_label, (ratio, _) in safe_conf.items():
+                if class_label in indices_by_class:
+                    class_view_indices = indices_by_class[class_label]
+                    num_to_hold = int(len(class_view_indices) * ratio)
+                    if num_to_hold > 0:
+                        perm = torch.randperm(len(class_view_indices), generator=self.generator)
+                        heldout_view_indices.extend([class_view_indices[i] for i in perm[:num_to_hold]])
+        
+        if not heldout_view_indices:
+            # If no indices were selected, return the original dataset and an empty set
+            return dataset, None
+
+        train_view_indices = [i for i in indices_in_view if i not in heldout_view_indices]
+        
+        return Subset(dataset, train_view_indices), Subset(dataset, heldout_view_indices)
+
+    def _build_dataloader(self, dataset, shuffle=False):
+        if not dataset or len(dataset) == 0:
+            return None
         return DataLoader(
             dataset,
             batch_size=self.batch_size,
-            shuffle=False, # TODO fix
+            shuffle=shuffle,
             num_workers=self.num_workers,
             pin_memory=True,
-            generator=self.generator
+            generator=self.generator,
         )

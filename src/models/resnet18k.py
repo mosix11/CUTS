@@ -49,7 +49,7 @@ class PreActResNet(nn.Module):
         init_channels=64,
         weight_init=None,
         loss_fn=nn.CrossEntropyLoss,
-        metric=None,
+        metrics:dict=None,
     ):
         super(PreActResNet, self).__init__()
         self.in_planes = init_channels
@@ -71,8 +71,12 @@ class PreActResNet(nn.Module):
         if not loss_fn:
             raise RuntimeError('The loss function must be specified!')
         self.loss_fn = loss_fn
-        if metric:
-            self.metric = metric
+        
+        
+        self.metrics = nn.ModuleDict()
+        if metrics:
+            for name, metric_instance in metrics.items():
+                self.metrics[name] = metric_instance
 
     def _make_layer(self, block, planes, num_blocks, stride):
         # eg: [2, 1, 1, ..., 1]. Only the first one downsamples.
@@ -98,25 +102,46 @@ class PreActResNet(nn.Module):
         with autocast("cuda", enabled=use_amp):
             preds = self(x)
             loss = self.loss_fn(preds, y)
-        if self.metric:
-            met = self.metric(preds, y)
-            return loss, met
-        else:
-            return loss, None
-
+        if self.metrics:
+            for name, metric in self.metrics.items():
+                metric.update(preds, y)
+        return loss
+    
     def validation_step(self, x, y, use_amp=False):
         with torch.no_grad():
             with autocast("cuda", enabled=use_amp):
                 preds = self(x)
                 loss = self.loss_fn(preds, y)
-        if self.metric:
-            met = self.metric(preds, y)
-            return loss, met
-        else:
-            return loss, None
+        if self.metrics:
+            for name, metric in self.metrics.items():
+                metric.update(preds, y)
+        return loss
+
+
+    def compute_metrics(self):
+        results = {}
+        if self.metrics: 
+            for name, metric in self.metrics.items():
+                results[name] = metric.compute()
+        return results
+    
+    def reset_metrics(self):
+        if self.metrics:
+            for name, metric in self.metrics.items():
+                metric.reset()
 
     def get_identifier(self):
         return f"resnet18|k{self.k}"
+    
+    
+
+    def _count_trainable_parameters(self):
+        """
+        Counts and returns the total number of trainable parameters in the model.
+        These are the parameters whose gradients are computed and are updated during backpropagation.
+        """
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)
+    
 
 def make_resnet18k(
     k=64, num_classes=10, weight_init=None, loss_fn=nn.CrossEntropyLoss, metric=None

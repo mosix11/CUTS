@@ -231,16 +231,11 @@ class TrainerGS:
 
         self.fit_model()
 
-        final_train_results = self.evaluate(set='train')
-        final_test_results = self.evaluate(set='test')
-        
+        final_results = {}
+        final_results.update(self.evaluate(set='Train'))
+        final_results.update(self.evaluate(set='Test'))
         results = {
-            'final': {
-                'Train/Loss': final_train_results['loss'],
-                'Train/ACC': final_train_results['acc'],
-                'Test/Loss': final_test_results['loss'],
-                'Test/ACC': final_test_results['acc']
-            },
+            'final': final_results,
         }
 
         if self.save_best_model:
@@ -270,7 +265,7 @@ class TrainerGS:
         while self.g_step < self.max_gradient_steps:
             
             epoch_train_loss = misc_utils.AverageMeter()
-            epoch_train_acc = misc_utils.AverageMeter()
+            
             for i, batch in enumerate(self.train_dataloader):
                 input_batch, target_batch, is_noisy = self.prepare_batch(batch)
 
@@ -293,31 +288,36 @@ class TrainerGS:
 
 
                 epoch_train_loss.update(loss.detach().cpu().item(), n=input_batch.shape[0])
-                epoch_train_acc.update(metric.detach().cpu().item(), input_batch.shape[0])
                 
+                
+            metrics_results = self.model.compute_metrics()
+            self.model.reset_metrics()
             
             statistics = {
                 'Train/Loss': epoch_train_loss.avg,
-                'Train/ACC': epoch_train_acc.avg,
                 'Train/LR': self.optim.param_groups[0]['lr']
             }
+            for met_name, met_val in metrics_results:
+                stat_key = f"Train/{met_name}"
+                statistics[stat_key] = met_val
             
-            if epoch_train_loss.avg == 0.0 or epoch_train_acc.avg == 1.0:
+            if epoch_train_loss.avg == 0.0 or metrics_results['ACC'] == 1.0:
                 if self.early_stopping: self.early_stop = True
             
             
             if self.validation_freq:
                 if (self.epoch+1) % self.validation_freq == 0:
-                    res = self.evaluate(set='test')
-                statistics['Test/Loss'] = res['loss']
-                statistics['Test/ACC'] = res['acc']
-                if self.save_best_model:
-                    if self.best_model_perf['Test/ACC'] < statistics['Test/ACC']:
-                        self.best_model_perf = copy.deepcopy(statistics)
-                        self.best_model_perf['epoch'] = self.epoch
-                        self.best_model_perf['gstep'] = self.g_step
-                        ckp_path = self.checkpoint_dir / Path('best_ckp.pth')
-                        self.save_full_checkpoint(ckp_path)
+                    res = self.evaluate(set='Test')
+                    for met, val in res.items():
+                        statistics[met] = val
+                        
+                    if self.save_best_model:
+                        if self.best_model_perf['Test/ACC'] < statistics['Test/ACC']:
+                            self.best_model_perf = copy.deepcopy(statistics)
+                            self.best_model_perf['epoch'] = self.epoch
+                            self.best_model_perf['gstep'] = self.g_step
+                            ckp_path = self.checkpoint_dir / Path('best_ckp.pth')
+                            self.save_full_checkpoint(ckp_path)
                         
             if self.checkpoint_freq > 0 and (self.epoch+1) % self.checkpoint_freq == 0:
                 ckp_path = self.checkpoint_dir / Path('resume_ckp.pth')
@@ -334,37 +334,39 @@ class TrainerGS:
             
     
     
-    def evaluate(self, set='val'):
+    def evaluate(self, set='Val'):
         self.model.eval()
+        self.model.reset_metrics()
         loss_met = misc_utils.AverageMeter()
-        acc_met = misc_utils.AverageMeter()
         
-        if set=='train':
-            for i, batch in enumerate(self.train_dataloader):
-                input_batch, target_batch, is_noisy = self.prepare_batch(batch)
-                loss, metric = self.model.validation_step(input_batch, target_batch, self.use_amp)
-                loss_met.update(loss.detach().cpu().item(), n=input_batch.shape[0])
-                acc_met.update(metric.detach().cpu().item(), input_batch.shape[0])
-        elif set=='val':
-            for i, batch in enumerate(self.val_dataloader):
-                input_batch, target_batch, is_noisy = self.prepare_batch(batch)
-                loss, metric = self.model.validation_step(input_batch, target_batch, self.use_amp)
-                loss_met.update(loss.detach().cpu().item(), n=input_batch.shape[0])
-                acc_met.update(metric.detach().cpu().item(), input_batch.shape[0])
-                
-        elif set=='test':
-            for i, batch in enumerate(self.test_dataloader):
-                input_batch, target_batch, is_noisy = self.prepare_batch(batch)
-                loss, metric = self.model.validation_step(input_batch, target_batch, self.use_amp)
-                loss_met.update(loss.detach().cpu().item(), n=input_batch.shape[0])
-                acc_met.update(metric.detach().cpu().item(), input_batch.shape[0])
-            
+        dataloader = None
+        if set == 'Train':
+            dataloader = self.train_dataloader
+        elif set == 'Val':
+            dataloader = self.val_dataloader
+        elif set == 'Test':
+            dataloader = self.test_dataloader
+        else:
+            raise ValueError("Invalid set specified. Choose 'train', 'val', or 'test'.")
+
+        
+        for i, batch in enumerate(dataloader):
+            input_batch, target_batch, is_noisy = self.prepare_batch(batch)
+            loss = self.model.validation_step(input_batch, target_batch, self.use_amp)
+            loss_met.update(loss.detach().cpu().item(), n=input_batch.shape[0])
+        
+        metrics_results = self.model.compute_metrics()
+        self.model.reset_metrics()
             
         results = {
-            'loss': loss_met.avg,
-            'acc': acc_met.avg
+            f"{set}/Loss": loss_met.avg,
         }
+        for met_name, met_val in metrics_results:
+            stat_key = f"{set}/{met_name}"
+            results[stat_key] = met_val
+            
         return results
+    
     
     def save_full_checkpoint(self, path):
         save_dict = {

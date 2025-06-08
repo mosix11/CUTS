@@ -7,6 +7,7 @@ from torch.amp import autocast
 from torch.optim.lr_scheduler import MultiStepLR, ReduceLROnPlateau, CosineAnnealingLR
 from .custom_lr_schedulers import InverseSquareRootLR
 
+from torchmetrics import ConfusionMatrix
 
 import os
 from pathlib import Path
@@ -251,16 +252,11 @@ class TrainerEp:
 
         
 
-        final_train_results = self.evaluate(set='train')
-        final_test_results = self.evaluate(set='test')
-        
+        final_results = {}
+        final_results.update(self.evaluate(set='Train'))
+        final_results.update(self.evaluate(set='Test'))
         results = {
-            'final': {
-                'Train/Loss': final_train_results['loss'],
-                'Train/ACC': final_train_results['acc'],
-                'Test/Loss': final_test_results['loss'],
-                'Test/ACC': final_test_results['acc']
-            },
+            'final': final_results,
         }
 
         if self.save_best_model:
@@ -286,7 +282,6 @@ class TrainerEp:
 
         # epoch_start_time = time.time()
         epoch_train_loss = misc_utils.AverageMeter()
-        epoch_train_acc = misc_utils.AverageMeter()
 
         
         if self.batch_prog:
@@ -303,7 +298,7 @@ class TrainerEp:
             
             self.optim.zero_grad()
             
-            loss, metric = self.model.training_step(input_batch, target_batch, self.use_amp)
+            loss = self.model.training_step(input_batch, target_batch, self.use_amp)
             
             if self.use_amp:
                 self.grad_scaler.scale(loss).backward()
@@ -314,7 +309,9 @@ class TrainerEp:
                 self.optim.step()
                 
             epoch_train_loss.update(loss.detach().cpu().item(), n=input_batch.shape[0])
-            epoch_train_acc.update(metric.detach().cpu().item(), input_batch.shape[0])
+            
+        
+            
         if self.lr_scheduler:
             self.lr_scheduler.step()
             
@@ -328,20 +325,25 @@ class TrainerEp:
         #     f"{int((time.time() - epoch_start_time)%60)} minutes"
         # )
         
+        metrics_results = self.model.compute_metrics()
+        self.model.reset_metrics()
+        
         statistics = {
             'Train/Loss': epoch_train_loss.avg,
-            'Train/ACC': epoch_train_acc.avg,
             'Train/LR': self.optim.param_groups[0]['lr']
         }
+        for met_name, met_val in metrics_results:
+            stat_key = f"Train/{met_name}"
+            statistics[stat_key] = met_val
             
-        if epoch_train_loss.avg == 0.0 or epoch_train_acc.avg == 1.0:
+        if epoch_train_loss.avg == 0.0 or metrics_results['ACC'] == 1.0:
             if self.early_stopping: self.early_stop = True
         
         if self.validation_freq > 0:
             if (self.epoch+1) % self.validation_freq == 0:
-                res = self.evaluate(set='test')
-                statistics['Test/Loss'] = res['loss']
-                statistics['Test/ACC'] = res['acc']
+                res = self.evaluate(set='Test')
+                for met, val in res.items():
+                    statistics[met] = val
                 if self.save_best_model:
                     if self.best_model_perf['Test/ACC'] < statistics['Test/ACC']:
                         self.best_model_perf = copy.deepcopy(statistics)
@@ -359,37 +361,70 @@ class TrainerEp:
         if self.log_comet:
             self.comet_experiment.log_metrics(statistics, step=self.epoch)
 
-    def evaluate(self, set='val'):
+
+
+    def evaluate(self, set='Val'):
         self.model.eval()
+        self.model.reset_metrics()
         loss_met = misc_utils.AverageMeter()
-        acc_met = misc_utils.AverageMeter()
         
-        if set=='train':
-            for i, batch in enumerate(self.train_dataloader):
-                input_batch, target_batch, is_noisy = self.prepare_batch(batch)
-                loss, metric = self.model.validation_step(input_batch, target_batch, self.use_amp)
-                loss_met.update(loss.detach().cpu().item(), n=input_batch.shape[0])
-                acc_met.update(metric.detach().cpu().item(), input_batch.shape[0])
-        elif set=='val':
-            for i, batch in enumerate(self.val_dataloader):
-                input_batch, target_batch, is_noisy = self.prepare_batch(batch)
-                loss, metric = self.model.validation_step(input_batch, target_batch, self.use_amp)
-                loss_met.update(loss.detach().cpu().item(), n=input_batch.shape[0])
-                acc_met.update(metric.detach().cpu().item(), input_batch.shape[0])
-                
-        elif set=='test':
-            for i, batch in enumerate(self.test_dataloader):
-                input_batch, target_batch, is_noisy = self.prepare_batch(batch)
-                loss, metric = self.model.validation_step(input_batch, target_batch, self.use_amp)
-                loss_met.update(loss.detach().cpu().item(), n=input_batch.shape[0])
-                acc_met.update(metric.detach().cpu().item(), input_batch.shape[0])
-            
+        dataloader = None
+        if set == 'Train':
+            dataloader = self.train_dataloader
+        elif set == 'Val':
+            dataloader = self.val_dataloader
+        elif set == 'Test':
+            dataloader = self.test_dataloader
+        else:
+            raise ValueError("Invalid set specified. Choose 'train', 'val', or 'test'.")
+
+        
+        for i, batch in enumerate(dataloader):
+            input_batch, target_batch, is_noisy = self.prepare_batch(batch)
+            loss = self.model.validation_step(input_batch, target_batch, self.use_amp)
+            loss_met.update(loss.detach().cpu().item(), n=input_batch.shape[0])
+        
+        metrics_results = self.model.compute_metrics()
+        self.model.reset_metrics()
             
         results = {
-            'loss': loss_met.avg,
-            'acc': acc_met.avg
+            f"{set}/Loss": loss_met.avg,
         }
+        for met_name, met_val in metrics_results:
+            stat_key = f"{set}/{met_name}"
+            results[stat_key] = met_val
+            
         return results
+    
+    
+    def confmat(self, set='val', num_classes=10):
+        self.model.eval()
+        
+        dataloader = None
+        if set == 'train':
+            dataloader = self.train_dataloader
+        elif set == 'val':
+            dataloader = self.val_dataloader
+        elif set == 'test':
+            dataloader = self.test_dataloader
+        else:
+            raise ValueError("Invalid set specified. Choose 'train', 'val', or 'test'.")
+        
+        all_preds = []
+        all_targets = []
+        
+        for i, batch in enumerate(dataloader):
+            input_batch, target_batch, is_noisy = self.prepare_batch(batch)
+            model_output = self.model.predict(input_batch) # Get raw model output (logits)
+            predictions = torch.argmax(model_output, dim=-1) # Get predicted class labels
+            
+            all_preds.extend(predictions.detach().cpu())
+            all_targets.extend(target_batch.detach().cpu())
+            
+        confmat = ConfusionMatrix(task="multiclass", num_classes=num_classes)
+        cm = confmat(torch.tensor(all_preds), torch.tensor(all_targets))
+        return cm
+        
     
     
     def save_full_checkpoint(self, path):

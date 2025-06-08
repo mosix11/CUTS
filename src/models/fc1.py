@@ -13,7 +13,7 @@ class FC1(nn.Module):
         output_dim=10,
         weight_init=None,
         loss_fn=None,
-        metric=None,
+        metrics:dict=None,
     ):
         super().__init__()
         
@@ -30,9 +30,13 @@ class FC1(nn.Module):
         if not loss_fn:
             raise RuntimeError('The loss function must be specified!')
         self.loss_fn = loss_fn
-        if metric:
-            self.metric = metric
+        
+        self.metrics = nn.ModuleDict()
+        if metrics:
+            for name, metric_instance in metrics.items():
+                self.metrics[name] = metric_instance
             
+        
     
     def reuse_weights(self, old_state: dict):
         """
@@ -226,10 +230,10 @@ class FC1(nn.Module):
                 loss = self.loss_fn(preds, y_onehot)
             else:
                 loss = self.loss_fn(preds, y)
-        if self.metric:
-            met = self.metric(preds, y)
-            return loss, met
-        else: return loss, None
+        if self.metrics:
+            for name, metric in self.metrics.items():
+                metric.update(preds, y)
+        return loss
         
     def validation_step(self, x, y, use_amp=False):
         with torch.no_grad():
@@ -240,11 +244,23 @@ class FC1(nn.Module):
                     loss = self.loss_fn(preds, y_onehot)
                 else:
                     loss = self.loss_fn(preds, y)
-        if self.metric:
-            met = self.metric(preds, y)
-            return loss, met
-        else: return loss, None
+        if self.metrics:
+            for name, metric in self.metrics.items():
+                metric.update(preds, y)
+        return loss
+
+
+    def compute_metrics(self):
+        results = {}
+        if self.metrics: 
+            for name, metric in self.metrics.items():
+                results[name] = metric.compute()
+        return results
     
+    def reset_metrics(self):
+        if self.metrics:
+            for name, metric in self.metrics.items():
+                metric.reset()
     
     def predict(self, x):
         with torch.no_grad():
@@ -259,7 +275,7 @@ class FC1(nn.Module):
     def get_identifier(self):
         return f"fc1|h{self.hidden_dim}|p{self._count_trainable_parameters()}"
     
-    
+
     
     def _count_trainable_parameters(self):
         """

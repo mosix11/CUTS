@@ -16,7 +16,7 @@ import os
 import dotenv
 
 
-def plot_confusion_matrix(cm, class_names=None, title='Confusion Matrix', filename='confusion_matrix_pretrained.png'):
+def plot_confusion_matrix(cm, class_names=None, title='Confusion Matrix', filename='confusion_matrix_finetuned.png'):
     """
     Plots the confusion matrix and saves it to a file.
 
@@ -37,10 +37,13 @@ def plot_confusion_matrix(cm, class_names=None, title='Confusion Matrix', filena
     plt.savefig(filename)
     plt.close() # Close the plot to free memory
 
+
+
+
 def train_fc_cifar10(outputs_dir: Path):
-    max_epochs = 600
+    max_epochs = 500
     # subsample_size = (30,1000)
-    batch_size = 1024
+    batch_size = 512
     img_size = (16,16)
     class_subset = []
     remap_labels = False
@@ -48,6 +51,10 @@ def train_fc_cifar10(outputs_dir: Path):
     label_noise = 0.0
     
     # heldout_conf = (0.7, True)
+    heldout_conf = {
+        2: (0.9, False),
+        5: (0.9, False)
+    }
     # heldout_conf = {
     #     0: (0.2, False),
     #     1: (0.2, False),
@@ -60,11 +67,6 @@ def train_fc_cifar10(outputs_dir: Path):
     #     8: (0.2, False),
     #     9: (0.2, False),
     # }
-    heldout_conf = {
-        2: (0.7, False),
-        5: (0.7, False)
-    }
-    
     
     grayscale = True
     flatten = True
@@ -91,7 +93,7 @@ def train_fc_cifar10(outputs_dir: Path):
         remap_labels=remap_labels,
         balance_classes=balance_classes,
         label_noise=label_noise,
-        # heldout_conf=heldout_conf,
+        heldout_conf=heldout_conf,
         # augmentations=augmentations,
         normalize_imgs=normalize_imgs,
         valset_ratio=0.0,
@@ -100,10 +102,11 @@ def train_fc_cifar10(outputs_dir: Path):
         seed=dataset_seed,
     )
     
+    dataset.train_loader = dataset.heldout_loader
     
     optim_cgf = {
         'type': 'adam',
-        'lr': 1e-4,
+        'lr': 1e-7,
         'betas': (0.9, 0.999)
     }
     lr_schedule_cfg = None
@@ -115,38 +118,26 @@ def train_fc_cifar10(outputs_dir: Path):
         'ACC': acc_metric,
         'F1': f1_metric
     }
-    
     # weight_init_method = partial(nn_utils.init_normal, mean=0.0, std=0.1)
     
-    # model = FC1(
-    #         input_dim=256,
-    #         hidden_dim=4096,
-    #         output_dim=10,
-    #         # weight_init=weight_init_method,
-    #         loss_fn=loss_fn,
-    #         metric=acc_metric,
-    #     )
-    
     model = FC1(
-        input_dim=256,
-        hidden_dim=4096,
-        output_dim=10,
-        # weight_init=weight_init_method,
-        loss_fn=loss_fn,
-        metric=metrics,
-    )
+            input_dim=256,
+            hidden_dim=4096,
+            output_dim=10,
+            # weight_init=weight_init_method,
+            loss_fn=loss_fn,
+            metric=metrics,
+        )
     
-    experiment_name = model.get_identifier() + '_' + dataset.get_identifier() + f"_seeds{training_seed}+{dataset_seed}"
-    experiment_name += '_' + f"{optim_cgf['type']}|lr{optim_cgf['lr']}|b{batch_size}"
-    if use_amp: 
-        experiment_name += "|AMP" 
-    else: 
-        experiment_name += "|noAMP"
-    if lr_schedule_cfg: 
-        experiment_name += f"|{lr_schedule_cfg['type']}"
-    experiment_name += 'FullTraining'
+    # experiment_name = "fc1|h4096|p1093642_cifar10|ln0.0|noaug|full_seeds11+11_adam|lr0.0001|b1024|AMP"
+    experiment_name = "fc1|h4096|p1093642_cifar10|ln0.0|noaug|full_seeds11+11_adam|lr0.0001|b1024|AMPFullTraining"
     experiment_tags = experiment_name.split('_')
     
+    base_model_ckp_path = outputs_dir / Path(experiment_name) / Path('checkpoint/final_ckp.pth')
+    checkpoint = torch.load(base_model_ckp_path)
+    model.load_state_dict(checkpoint["model_state"])
+    
+    experiment_name += '_FineTune'
     
     trainer = TrainerEp(
         outputs_dir=outputs_dir,
@@ -245,7 +236,7 @@ if __name__ == "__main__":
     dotenv.load_dotenv('.env')
     
     
-    outputs_dir = Path("outputs/").absolute()
+    outputs_dir = Path("outputs").absolute()
     outputs_dir.mkdir(exist_ok=True, parents=True)
 
     if args.model == "fc" and args.dataset == "mnist":
