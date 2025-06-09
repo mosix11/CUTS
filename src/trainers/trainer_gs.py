@@ -18,6 +18,8 @@ import json
 
 from typing import List, Tuple, Union
 
+from torchmetrics import ConfusionMatrix
+
 from ..utils import nn_utils, misc_utils
 
 
@@ -97,8 +99,8 @@ class TrainerGS:
             self.best_model_perf = {
                 'Train/Loss': torch.inf,
                 'Train/ACC': 0,
-                'Test/Loss': torch.inf,
-                'Test/ACC': 0
+                'Val/Loss': torch.inf,
+                'Val/ACC': 0
             }
         
         self.early_stopping = early_stopping
@@ -297,7 +299,7 @@ class TrainerGS:
                 'Train/Loss': epoch_train_loss.avg,
                 'Train/LR': self.optim.param_groups[0]['lr']
             }
-            for met_name, met_val in metrics_results:
+            for met_name, met_val in metrics_results.items():
                 stat_key = f"Train/{met_name}"
                 statistics[stat_key] = met_val
             
@@ -307,12 +309,12 @@ class TrainerGS:
             
             if self.validation_freq:
                 if (self.epoch+1) % self.validation_freq == 0:
-                    res = self.evaluate(set='Test')
+                    res = self.evaluate(set='Val')
                     for met, val in res.items():
                         statistics[met] = val
                         
                     if self.save_best_model:
-                        if self.best_model_perf['Test/ACC'] < statistics['Test/ACC']:
+                        if self.best_model_perf['Val/ACC'] < statistics['Val/ACC']:
                             self.best_model_perf = copy.deepcopy(statistics)
                             self.best_model_perf['epoch'] = self.epoch
                             self.best_model_perf['gstep'] = self.g_step
@@ -347,7 +349,7 @@ class TrainerGS:
         elif set == 'Test':
             dataloader = self.test_dataloader
         else:
-            raise ValueError("Invalid set specified. Choose 'train', 'val', or 'test'.")
+            raise ValueError("Invalid set specified. Choose 'Train', 'Val', or 'Test'.")
 
         
         for i, batch in enumerate(dataloader):
@@ -361,11 +363,39 @@ class TrainerGS:
         results = {
             f"{set}/Loss": loss_met.avg,
         }
-        for met_name, met_val in metrics_results:
+        for met_name, met_val in metrics_results.items():
             stat_key = f"{set}/{met_name}"
             results[stat_key] = met_val
             
         return results
+    
+    def confmat(self, set='Val', num_classes=10):
+        self.model.eval()
+        
+        dataloader = None
+        if set == 'Train':
+            dataloader = self.train_dataloader
+        elif set == 'Val':
+            dataloader = self.val_dataloader
+        elif set == 'Test':
+            dataloader = self.test_dataloader
+        else:
+            raise ValueError("Invalid set specified. Choose 'Train', 'Val', or 'Test'.")
+        
+        all_preds = []
+        all_targets = []
+        
+        for i, batch in enumerate(dataloader):
+            input_batch, target_batch, is_noisy = self.prepare_batch(batch)
+            model_output = self.model.predict(input_batch) # Get raw model output (logits)
+            predictions = torch.argmax(model_output, dim=-1) # Get predicted class labels
+            
+            all_preds.extend(predictions.detach().cpu())
+            all_targets.extend(target_batch.detach().cpu())
+            
+        confmat = ConfusionMatrix(task="multiclass", num_classes=num_classes)
+        cm = confmat(torch.tensor(all_preds), torch.tensor(all_targets))
+        return cm
     
     
     def save_full_checkpoint(self, path):

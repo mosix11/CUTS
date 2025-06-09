@@ -99,8 +99,8 @@ class TrainerEp:
             self.best_model_perf = {
                 'Train/Loss': torch.inf,
                 'Train/ACC': 0,
-                'Test/Loss': torch.inf,
-                'Test/ACC': 0
+                'Val/Loss': torch.inf,
+                'Val/ACC': 0
             }
             
         self.early_stopping = early_stopping
@@ -214,6 +214,8 @@ class TrainerEp:
             online=True,
             experiment_config=experiment_config
         )
+        with open(self.log_dir / Path('comet_exp_key'), 'w') as mfile:
+            mfile.write(self.comet_experiment.get_key()) 
 
     def fit(self, model, dataset, resume=False):
         self.setup_data_loaders(dataset)
@@ -332,7 +334,7 @@ class TrainerEp:
             'Train/Loss': epoch_train_loss.avg,
             'Train/LR': self.optim.param_groups[0]['lr']
         }
-        for met_name, met_val in metrics_results:
+        for met_name, met_val in metrics_results.items():
             stat_key = f"Train/{met_name}"
             statistics[stat_key] = met_val
             
@@ -341,11 +343,11 @@ class TrainerEp:
         
         if self.validation_freq > 0:
             if (self.epoch+1) % self.validation_freq == 0:
-                res = self.evaluate(set='Test')
+                res = self.evaluate(set='Val')
                 for met, val in res.items():
                     statistics[met] = val
                 if self.save_best_model:
-                    if self.best_model_perf['Test/ACC'] < statistics['Test/ACC']:
+                    if self.best_model_perf['Val/ACC'] < statistics['Val/ACC']:
                         self.best_model_perf = copy.deepcopy(statistics)
                         self.best_model_perf['epoch'] = self.epoch
                         ckp_path = self.checkpoint_dir / Path('best_ckp.pth')
@@ -390,25 +392,25 @@ class TrainerEp:
         results = {
             f"{set}/Loss": loss_met.avg,
         }
-        for met_name, met_val in metrics_results:
+        for met_name, met_val in metrics_results.items():
             stat_key = f"{set}/{met_name}"
             results[stat_key] = met_val
             
         return results
     
     
-    def confmat(self, set='val', num_classes=10):
+    def confmat(self, set='Val', num_classes=10):
         self.model.eval()
         
         dataloader = None
-        if set == 'train':
+        if set == 'Train':
             dataloader = self.train_dataloader
-        elif set == 'val':
+        elif set == 'Val':
             dataloader = self.val_dataloader
-        elif set == 'test':
+        elif set == 'Test':
             dataloader = self.test_dataloader
         else:
-            raise ValueError("Invalid set specified. Choose 'train', 'val', or 'test'.")
+            raise ValueError("Invalid set specified. Choose 'Train', 'Val', or 'Test'.")
         
         all_preds = []
         all_targets = []

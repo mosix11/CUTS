@@ -97,7 +97,7 @@ class CNN5(nn.Module):
         results = {}
         if self.metrics: 
             for name, metric in self.metrics.items():
-                results[name] = metric.compute()
+                results[name] = metric.compute().cpu().item()
         return results
     
     def reset_metrics(self):

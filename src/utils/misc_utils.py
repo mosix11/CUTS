@@ -20,6 +20,7 @@ from multiprocessing import cpu_count
 import logging
 import colorama
 from colorama import Fore, Style
+import seaborn as sns
 
 colorama.init()
 
@@ -636,3 +637,38 @@ def describe_structure(obj, depth=0):
     
     else:
         print(f"{indent}{type(obj).__name__}")
+
+
+
+def plot_confusion_matrix(cm, class_names=None, title='Confusion Matrix', filepath=None, show=True):
+    """
+    Plots the confusion matrix and optionally saves it to a file and/or displays it.
+
+    Args:
+        cm (np.ndarray): The confusion matrix (2D numpy array).
+        class_names (list, optional): A list of class names to display on the axes.
+                                        If None, will use 0, 1, 2...
+        title (str): The title of the plot.
+        filepath (str, optional): The path and filename to save the plot.
+                                   If None, the plot will not be saved.
+        show (bool): If True, the plot will be displayed to the user. Defaults to True.
+    """
+    if filepath is None and not show:
+        print("Warning: Neither 'filepath' is provided nor 'show' is set to True. The plot will not be saved or displayed.")
+        return
+
+    plt.figure(figsize=(8, 6))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', cbar=False,
+                xticklabels=class_names, yticklabels=class_names)
+    plt.title(title)
+    plt.xlabel('Predicted Label')
+    plt.ylabel('True Label')
+    plt.tight_layout()
+
+    if filepath:
+        plt.savefig(filepath)
+    
+    if show:
+        plt.show()
+    
+    plt.close() # Close the plot to free memory

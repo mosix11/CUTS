@@ -102,6 +102,19 @@ class CIFAR10:
     def get_heldout_dataloader(self):
         return self.heldout_loader
     
+    
+    def get_trainset(self):
+        return self.trainset
+    
+    def get_valset(self):
+        return self.valset
+    
+    def get_testset(self):
+        return self.testset
+    
+    def get_heldoutset(self):
+        return self.heldout_set
+    
     # ... (other methods like get_identifier, _get_balanced_subset remain the same) ...
     def get_identifier(self):
         identifier = 'cifar10|'
@@ -204,7 +217,7 @@ class CIFAR10:
             if self.heldout_set: self.heldout_set = LabelRemapper(self.heldout_set, mapping)
 
         self.trainset = NoisyDataset(trainset, is_noisy_applied=self.label_noise > 0.0)
-        self.valset = NoisyDataset(valset, is_noisy_applied=False) if valset else None
+        self.valset = NoisyDataset(valset, is_noisy_applied=self.label_noise > 0.0) if valset else None
         self.testset = NoisyDataset(test_dataset, is_noisy_applied=False)
         if self.heldout_set:
             is_noisy = noisy_heldout and self.label_noise > 0.0
@@ -233,7 +246,6 @@ class CIFAR10:
         
         heldout_view_indices = []
         if isinstance(self.heldout_conf, tuple):
-            # *** FIX: Perform stratified sampling for tuples ***
             # Hold out a portion of *each available class*.
             ratio, _ = self.heldout_conf
             for class_label in self.available_classes:
@@ -245,7 +257,6 @@ class CIFAR10:
                         heldout_view_indices.extend([class_view_indices[i] for i in perm[:num_to_hold]])
 
         elif isinstance(self.heldout_conf, dict):
-            # *** FIX: Robustly handle dicts with or without class_subset ***
             # Sanitize keys to be integers, just in case
             safe_conf = {int(k): v for k, v in self.heldout_conf.items()}
             for class_label, (ratio, _) in safe_conf.items():
