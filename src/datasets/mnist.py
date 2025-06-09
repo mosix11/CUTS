@@ -3,7 +3,7 @@ from torchvision import datasets
 import torchvision.transforms.v2 as transforms
 from torch.utils.data import Dataset, DataLoader, random_split
 from torch.utils.data import Subset
-from .utils import LabelRemapper, NoisyDataset, apply_label_noise
+from .utils import LabelRemapper, NoisyClassificationDataset, apply_label_noise
 
 import os
 import sys
@@ -206,11 +206,11 @@ class MNIST:
         if self.label_noise > 0.0:
             trainset = apply_label_noise(trainset)
             
-        trainset = NoisyDataset(trainset, is_noisy_applied=self.label_noise > 0.0)
-        if valset is not None:
-            valset = NoisyDataset(valset, is_noisy_applied=False)
+        # trainset = NoisyDataset(trainset, is_noisy_applied=self.label_noise > 0.0)
+        # if valset is not None:
+        #     valset = NoisyDataset(valset, is_noisy_applied=False)
             
-        testset = NoisyDataset(testset, is_noisy_applied=False)
+        # testset = NoisyDataset(testset, is_noisy_applied=False)
    
         self.train_loader = self._build_dataloader(trainset)
         self.val_loader = (

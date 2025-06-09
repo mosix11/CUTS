@@ -3,7 +3,7 @@ from torchvision import datasets
 import torchvision.transforms.v2 as transforms
 from torch.utils.data import Dataset, DataLoader, random_split, Subset
 
-from .utils import LabelRemapper, NoisyDataset, apply_label_noise
+from .utils import LabelRemapper, NoisyClassificationDataset, apply_label_noise
 
 import os
 from pathlib import Path
@@ -16,13 +16,12 @@ class CIFAR10:
         self,
         data_dir: Path = Path("./data").absolute(),
         batch_size: int = 256,
-        img_size: tuple = (32, 32),
-        subsample_size: Tuple[int, int] = (-1, -1),
+        img_size: Union[tuple, list] = (32, 32),
+        subsample_size: Union[tuple, list] = (-1, -1),
         class_subset: list = [],
         remap_labels: bool = False,
         balance_classes: bool = False,
-        label_noise: float = 0.0,
-        heldout_conf: Union[None, Tuple[float, bool], Dict[int, Tuple[float, bool]]] = None,
+        heldout_conf: Union[None, float, Dict[int, float]] = None,
         grayscale: bool = False,
         augmentations: list = [],
         normalize_imgs: bool = False,
@@ -45,7 +44,6 @@ class CIFAR10:
         self.class_subset = sorted(class_subset) if class_subset else None
         self.remap_labels = remap_labels
         self.balance_classes = balance_classes
-        self.label_noise = label_noise
         self.heldout_conf = heldout_conf
         self.grayscale = grayscale
         self.augmentations = augmentations
@@ -54,7 +52,6 @@ class CIFAR10:
         self.valset_ratio = valset_ratio
         self.trainset_ratio = 1 - self.valset_ratio
 
-        # *** FIX: Define the universe of available classes ***
         if self.class_subset:
             self.available_classes = self.class_subset
         else:
@@ -106,19 +103,96 @@ class CIFAR10:
     def get_trainset(self):
         return self.trainset
     
+    def set_trainset(self, set, shuffle=False):
+        self.trainset = set
+        self._build_dataloader(self.trainset, shuffle=shuffle)
+    
     def get_valset(self):
         return self.valset
+    
+    def set_trainset(self, set):
+        self.valset = set
+        self._build_dataloader(self.valset, shuffle=False)
     
     def get_testset(self):
         return self.testset
     
+    def set_testset(self, set):
+        self.testset = set
+        self._build_dataloader(self.testset, shuffle=False)
+    
     def get_heldoutset(self):
         return self.heldout_set
     
-    # ... (other methods like get_identifier, _get_balanced_subset remain the same) ...
+    def set_heldoutset(self, set, shuffle=False):
+        self.heldout_set = set
+        self._build_dataloader(self.heldout_set, shuffle=shuffle)
+        
+
+    def get_generator(self):
+        return self.generator
+    
+    def set_generator(self, gen):
+        self.generator = gen
+        
+    def set_generator_seed(self, seed):
+        self.generator.manual_seed(seed)
+        
+        
+    def inject_noise(self, set='Train', noise_rate=0.0, noise_type='symmetric', seed=None, generator=None):
+        dataset = None
+        if set == 'Train':
+            dataset = self.trainset
+        elif set == 'Val':
+            dataset = self.valset
+        elif set == 'Test':
+            dataset = self.testset
+        elif set == 'Heldout':
+            dataset = self.heldout_set
+        else:
+            raise ValueError('set argument must be one of these values `Train`, `Val`, `Test`, `Heldout`')
+        
+        # unwrap the dataset
+        if isinstance(dataset, LabelRemapper):
+            dataset = dataset.dataset
+        
+        dataset = NoisyClassificationDataset(
+            dataset=dataset,
+            noise_rate=noise_rate,
+            noise_type=noise_type,
+            seed=seed,
+            num_classes=len(self.available_classes),
+            available_labels=self.class_subset,
+            generator=generator
+        )
+        
+        if self.remap_labels and self.class_subset:
+            dataset = LabelRemapper(dataset, self.label_mapping)
+
+        
+        if set == 'Train':
+            self.trainset = dataset 
+            self.train_loader = self._build_dataloader(self.trainset, shuffle=True)
+        elif set == 'Val':
+            self.valset = dataset
+            self.val_loader = self._build_dataloader(self.valset, shuffle=False)
+        elif set == 'Test':
+            self.testset = dataset 
+            self.test_loader = self._build_dataloader(self.testset, shuffle=False)
+        elif set == 'Heldout':
+            self.heldout_set = dataset
+            self.heldout_loader = self._build_dataloader(self.heldout_set, shuffle=False)
+        
+        
+    def replace_heldout_as_train_dl(self):
+        self.train_loader = self._build_dataloader(self.heldout_set, shuffle=True)
+        
+    def reset_train_dl(self):
+        self.train_loader = self._build_dataloader(self.trainset, shuffle=True)
+
     def get_identifier(self):
         identifier = 'cifar10|'
-        identifier += f'ln{self.label_noise}|'
+        # identifier += f'ln{self.label_noise}|'
         identifier += 'aug|' if len(self.augmentations) > 0 else 'noaug|'
         identifier += f'subsample{self.subsample_size}' if self.subsample_size != (-1, -1) else 'full'
         return identifier
@@ -156,30 +230,26 @@ class CIFAR10:
             selected_indices = [class_indices[i] for i in perm[:samples_per_class]]
             final_indices.extend(selected_indices)
             
-        shuffled_perm = torch.randperm(len(final_indices), generator=generator)
-        shuffled_final_indices = torch.tensor(final_indices)[shuffled_perm].tolist()
+        # shuffled_perm = torch.randperm(len(final_indices), generator=generator)
+        # shuffled_final_indices = torch.tensor(final_indices)[shuffled_perm].tolist()
 
-        return Subset(dataset, shuffled_final_indices)
+        return Subset(dataset, final_indices)
 
     def _init_loaders(self):
-        # The logic in this method is mostly the same, as the fixes are concentrated
-        # in __init__ and _split_heldout_set.
-        full_train_dataset = datasets.CIFAR10(root=self.dataset_dir, train=True, transform=self.get_transforms(train=True), download=True)
+        train_dataset = datasets.CIFAR10(root=self.dataset_dir, train=True, transform=self.get_transforms(train=True), download=True)
         test_dataset = datasets.CIFAR10(root=self.dataset_dir, train=False, transform=self.get_transforms(train=False), download=True)
 
         if self.class_subset:
+            train_idxs = [i for i, lbl in enumerate(train_dataset.targets) if lbl in self.class_subset]
+            train_dataset = Subset(train_dataset, train_idxs)
+            
             test_idxs = [i for i, lbl in enumerate(test_dataset.targets) if lbl in self.class_subset]
             test_dataset = Subset(test_dataset, test_idxs)
         
         if self.subsample_size[1] != -1:
             test_indices = torch.randperm(len(test_dataset), generator=self.generator)[:self.subsample_size[1]]
             test_dataset = Subset(test_dataset, test_indices.tolist())
-
-        train_dataset = full_train_dataset
-
-        if self.class_subset:
-            train_idxs = [i for i, lbl in enumerate(train_dataset.targets) if lbl in self.class_subset]
-            train_dataset = Subset(train_dataset, train_idxs)
+            
         
         if self.balance_classes and self.class_subset and self.subsample_size[0] != -1:
             train_dataset = self._get_balanced_subset(train_dataset, self.subsample_size[0], self.class_subset, self.generator)
@@ -187,22 +257,9 @@ class CIFAR10:
             train_indices = torch.randperm(len(train_dataset), generator=self.generator)[:self.subsample_size[0]]
             train_dataset = Subset(train_dataset, train_indices.tolist())
 
-        self.heldout_set = None
-        noisy_heldout = False
-        if self.heldout_conf is not None:
-            if isinstance(self.heldout_conf, tuple):
-                noisy_heldout = self.heldout_conf[1]
-            elif isinstance(self.heldout_conf, dict):
-                noisy_heldout = all(v[1] for v in self.heldout_conf.values())
+        heldout_set = None
+        train_dataset, heldout_set = self._split_heldout_set(train_dataset)
 
-            if not noisy_heldout:
-                train_dataset, self.heldout_set = self._split_heldout_set(train_dataset)
-
-        if self.label_noise > 0.0:
-            train_dataset = apply_label_noise(train_dataset, self.label_noise, self.available_classes, self.generator)
-        
-        if self.heldout_conf is not None and noisy_heldout:
-            train_dataset, self.heldout_set = self._split_heldout_set(train_dataset)
         
         if self.valset_ratio > 0.0 and len(train_dataset) > 1:
             trainset, valset = random_split(train_dataset, [self.trainset_ratio, self.valset_ratio], generator=self.generator)
@@ -210,18 +267,25 @@ class CIFAR10:
             trainset, valset = train_dataset, None
 
         if self.remap_labels and self.class_subset:
-            mapping = {orig: new for new, orig in enumerate(self.class_subset)}
-            trainset = LabelRemapper(trainset, mapping)
-            if valset: valset = LabelRemapper(valset, mapping)
-            test_dataset = LabelRemapper(test_dataset, mapping)
-            if self.heldout_set: self.heldout_set = LabelRemapper(self.heldout_set, mapping)
+            self.label_mapping = {orig: new for new, orig in enumerate(self.class_subset)}
+            self.available_classes = sorted(list(self.label_mapping.values()))
+            # print(self.available_classes)
+            trainset = LabelRemapper(trainset, self.label_mapping)
+            if valset: valset = LabelRemapper(valset, self.label_mapping)
+            test_dataset = LabelRemapper(test_dataset, self.label_mapping)
+            if heldout_set: heldout_set = LabelRemapper(heldout_set, self.label_mapping)
 
-        self.trainset = NoisyDataset(trainset, is_noisy_applied=self.label_noise > 0.0)
-        self.valset = NoisyDataset(valset, is_noisy_applied=self.label_noise > 0.0) if valset else None
-        self.testset = NoisyDataset(test_dataset, is_noisy_applied=False)
-        if self.heldout_set:
-            is_noisy = noisy_heldout and self.label_noise > 0.0
-            self.heldout_set = NoisyDataset(self.heldout_set, is_noisy_applied=is_noisy)
+        # self.trainset = NoisyDataset(trainset, is_noisy_applied=self.label_noise > 0.0)
+        # self.valset = NoisyDataset(valset, is_noisy_applied=self.label_noise > 0.0) if valset else None
+        # self.testset = NoisyDataset(test_dataset, is_noisy_applied=False)
+        # if self.heldout_set:
+        #     is_noisy = noisy_heldout and self.label_noise > 0.0
+        #     self.heldout_set = NoisyDataset(self.heldout_set, is_noisy_applied=is_noisy)
+        
+        self.trainset = trainset
+        self.valset = valset
+        self.testset = test_dataset
+        self.heldout_set = heldout_set
         
         self.train_loader = self._build_dataloader(self.trainset, shuffle=True)
         self.val_loader = self._build_dataloader(self.valset) if self.valset else None
@@ -245,9 +309,9 @@ class CIFAR10:
             indices_by_class[label_item].append(idx)
         
         heldout_view_indices = []
-        if isinstance(self.heldout_conf, tuple):
+        if isinstance(self.heldout_conf, float):
             # Hold out a portion of *each available class*.
-            ratio, _ = self.heldout_conf
+            ratio = self.heldout_conf
             for class_label in self.available_classes:
                 if class_label in indices_by_class:
                     class_view_indices = indices_by_class[class_label]
@@ -259,7 +323,7 @@ class CIFAR10:
         elif isinstance(self.heldout_conf, dict):
             # Sanitize keys to be integers, just in case
             safe_conf = {int(k): v for k, v in self.heldout_conf.items()}
-            for class_label, (ratio, _) in safe_conf.items():
+            for class_label, ratio in safe_conf.items():
                 if class_label in indices_by_class:
                     class_view_indices = indices_by_class[class_label]
                     num_to_hold = int(len(class_view_indices) * ratio)

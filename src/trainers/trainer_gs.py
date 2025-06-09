@@ -38,7 +38,7 @@ class TrainerGS:
                 'betas': (0.9, 0.999)
             },
         lr_schedule_cfg: dict = None,
-        validation_freq: int = None,
+        validation_freq: int = -1,
         save_best_model: bool = True,
         checkpoint_freq: int = -1,
         early_stopping: bool = False,
@@ -108,6 +108,9 @@ class TrainerGS:
         self.log_comet = log_comet
         self.comet_api_key = comet_api_key
         self.comet_project_name = comet_project_name
+        if log_comet and not comet_api_key:
+            raise ValueError('When `log_comet` is set to `True`, `comet_api_key` should be provided.\n Please put your comet api key in a file called `.env` in the root directory of the project with the variable name `COMET_API_KEY`')
+        
         self.exp_name = exp_name
         self.exp_tags = exp_tags
         if log_comet and comet_project_name is None:
@@ -269,7 +272,11 @@ class TrainerGS:
             epoch_train_loss = misc_utils.AverageMeter()
             
             for i, batch in enumerate(self.train_dataloader):
-                input_batch, target_batch, is_noisy = self.prepare_batch(batch)
+                batch = self.prepare_batch(batch)
+                if len(batch) == 3:
+                    input_batch, target_batch, is_noisy = batch
+                else:
+                    input_batch, target_batch = batch
 
                 self.optim.zero_grad()
                 
@@ -353,7 +360,11 @@ class TrainerGS:
 
         
         for i, batch in enumerate(dataloader):
-            input_batch, target_batch, is_noisy = self.prepare_batch(batch)
+            batch = self.prepare_batch(batch)
+            if len(batch) == 3:
+                input_batch, target_batch, is_noisy = batch
+            else:
+                input_batch, target_batch = batch
             loss = self.model.validation_step(input_batch, target_batch, self.use_amp)
             loss_met.update(loss.detach().cpu().item(), n=input_batch.shape[0])
         
@@ -386,7 +397,11 @@ class TrainerGS:
         all_targets = []
         
         for i, batch in enumerate(dataloader):
-            input_batch, target_batch, is_noisy = self.prepare_batch(batch)
+            batch = self.prepare_batch(batch)
+            if len(batch) == 3:
+                input_batch, target_batch, is_noisy = batch
+            else:
+                input_batch, target_batch = batch
             model_output = self.model.predict(input_batch) # Get raw model output (logits)
             predictions = torch.argmax(model_output, dim=-1) # Get predicted class labels
             

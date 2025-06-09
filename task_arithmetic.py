@@ -18,8 +18,9 @@ import numpy as np
 import random
 from torchmetrics import ConfusionMatrix
 from tqdm import tqdm
-
+import yaml
 from PIL import Image
+import copy
 
 def plot_multiple_confusion_matrices(
     filepath1,
@@ -360,44 +361,175 @@ def train_cnn5_cifar10(outputs_dir: Path):
 # {'final': {'Train/Loss': 0.01166448979973793, 'Train/ACC': 0.9990500211715698, 'Train/F1': 0.9990500211715698, 'Test/Loss': 1.1495949382781983, 'Test/ACC': 0.6852999925613403, 'Test/F1': 0.6852999925613403}, 'best': {'Train/Loss': 1.2972837326049804, 'Train/LR': 0.0001, 'Train/ACC': 0.6348000168800354, 'Train/F1': 0.6348000168800354, 'Val/Loss': 1.669271377182007, 'Val/ACC': 0.5419999957084656, 'Val/F1': 0.5419999957084656, 'epoch': 38}}
 
 
-if __name__ == "__main__":
+def process_dataset(cfg, augmentations=None):
+    cfg['dataset']['batch_size'] = cfg['trainer']['finetuning']['batch_size']
+    del cfg['trainer']['finetuning']['batch_size']
+    dataset_name = cfg['dataset'].pop('name')
+    cfg['dataset']['augmentations'] = augmentations if augmentations else []
     
+    if dataset_name == 'mnist':
+        pass
+    elif dataset_name == 'cifar10':
+        num_classes = cfg['dataset'].pop('num_classes')
+        dataset = CIFAR10(
+            **cfg['dataset']
+        )
+    elif dataset_name == 'cifar100':
+        pass
+    elif dataset_name == 'mog':
+        pass
+    else: raise ValueError(f"Invalid dataset {dataset_name}.")
+    
+    return dataset, num_classes
+
+
+
+def process_model(cfg, num_classes):
+    model_type = cfg['model'].pop('type')
+    if cfg['model']['loss_fn'] == 'MSE':
+        cfg['model']['loss_fn'] = torch.nn.MSELoss()
+    elif cfg['model']['loss_fn'] == 'CE':
+        cfg['model']['loss_fn'] = torch.nn.CrossEntropyLoss()
+    else: raise ValueError(f"Invalid loss function {cfg['model']['loss_fn']}.")
+    
+    
+    if cfg['model']['metrics']:
+        metrics = {}
+        for metric_name in cfg['model']['metrics']:
+            if metric_name == 'ACC':
+                metrics[metric_name] = torchmetrics.Accuracy(task="multiclass", num_classes=num_classes)
+            elif metric_name == 'F1':
+                metrics[metric_name] = torchmetrics.F1Score(task="multiclass", num_classes=num_classes)
+            else: raise ValueError(f"Invalid metric {metric_name}.")
+        cfg['model']['metrics'] = metrics
+
+    if model_type == 'fc1':
+        pass
+    elif model_type == 'fcN':
+        pass
+    elif model_type == 'cnn5':
+        model = CNN5(
+            **cfg['model']
+        )
+    elif model_type == 'resnet18k':
+        pass
+    else: raise ValueError(f"Invalid model type {model_type}.")
+    
+    return model
+
+
+def apply_tv(scale_coef:float, outputs_dir: Path, cfg: dict, cfg_name:str):
+    
+    dataset, num_classes = process_dataset(cfg)
+    
+    model_base = process_model(cfg, num_classes)
+    model_ft = copy.deepcopy(model_base)
+    
+    cpu = nn_utils.get_cpu_device()
+    gpu = nn_utils.get_gpu_device()
+    
+    base_model_ckp_path = outputs_dir/ Path(f"{cfg_name}_pretrain") / Path('weights/model_weights.pth')
+    base_model_stat_dict = torch.load(base_model_ckp_path, map_location=cpu)
+    model_base.load_state_dict(base_model_stat_dict)
+    
+    ft_model_ckp_path = outputs_dir/ Path(f"{cfg_name}_finetune") / Path('weights/model_weights.pth')
+    ft_model_state_dict = torch.load(ft_model_ckp_path, map_location=cpu)
+    model_ft.load_state_dict(ft_model_state_dict)
+    
+
+    
+    
+    task_vector = TaskVector(
+        pretrained_state_dict=base_model_stat_dict,
+        finetuned_state_dict=ft_model_state_dict
+    )
+    
+    task_vector.apply_to(model_base, scaling_coef=scale_coef)
+    
+    model_base.to(gpu)
+    model_base.eval()
+    
+    test_dataloader = dataset.get_test_dataloader()
+    
+    loss_met = misc_utils.AverageMeter()
+    model_base.reset_metrics()
+    all_preds = []
+    all_targets = []
+    
+    for i, batch in tqdm(
+                enumerate(test_dataloader),
+                total=len(test_dataloader),
+            ):
+        batch = prepare_batch(batch, gpu)
+        if len(batch) == 3:
+                input_batch, target_batch, is_noisy = batch
+        else:
+            input_batch, target_batch = batch
+        loss = model_base.validation_step(input_batch, target_batch, use_amp=True)
+        loss_met.update(loss.detach().cpu().item(), n=input_batch.shape[0])
+        
+        model_output = model_base.predict(input_batch)
+        predictions = torch.argmax(model_output, dim=-1) 
+        
+        all_preds.extend(predictions.detach().cpu())
+        all_targets.extend(target_batch.detach().cpu())
+        
+    metric_results = model_base.compute_metrics()
+    model_base.reset_metrics()
+    
+    confmat = ConfusionMatrix(task="multiclass", num_classes=10)
+    cm = confmat(torch.tensor(all_preds), torch.tensor(all_targets))
+    
+    class_names = [f'Class {i}' for i in range(10)]
+    misc_utils.plot_confusion_matrix(cm=cm, class_names=class_names, filepath='confusion_matrix_tv.png', show=False)
+    
+    plot_multiple_confusion_matrices(
+        filepath1=outputs_dir/ Path(f"{cfg_name}_pretrain") / Path('plots/confmat.png'),
+        filepath2=outputs_dir/ Path(f"{cfg_name}_finetune") / Path('plots/confmat.png'),
+        filepath3='confusion_matrix_tv.png',
+        title1='Pretrained',
+        title2='Finetuned',
+        title3='TV',
+        save_filepath=f"{cfg_name}_confmat_combined.png"
+    )
+    
+    print(f"Loss of the negated model is {loss_met.avg}")
+    print(f"Metrics of the negated model is {metric_results}")
+    
+
+if __name__ == "__main__":
+
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "-m",
-        "--model",
-        help="The model to use for training.",
+        "-c",
+        "--config",
+        help="Configuration to used for model.",
         type=str,
-        choices=["fc", "cnn5", "resnet18k"],
-        required=True,
     )
     parser.add_argument(
-        "-d",
-        "--dataset",
-        help="The dataset used for trainig the model.",
-        type=str,
-        choices=["mnist", "cifar10", "cifar100", "mog"],
-        required=True,
+        "-r",
+        "--resume",
+        help="Resume training from the last checkpoint.",
+        action="store_true",
     )
-
+    
+    parser.add_argument(
+        "-s",
+        "--scale",
+        help="Scale coefficient for the task vector.",
+        type=float,
+    )
     args = parser.parse_args()
+
+    dotenv.load_dotenv(".env")
     
-    dotenv.load_dotenv('.env')
-    
-    
+    cfg_path = Path('configs').joinpath(args.config)
+
+    if not cfg_path.exists(): raise RuntimeError('The specified config file does not exist.')
+    with open(cfg_path, 'r') as file:
+        cfg = yaml.full_load(file)
+
     outputs_dir = Path("outputs/").absolute()
     outputs_dir.mkdir(exist_ok=True, parents=True)
 
-    if args.model == "fc" and args.dataset == "mnist":
-        pass
-    elif args.model == "fc" and args.dataset == "cifar10":
-        train_fc_cifar10(outputs_dir)
-        pass
-    elif args.model == "fc" and args.dataset == "mog":
-        pass
-    elif args.model == 'cnn5' and args.dataset == 'cifar10':
-        train_cnn5_cifar10(outputs_dir)
-            
-        
-    elif args.model == 'resnet18k' and args.dataset == 'cifar10':
-        pass
+    apply_tv(args.scale, outputs_dir, cfg, cfg_name=cfg_path.stem)
