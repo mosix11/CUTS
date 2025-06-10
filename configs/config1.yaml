@@ -1,3 +1,4 @@
+# different sets for pre train and fine tune with same noise seed
 training_seed: &training_seed 11
 dataset_seed: &dataset_seed 11
 

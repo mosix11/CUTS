@@ -1,4 +1,4 @@
-# Full training set for both training and fine tuning with same noise seed
+# same as config 3 but with different noise seed for fine tuning
 training_seed: &training_seed 11
 dataset_seed: &dataset_seed 11
 
@@ -15,7 +15,7 @@ strategy:
       set: *finetuning_set
       noise_rate: 1.0
       noise_type: 'symmetric'
-      seed: 8
+      seed: 33
 
 
 dataset:
@@ -43,7 +43,7 @@ model:
 
 trainer:
   pretraining:
-    max_epochs: 700
+    max_epochs: 600
     batch_size: 1024
     optimizer_cfg: 
       type: "adam"
@@ -61,7 +61,7 @@ trainer:
     seed: *training_seed
 
   finetuning:
-    max_epochs: 500
+    max_epochs: 400
     batch_size: 1024
     optimizer_cfg: 
       type: "adam"

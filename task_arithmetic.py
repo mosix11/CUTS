@@ -21,6 +21,7 @@ from tqdm import tqdm
 import yaml
 from PIL import Image
 import copy
+import json
 
 def plot_multiple_confusion_matrices(
     filepath1,
@@ -230,136 +231,6 @@ def train_fc_cifar10(outputs_dir: Path):
 
 
 
-def train_cnn5_cifar10(outputs_dir: Path):
-    max_epochs = 200
-    batch_size = 1024
-    class_subset = []
-    remap_labels = False
-    balance_classes = True
-    label_noise = 0.0
-    normalize_imgs = True
-    
-    training_seed = 11
-    dataset_seed = 11
-    
-    dataset = CIFAR10(
-        batch_size=batch_size,
-        class_subset=class_subset,
-        remap_labels=remap_labels,
-        balance_classes=balance_classes,
-        label_noise=label_noise,
-        normalize_imgs=normalize_imgs,
-        valset_ratio=0.0,
-        num_workers=8,
-        seed=dataset_seed,
-    )
-    
-    if training_seed:
-        random.seed(training_seed)
-        np.random.seed(training_seed)
-        torch.manual_seed(training_seed)
-        torch.cuda.manual_seed_all(training_seed)
-    torch.backends.cudnn.enabled = True
-    torch.backends.cudnn.benchmark = False
-    os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
-    torch.use_deterministic_algorithms(True) 
-    torch.set_float32_matmul_precision("high")
-    
-    
-    loss_fn = torch.nn.CrossEntropyLoss()
-    acc_metric = torchmetrics.Accuracy(task='multiclass', num_classes=10)
-    f1_metric = torchmetrics.F1Score(task='multiclass', num_classes=10)
-    metrics = {
-        'ACC': acc_metric,
-        'F1': f1_metric
-    }
-    
-    
-    model_base = CNN5(
-        num_channels=128,
-        num_classes=10,
-        # weight_init=weight_init_method,
-        loss_fn=loss_fn,
-        metrics=metrics,
-    )
-    
-    model_finetune = CNN5(
-        num_channels=128,
-        num_classes=10,
-        # weight_init=weight_init_method,
-        loss_fn=loss_fn,
-        metrics=metrics,
-    )
-    
-    cpu = nn_utils.get_cpu_device()
-    gpu = nn_utils.get_gpu_device()
-    
-    
-    base_model_dir = outputs_dir / Path("cnn5|k128_cifar10|ln0.4|aug|full_seeds11+11_adam|lr0.0001|b1024|AMP_HalfTraining")
-    finetune_model_dir = outputs_dir / Path("cnn5|k128_cifar10|ln0.4|aug|full_seeds11+11_adam|lr0.0001|b1024|AMP_HalfTraining_FineTune")
-    
-    base_model_ckp = torch.load(base_model_dir / 'weights/model_weights.pth', map_location=cpu)
-    finetune_model_ckp = torch.load(finetune_model_dir / 'weights/model_weights.pth', map_location=cpu)
-    
-    model_base.load_state_dict(base_model_ckp)
-    model_finetune.load_state_dict(finetune_model_ckp)
-    
-    task_vector = TaskVector(
-        pretrained_state_dict=base_model_ckp,
-        finetuned_state_dict=finetune_model_ckp
-    )
-    
-    task_vector.apply_to(model_base, scaling_coef=-0.35)
-    
-    model_base.to(gpu)
-    model_base.eval()
-    
-    test_dataloader = dataset.get_test_dataloader()
-    
-    loss_met = misc_utils.AverageMeter()
-    model_base.reset_metrics()
-    all_preds = []
-    all_targets = []
-    
-    for i, batch in tqdm(
-                enumerate(test_dataloader),
-                total=len(test_dataloader),
-            ):
-        input_batch, target_batch, is_noisy = prepare_batch(batch, gpu)
-        loss = model_base.validation_step(input_batch, target_batch, use_amp=True)
-        loss_met.update(loss.detach().cpu().item(), n=input_batch.shape[0])
-        
-        model_output = model_base.predict(input_batch)
-        predictions = torch.argmax(model_output, dim=-1) 
-        
-        all_preds.extend(predictions.detach().cpu())
-        all_targets.extend(target_batch.detach().cpu())
-        
-    metric_results = model_base.compute_metrics()
-    model_base.reset_metrics()
-    
-    confmat = ConfusionMatrix(task="multiclass", num_classes=10)
-    cm = confmat(torch.tensor(all_preds), torch.tensor(all_targets))
-    
-    class_names = [f'Class {i}' for i in range(10)]
-    misc_utils.plot_confusion_matrix(cm=cm, class_names=class_names, filepath='confusion_matrix_tv.png', show=False)
-    
-    plot_multiple_confusion_matrices(
-        filepath1=base_model_dir / Path('plots/confmat.png'),
-        filepath2=finetune_model_dir / Path('plots/confmat.png'),
-        filepath3='confusion_matrix_tv.png',
-        title1='Pretrained',
-        title2='Finetuned',
-        title3='TV',
-        save_filepath='confusion_matrices_combined.png'
-    )
-    
-    print(f"Loss of the negated model is {loss_met.avg}")
-    print(f"Metrics of the negated model is {metric_results}")
-
-
-# {'final': {'Train/Loss': 0.01166448979973793, 'Train/ACC': 0.9990500211715698, 'Train/F1': 0.9990500211715698, 'Test/Loss': 1.1495949382781983, 'Test/ACC': 0.6852999925613403, 'Test/F1': 0.6852999925613403}, 'best': {'Train/Loss': 1.2972837326049804, 'Train/LR': 0.0001, 'Train/ACC': 0.6348000168800354, 'Train/F1': 0.6348000168800354, 'Val/Loss': 1.669271377182007, 'Val/ACC': 0.5419999957084656, 'Val/F1': 0.5419999957084656, 'epoch': 38}}
-
 
 def process_dataset(cfg, augmentations=None):
     cfg['dataset']['batch_size'] = cfg['trainer']['finetuning']['batch_size']
@@ -404,13 +275,11 @@ def process_model(cfg, num_classes):
         cfg['model']['metrics'] = metrics
 
     if model_type == 'fc1':
-        pass
+        model = FC1(**cfg)
     elif model_type == 'fcN':
         pass
     elif model_type == 'cnn5':
-        model = CNN5(
-            **cfg['model']
-        )
+        model = CNN5(**cfg['model'])
     elif model_type == 'resnet18k':
         pass
     else: raise ValueError(f"Invalid model type {model_type}.")
@@ -428,15 +297,22 @@ def apply_tv(scale_coef:float, outputs_dir: Path, cfg: dict, cfg_name:str):
     cpu = nn_utils.get_cpu_device()
     gpu = nn_utils.get_gpu_device()
     
-    base_model_ckp_path = outputs_dir/ Path(f"{cfg_name}_pretrain") / Path('weights/model_weights.pth')
+    pretrain_dir = outputs_dir/ Path(f"{cfg_name}_pretrain")
+    finetune_dir = outputs_dir/ Path(f"{cfg_name}_finetune")
+    
+    base_model_ckp_path = pretrain_dir / Path('weights/model_weights.pth')
     base_model_stat_dict = torch.load(base_model_ckp_path, map_location=cpu)
     model_base.load_state_dict(base_model_stat_dict)
     
-    ft_model_ckp_path = outputs_dir/ Path(f"{cfg_name}_finetune") / Path('weights/model_weights.pth')
+    with open(pretrain_dir / Path('log/results.json'), 'r') as file:
+        base_model_results = json.load(file)
+    
+    ft_model_ckp_path = finetune_dir / Path('weights/model_weights.pth')
     ft_model_state_dict = torch.load(ft_model_ckp_path, map_location=cpu)
     model_ft.load_state_dict(ft_model_state_dict)
     
-
+    with open(finetune_dir / Path('log/results.json'), 'r') as file:
+        ft_model_results = json.load(file)
     
     
     task_vector = TaskVector(
@@ -484,8 +360,8 @@ def apply_tv(scale_coef:float, outputs_dir: Path, cfg: dict, cfg_name:str):
     misc_utils.plot_confusion_matrix(cm=cm, class_names=class_names, filepath='confusion_matrix_tv.png', show=False)
     
     plot_multiple_confusion_matrices(
-        filepath1=outputs_dir/ Path(f"{cfg_name}_pretrain") / Path('plots/confmat.png'),
-        filepath2=outputs_dir/ Path(f"{cfg_name}_finetune") / Path('plots/confmat.png'),
+        filepath1=pretrain_dir / Path('plots/confmat.png'),
+        filepath2=finetune_dir / Path('plots/confmat.png'),
         filepath3='confusion_matrix_tv.png',
         title1='Pretrained',
         title2='Finetuned',
@@ -495,6 +371,9 @@ def apply_tv(scale_coef:float, outputs_dir: Path, cfg: dict, cfg_name:str):
     
     print(f"Loss of the negated model is {loss_met.avg}")
     print(f"Metrics of the negated model is {metric_results}")
+    
+    print('pretrained results : \n', base_model_results)
+    
     
 
 if __name__ == "__main__":
