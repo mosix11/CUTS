@@ -6,6 +6,7 @@ raytune/
 outputs/
 output/
 backups/
+results/
 .vscode/
 .cometml-runs
 ###################

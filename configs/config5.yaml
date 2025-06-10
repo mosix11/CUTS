@@ -4,6 +4,7 @@ dataset_seed: &dataset_seed 11
 
 
 strategy:
+  ray: False
   finetuning_set: &finetuning_set 'Train'
   noise:
     pretraining:
