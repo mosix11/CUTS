@@ -1,0 +1,15 @@
+numpy
+matplotlib
+torch
+torchvision
+torchmetrics
+tqdm
+requests
+colorama
+tensorboard
+torch-tb-profiler
+comet_ml
+python-dotenv
+ray[tune]
+PyYaml
+seaborn
