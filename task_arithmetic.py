@@ -482,15 +482,15 @@ if __name__ == "__main__":
 
     dotenv.load_dotenv(".env")
     
-    cfg_path = Path('configs').joinpath(args.config)
+    cfg_path = Path('configs/single_experiment').joinpath(args.config)
 
     if not cfg_path.exists(): raise RuntimeError('The specified config file does not exist.')
     with open(cfg_path, 'r') as file:
         cfg = yaml.full_load(file)
 
-    outputs_dir = Path("outputs/").absolute()
+    outputs_dir = Path("outputs/single_experiment").absolute()
     outputs_dir.mkdir(exist_ok=True, parents=True)
-    results_dir = Path("results/").absolute()
+    results_dir = Path("results/single_experiment").absolute()
     results_dir.mkdir(exist_ok=True, parents=True)
     
     apply_tv(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)

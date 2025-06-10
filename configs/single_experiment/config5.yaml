@@ -1,22 +1,21 @@
-# different sets for pre train and fine tune with same noise seed
+# pre train on full training set without noise and finetuen on full training set with full noise
 training_seed: &training_seed 11
 dataset_seed: &dataset_seed 11
 
 
 strategy:
-  ray: True
-  finetuning_set: &finetuning_set 'Heldout'
+  finetuning_set: &finetuning_set 'Train'
   noise:
     pretraining:
       set: 'Train'
-      noise_rate: 0.4
+      noise_rate: 0.0
       noise_type: 'symmetric'
-      seed: 11
+      seed: 8
     finetuning:
       set: *finetuning_set
       noise_rate: 1.0
       noise_type: 'symmetric'
-      seed: 11
+      seed: 8
 
 
 dataset:
@@ -26,17 +25,7 @@ dataset:
   subsample_size: [-1, -1]
   class_subset: []
   remap_labels: False
-  heldout_conf: 
-    0: 0.5
-    1: 0.5
-    2: 0.5
-    3: 0.5
-    4: 0.5
-    5: 0.5
-    6: 0.5
-    7: 0.5
-    8: 0.5
-    9: 0.5
+  heldout_conf: null
   grayscale: False
   normalize_imgs: True
   flatten: False

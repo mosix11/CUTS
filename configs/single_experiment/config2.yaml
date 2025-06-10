@@ -1,22 +1,21 @@
-# same as config 3 but with different noise seed for fine tuning
+# same as config 1 but with fine tuning on different noise seed
 training_seed: &training_seed 11
 dataset_seed: &dataset_seed 11
 
 
 strategy:
-  ray: False
-  finetuning_set: &finetuning_set 'Train'
+  finetuning_set: &finetuning_set 'Heldout'
   noise:
     pretraining:
       set: 'Train'
       noise_rate: 0.4
       noise_type: 'symmetric'
-      seed: 8
+      seed: 11
     finetuning:
       set: *finetuning_set
       noise_rate: 1.0
       noise_type: 'symmetric'
-      seed: 33
+      seed: 22
 
 
 dataset:
@@ -26,7 +25,17 @@ dataset:
   subsample_size: [-1, -1]
   class_subset: []
   remap_labels: False
-  heldout_conf: null
+  heldout_conf: 
+    0: 0.5
+    1: 0.5
+    2: 0.5
+    3: 0.5
+    4: 0.5
+    5: 0.5
+    6: 0.5
+    7: 0.5
+    8: 0.5
+    9: 0.5
   grayscale: False
   normalize_imgs: True
   flatten: False
@@ -44,7 +53,7 @@ model:
 
 trainer:
   pretraining:
-    max_epochs: 700
+    max_epochs: 600
     batch_size: 1024
     optimizer_cfg: 
       type: "adam"
@@ -62,7 +71,7 @@ trainer:
     seed: *training_seed
 
   finetuning:
-    max_epochs: 500
+    max_epochs: 400
     batch_size: 1024
     optimizer_cfg: 
       type: "adam"

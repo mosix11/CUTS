@@ -1,22 +1,21 @@
-# pre train on full training set without noise and finetuen on full training set with full noise
+# same as config 3 but with different noise seed for fine tuning
 training_seed: &training_seed 11
 dataset_seed: &dataset_seed 11
 
 
 strategy:
-  ray: False
   finetuning_set: &finetuning_set 'Train'
   noise:
     pretraining:
       set: 'Train'
-      noise_rate: 0.0
+      noise_rate: 0.4
       noise_type: 'symmetric'
       seed: 8
     finetuning:
       set: *finetuning_set
       noise_rate: 1.0
       noise_type: 'symmetric'
-      seed: 8
+      seed: 33
 
 
 dataset:
@@ -44,7 +43,7 @@ model:
 
 trainer:
   pretraining:
-    max_epochs: 600
+    max_epochs: 700
     batch_size: 1024
     optimizer_cfg: 
       type: "adam"
@@ -62,7 +61,7 @@ trainer:
     seed: *training_seed
 
   finetuning:
-    max_epochs: 400
+    max_epochs: 500
     batch_size: 1024
     optimizer_cfg: 
       type: "adam"
