@@ -1,6 +1,6 @@
 import comet_ml
-from src.datasets import MNIST, CIFAR10, FashionMNIST, MoGSynthetic, data_utils
-from src.models import FC1, CNN5, make_resnet18k, FCN
+from src.datasets import dataset_factory
+from src.models import model_factory
 from src.trainers import TrainerEp, TrainerGS
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -18,72 +18,17 @@ import yaml
 
 
 
-def process_dataset(cfg, augmentations=None):
-    cfg['dataset']['batch_size'] = cfg['trainer']['finetuning']['batch_size']
-    del cfg['trainer']['finetuning']['batch_size']
-    dataset_name = cfg['dataset'].pop('name')
-    cfg['dataset']['augmentations'] = augmentations if augmentations else []
-    
-    if dataset_name == 'mnist':
-        pass
-    elif dataset_name == 'cifar10':
-        num_classes = cfg['dataset'].pop('num_classes')
-        dataset = CIFAR10(
-            **cfg['dataset']
-        )
-    elif dataset_name == 'cifar100':
-        pass
-    elif dataset_name == 'mog':
-        pass
-    else: raise ValueError(f"Invalid dataset {dataset_name}.")
-    
-    return dataset, num_classes
-
-
-
-def process_model(cfg, num_classes):
-    model_type = cfg['model'].pop('type')
-    if cfg['model']['loss_fn'] == 'MSE':
-        cfg['model']['loss_fn'] = torch.nn.MSELoss()
-    elif cfg['model']['loss_fn'] == 'CE':
-        cfg['model']['loss_fn'] = torch.nn.CrossEntropyLoss()
-    else: raise ValueError(f"Invalid loss function {cfg['model']['loss_fn']}.")
-    
-    
-    if cfg['model']['metrics']:
-        metrics = {}
-        for metric_name in cfg['model']['metrics']:
-            if metric_name == 'ACC':
-                metrics[metric_name] = torchmetrics.Accuracy(task="multiclass", num_classes=num_classes)
-            elif metric_name == 'F1':
-                metrics[metric_name] = torchmetrics.F1Score(task="multiclass", num_classes=num_classes)
-            else: raise ValueError(f"Invalid metric {metric_name}.")
-        cfg['model']['metrics'] = metrics
-
-    if model_type == 'fc1':
-        model = FC1(**cfg)
-    elif model_type == 'fcN':
-        model = FCN(**cfg)
-    elif model_type == 'cnn5':
-        model = CNN5(**cfg['model'])
-    elif model_type == 'resnet18k':
-        model = make_resnet18k(**cfg)
-    else: raise ValueError(f"Invalid model type {model_type}.")
-    
-    return model
-
-
-def apply_strategy(cfg, dataset):
+def apply_strategy(cfg, dataset, phase:str="finetuning"):
     strategy = cfg['strategy']
     # if strategy['finetuning_set'] == 'TrainingSet':
     #     pass
     # elif strategy['finetuning_set'] == 'HeldoutSet':
     #     pass
-    # else: raise ValueError(f"Invalid strategy type {strategy['finetuning_set']}.")
-    
-    dataset.inject_noise(**strategy['noise']['finetuning'])
-    if strategy['finetuning_set'] == 'Heldout':
+    # else: raise ValueError(f"Invalid strategy type {strategy['finetuning_set']}.")    
+    dataset.inject_noise(**strategy['noise'][phase])
+    if phase == 'finetuning' and strategy['finetuning_set'] == 'Heldout':
         dataset.replace_heldout_as_train_dl()
+        
     return dataset
 
 
@@ -93,9 +38,9 @@ def finetune_model(outputs_dir: Path, cfg: dict, cfg_name:str):
         transformsv2.RandomCrop(32, padding=4),
         transformsv2.RandomHorizontalFlip(),
     ]
-    dataset, num_classes = process_dataset(cfg, augmentations)
+    dataset, num_classes = dataset_factory.create_dataset(cfg, augmentations, phase='finetuning')
     
-    model = process_model(cfg, num_classes)
+    model = model_factory.create_model(cfg, num_classes)
     
     dataset = apply_strategy(cfg, dataset)
 

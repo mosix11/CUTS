@@ -1,6 +1,6 @@
 import comet_ml
-from src.datasets import MNIST, CIFAR10, FashionMNIST, MoGSynthetic
-from src.models import FC1, CNN5, make_resnet18k, FCN, TaskVector
+from src.datasets import dataset_factory
+from src.models import TaskVector, model_factory
 from src.trainers import TrainerEp, TrainerGS
 import matplotlib.pyplot as plt
 from src.utils import nn_utils, misc_utils
@@ -22,74 +22,9 @@ from PIL import Image
 import copy
 import json
 import pandas as pd
+from collections import OrderedDict
+import seaborn as sns
 
-
-# def plot_multiple_confusion_matrices(
-#     filepath1,
-#     filepath2,
-#     filepath3,
-#     title1=None,
-#     title2=None,
-#     title3=None,
-#     main_title='Combined Confusion Matrices',
-#     save_filepath=None,
-#     show=True
-# ):
-#     """
-#     Combines and displays three confusion matrix plots vertically in a single figure.
-
-#     Args:
-#         filepath1 (str): Path to the first confusion matrix image.
-#         filepath2 (str): Path to the second confusion matrix image.
-#         filepath3 (str): Path to the third confusion matrix image.
-#         title1 (str, optional): Title for the first confusion matrix.
-#         title2 (str, optional): Title for the second confusion matrix.
-#         title3 (str, optional): Title for the third confusion matrix.
-#         main_title (str): Overall title for the combined figure. Defaults to 'Combined Confusion Matrices'.
-#         save_filepath (str, optional): Path to save the combined figure. If None, the figure is not saved.
-#         show (bool): If True, display the combined figure. Defaults to True.
-#     """
-#     try:
-#         img1 = Image.open(filepath1)
-#         img2 = Image.open(filepath2)
-#         img3 = Image.open(filepath3)
-#     except FileNotFoundError as e:
-#         print(f"Error: One or more confusion matrix image files not found. {e}")
-#         return
-
-#     fig, axes = plt.subplots(3, 1, figsize=(10, 18)) # 3 rows, 1 column, adjust figsize as needed
-
-#     # Plot the first confusion matrix
-#     axes[0].imshow(img1)
-#     axes[0].axis('off')  # Turn off axis labels and ticks for the image
-#     if title1:
-#         axes[0].text(-0.1, 0.5, title1, transform=axes[0].transAxes,
-#                      fontsize=12, va='center', ha='right', rotation=90) # Vertical title on the left
-
-#     # Plot the second confusion matrix
-#     axes[1].imshow(img2)
-#     axes[1].axis('off')
-#     if title2:
-#         axes[1].text(-0.1, 0.5, title2, transform=axes[1].transAxes,
-#                      fontsize=12, va='center', ha='right', rotation=90)
-
-#     # Plot the third confusion matrix
-#     axes[2].imshow(img3)
-#     axes[2].axis('off')
-#     if title3:
-#         axes[2].text(-0.1, 0.5, title3, transform=axes[2].transAxes,
-#                      fontsize=12, va='center', ha='right', rotation=90)
-
-#     fig.suptitle(main_title, fontsize=16, y=1.02) # Overall title at the top
-#     plt.tight_layout(rect=[0.05, 0.03, 1, 0.98]) # Adjust layout to make space for main title and side titles
-
-#     if save_filepath:
-#         plt.savefig(save_filepath, bbox_inches='tight')
-
-#     if show:
-#         plt.show()
-    
-#     plt.close() # Close the figure to free memory
 
 def plot_multiple_confusion_matrices(
     filepaths,
@@ -197,64 +132,105 @@ def plot_multiple_confusion_matrices(
     
     plt.close() # Close the figure to free memory
 
-def prepare_batch(batch, device):
-    batch = [tens.to(device) for tens in batch]
-    return batch
 
 
-def process_dataset(cfg, augmentations=None):
-    cfg['dataset']['batch_size'] = cfg['trainer']['finetuning']['batch_size']
-    del cfg['trainer']['finetuning']['batch_size']
-    dataset_name = cfg['dataset'].pop('name')
-    cfg['dataset']['augmentations'] = augmentations if augmentations else []
+def plot_results_grids(results_dict, saving_path=None):
+    # Extract unique sorted pt_noise and ft_noise values
+    pt_noises = sorted(results_dict.keys())
+    all_ft_noises = sorted({ft for d in results_dict.values() for ft in d.keys()})
     
-    if dataset_name == 'mnist':
-        pass
-    elif dataset_name == 'cifar10':
-        num_classes = cfg['dataset'].pop('num_classes')
-        dataset = CIFAR10(
-            **cfg['dataset']
-        )
-    elif dataset_name == 'cifar100':
-        pass
-    elif dataset_name == 'mog':
-        pass
-    else: raise ValueError(f"Invalid dataset {dataset_name}.")
-    
-    return dataset, num_classes
+    # Prepare empty DataFrames
+    acc_diff_df = pd.DataFrame(index=pt_noises, columns=all_ft_noises, dtype=float)
+    loss_diff_df = pd.DataFrame(index=pt_noises, columns=all_ft_noises, dtype=float)
+    scale_df = pd.DataFrame(index=pt_noises, columns=all_ft_noises, dtype=float)
+
+    # Fill the DataFrames with the corresponding values
+    for pt_noise in results_dict:
+        for ft_noise in results_dict[pt_noise]:
+            entry = results_dict[pt_noise][ft_noise]
+            acc_diff = entry['tv']['ACC'] - entry['pt']['ACC']
+            loss_diff = entry['tv']['Loss'] - entry['pt']['Loss']
+            scale = entry['tv']['Scale']
+            acc_diff_df.at[pt_noise, ft_noise] = acc_diff
+            loss_diff_df.at[pt_noise, ft_noise] = loss_diff
+            scale_df.at[pt_noise, ft_noise] = scale
+
+    # Plotting
+    fig, axes = plt.subplots(3, 1, figsize=(12, 18), constrained_layout=True)
+
+    cmap = "Blues"
+    cbar_kws = {'label': 'Value'}
+
+    sns.heatmap(acc_diff_df, ax=axes[0], annot=True, fmt=".4f", cmap=cmap, cbar_kws=cbar_kws,
+                linewidths=0.5, linecolor='white', square=True, mask=acc_diff_df.isna())
+    axes[0].set_title("Accuracy Difference")
+    # axes[0].set_xlabel("Fine-Tuninig Noise")
+    axes[0].set_ylabel("Pre-Training Noise")
+
+    sns.heatmap(loss_diff_df, ax=axes[1], annot=True, fmt=".4f", cmap=cmap, cbar_kws=cbar_kws,
+                linewidths=0.5, linecolor='white', square=True, mask=loss_diff_df.isna())
+    axes[1].set_title("Loss Difference")
+    # axes[1].set_xlabel("Fine-Tuninig Noise")
+    axes[1].set_ylabel("Pre-Training Noise")
+
+    sns.heatmap(scale_df, ax=axes[2], annot=True, fmt=".4f", cmap=cmap, cbar_kws=cbar_kws,
+                linewidths=0.5, linecolor='white', square=True, mask=scale_df.isna())
+    axes[2].set_title("Best Scale Coefficient")
+    axes[2].set_xlabel("Fine-Tuninig Noise")
+    axes[2].set_ylabel("Pre-Training Noise")
+
+    if saving_path is not None:
+        plt.savefig(saving_path, dpi=300, bbox_inches='tight')
+
+    plt.show()
+
+def unwrap_noise_configurations(config_dict):
+    """
+    Unwraps the lists inside 'strategy:noise' from a loaded YAML dictionary.
+
+    Args:
+        config_dict (dict): The dictionary loaded from the YAML file.
+
+    Returns:
+        tuple: A tuple containing two lists:
+            - list_a (list): Each dictionary in this list represents a configuration
+                             with a single 'pretraining' noise setting. The 'finetuning'
+                             noise setting is removed.
+            - list_b (list): Each dictionary in this list represents a combination
+                             of single 'pretraining' and 'finetuning' noise settings,
+                             where the 'noise_rate' of finetuning is greater than
+                             that of pretraining.
+    """
+    list_a = []
+    list_b = []
+
+    # Safely access the noise configurations
+    strategy_noise = config_dict.get('strategy', {}).get('noise', {})
+    pretraining_configs = strategy_noise.get('pretraining', [])
+    finetuning_configs = strategy_noise.get('finetuning', [])
+
+    # Generate list_a (pretraining only configurations)
+    for pretraining_item in pretraining_configs:
+        new_config = copy.deepcopy(config_dict)
+        new_config['strategy']['noise']['pretraining'] = pretraining_item
+        # Remove finetuning if it exists
+        if 'finetuning' in new_config['strategy']['noise']:
+            del new_config['strategy']['noise']['finetuning']
+
+        list_a.append(new_config)
+
+    # Generate list_b (pretraining + finetuning combinations with noise_rate condition)
+    for pretraining_item in pretraining_configs:
+        for finetuning_item in finetuning_configs:
+            if finetuning_item.get('noise_rate', 0.0) > pretraining_item.get('noise_rate', 0.0):
+                new_config = copy.deepcopy(config_dict)
+                new_config['strategy']['noise']['pretraining'] = pretraining_item
+                new_config['strategy']['noise']['finetuning'] = finetuning_item
+                list_b.append(new_config)
+
+    return list_a, list_b
 
 
-
-def process_model(cfg, num_classes):
-    model_type = cfg['model'].pop('type')
-    if cfg['model']['loss_fn'] == 'MSE':
-        cfg['model']['loss_fn'] = torch.nn.MSELoss()
-    elif cfg['model']['loss_fn'] == 'CE':
-        cfg['model']['loss_fn'] = torch.nn.CrossEntropyLoss()
-    else: raise ValueError(f"Invalid loss function {cfg['model']['loss_fn']}.")
-    
-    
-    if cfg['model']['metrics']:
-        metrics = {}
-        for metric_name in cfg['model']['metrics']:
-            if metric_name == 'ACC':
-                metrics[metric_name] = torchmetrics.Accuracy(task="multiclass", num_classes=num_classes)
-            elif metric_name == 'F1':
-                metrics[metric_name] = torchmetrics.F1Score(task="multiclass", num_classes=num_classes)
-            else: raise ValueError(f"Invalid metric {metric_name}.")
-        cfg['model']['metrics'] = metrics
-
-    if model_type == 'fc1':
-        model = FC1(**cfg)
-    elif model_type == 'fcN':
-        model = FCN(**cfg)
-    elif model_type == 'cnn5':
-        model = CNN5(**cfg['model'])
-    elif model_type == 'resnet18k':
-        model = make_resnet18k(**cfg)
-    else: raise ValueError(f"Invalid model type {model_type}.")
-    
-    return model
 
 
 
@@ -364,7 +340,14 @@ def search_optimal_coefficient(base_model, task_vector, search_range, dataset, n
     return best_coef, best_results, best_cm_tensor
 
 
-def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str, search_range = [-1.5, 0.0]):
+
+
+def prepare_batch(batch, device):
+    batch = [tens.to(device) for tens in batch]
+    return batch
+
+
+def apply_tv_single_expr(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str, search_range = [-1.5, 0.0]):
     training_seed = cfg['training_seed']
     if training_seed:
         random.seed(training_seed)
@@ -377,9 +360,9 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str, sear
     torch.use_deterministic_algorithms(True) 
     torch.set_float32_matmul_precision("high")
     
-    dataset, num_classes = process_dataset(cfg)
+    dataset, num_classes = dataset_factory.create_dataset(cfg, phase='finetuning')
     
-    model_base = process_model(cfg, num_classes)
+    model_base = model_factory.create_model(cfg, num_classes)
     
     cpu = nn_utils.get_cpu_device()
     gpu = nn_utils.get_gpu_device()
@@ -456,20 +439,126 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str, sear
     
     
 
+def apply_tv_grid_analysis(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str, search_range = [-1.5, 0.0]):
+    training_seed = cfg['training_seed']
+    if training_seed:
+        random.seed(training_seed)
+        np.random.seed(training_seed)
+        torch.manual_seed(training_seed)
+        torch.cuda.manual_seed_all(training_seed)
+    torch.backends.cudnn.enabled = True
+    torch.backends.cudnn.benchmark = False
+    os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
+    torch.use_deterministic_algorithms(True) 
+    torch.set_float32_matmul_precision("high")
+    
+    cpu = nn_utils.get_cpu_device()
+    gpu = nn_utils.get_gpu_device()
+    
+    outputs_dir = outputs_dir / Path(cfg_name)
+    
+    _, finetune_cfgs = unwrap_noise_configurations(cfg)
+    
+    
+    results_dict = OrderedDict()
+    
+    for cfg in finetune_cfgs:
+        pt_noise = cfg['strategy']['noise']['pretraining']['noise_rate']
+        ft_noise = cfg['strategy']['noise']['finetuning']['noise_rate']
+        if pt_noise not in results_dict:
+            results_dict[pt_noise] = OrderedDict()
+            
+        dataset, num_classes = dataset_factory.create_dataset(cfg, phase='finetuning')
+    
+        model_base = model_factory.create_model(cfg, num_classes)
+    
+    
+        pretrain_dir = outputs_dir / Path(f"pn={pt_noise}_pretrain")
+        finetune_dir = outputs_dir/ Path(f"pn={pt_noise}|fn={ft_noise}_finetune")
+        
+        base_model_ckp_path = pretrain_dir / Path('weights/model_weights.pth')
+        base_model_stat_dict = torch.load(base_model_ckp_path, map_location=cpu)
+        model_base.load_state_dict(base_model_stat_dict)
+        
+        
+        ft_model_ckp_path = finetune_dir / Path('weights/model_weights.pth')
+        ft_model_state_dict = torch.load(ft_model_ckp_path, map_location=cpu)
+        
+        task_vector = TaskVector(
+            pretrained_state_dict=base_model_stat_dict,
+            finetuned_state_dict=ft_model_state_dict
+        )
+        
+        best_coef, best_results, best_cm = search_optimal_coefficient(
+            base_model=model_base,
+            task_vector=task_vector,
+            dataset=dataset,
+            search_range=search_range,
+            device=gpu,
+            num_classes=num_classes
+        )
+        
+        
+        with open(pretrain_dir / Path('log/results.json'), 'r') as file:
+            base_model_results = json.load(file)
+            
+        with open(finetune_dir / Path('log/results.json'), 'r') as file:
+            ft_model_results = json.load(file)
+        
+        
+        
+        # class_names = [f'Class {i}' for i in range(10)]
+        # misc_utils.plot_confusion_matrix(cm=best_cm, class_names=class_names, filepath=results_dir / Path('confusion_matrix_tv.png'), show=False)
+        
+        results_list = {
+            'pt': {
+                'ACC': base_model_results['final']['Test/ACC'],
+                'F1': base_model_results['final']['Test/F1'],
+                'Loss': base_model_results['final']['Test/Loss'],
+            },
+            'ft': {
+                'ACC': ft_model_results['final']['Test/ACC'],
+                'F1': ft_model_results['final']['Test/F1'],
+                'Loss': ft_model_results['final']['Test/Loss'],
+            },
+            'tv': {
+                'ACC': best_results['ACC'],
+                'F1': best_results['F1'],
+                'Loss': best_results['Loss'],
+                'Scale': best_coef
+            },
+            
+        }
+        
+        results_dict[pt_noise][ft_noise] = results_list
+        
+    
+    with open(results_dir / Path(f"{cfg_name}_results.pk"), 'wb') as file:
+        pickle.dump(results_dict, file)
+    
+        
+    # with open(results_dir / Path(f"{cfg_name}_results.pk"), 'rb') as file:
+    #     results_dict = pickle.load(file)
+        
+    plot_results_grids(results_dict, results_dir / Path(f"{cfg_name}_grid_analysis.png"))
+    
+
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
+    
+    parser.add_argument(
+        "-g",
+        "--grid",
+        help="Whether the experiment is a grid analysis or not",
+        action="store_true",
+    )
+    
     parser.add_argument(
         "-c",
         "--config",
         help="Configuration to used for model.",
         type=str,
-    )
-    parser.add_argument(
-        "-r",
-        "--resume",
-        help="Resume training from the last checkpoint.",
-        action="store_true",
     )
     
     parser.add_argument(
@@ -482,15 +571,27 @@ if __name__ == "__main__":
 
     dotenv.load_dotenv(".env")
     
-    cfg_path = Path('configs/single_experiment').joinpath(args.config)
-
-    if not cfg_path.exists(): raise RuntimeError('The specified config file does not exist.')
-    with open(cfg_path, 'r') as file:
-        cfg = yaml.full_load(file)
-
-    outputs_dir = Path("outputs/single_experiment").absolute()
-    outputs_dir.mkdir(exist_ok=True, parents=True)
-    results_dir = Path("results/single_experiment").absolute()
-    results_dir.mkdir(exist_ok=True, parents=True)
     
-    apply_tv(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)
+
+    if args.grid:
+        cfg_path = Path('configs/grid_analysis').joinpath(args.config)
+
+        if not cfg_path.exists(): raise RuntimeError('The specified config file does not exist.')
+        with open(cfg_path, 'r') as file:
+            cfg = yaml.full_load(file)
+        outputs_dir = Path("outputs/grid_analysis").absolute()
+        results_dir = Path("results/grid_analysis").absolute()
+        results_dir.mkdir(exist_ok=True, parents=True)
+        
+        apply_tv_grid_analysis(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)
+    else:
+        cfg_path = Path('configs/single_experiment').joinpath(args.config)
+
+        if not cfg_path.exists(): raise RuntimeError('The specified config file does not exist.')
+        with open(cfg_path, 'r') as file:
+            cfg = yaml.full_load(file)
+        outputs_dir = Path("outputs/single_experiment").absolute()
+        results_dir = Path("results/single_experiment").absolute()
+        results_dir.mkdir(exist_ok=True, parents=True)
+        
+        apply_tv_single_expr(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)

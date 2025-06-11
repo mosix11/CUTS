@@ -27,6 +27,7 @@ class CIFAR10:
         normalize_imgs: bool = False,
         flatten: bool = False,
         valset_ratio: float = 0.05,
+        return_index: bool = False,
         num_workers: int = 2,
         seed: int = None,
     ) -> None:
@@ -51,6 +52,7 @@ class CIFAR10:
         self.flatten = flatten
         self.valset_ratio = valset_ratio
         self.trainset_ratio = 1 - self.valset_ratio
+        self.return_index = return_index
 
         if self.class_subset:
             self.available_classes = self.class_subset

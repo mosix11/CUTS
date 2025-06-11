@@ -119,6 +119,8 @@ class TrainerEp:
         self.model_log_call = model_log_call
             
 
+        self.accumulate_low_loss = False
+        self.accumulate_high_loss = False
         
 
     def setup_data_loaders(self, dataset):
@@ -240,6 +242,10 @@ class TrainerEp:
         self.grad_scaler = GradScaler("cuda", enabled=self.use_amp)
 
         self.early_stop = False
+        
+        if model.loss_fn.reduction != 'none' and (self.accumulate_low_loss or self.accumulate_high_loss):
+            raise RuntimeError('In order to accumulate samples with low or high loss in a subset, the reduction type of the loss function should be set to `none`.')
+            
         
         # Whether to log the progress for each batch or for each epoch
         if self.batch_prog:
@@ -468,3 +474,11 @@ class TrainerEp:
             
         if 'best_prf' in checkpoint:
             self.best_model_perf = checkpoint['best_prf']
+            
+            
+            
+    def activate_low_loss_samples_buffer(self):
+        self.accumulate_low_loss = True
+    
+    def activate_high_loss_samples_buffer(self):
+        self.accumulate_high_loss = True

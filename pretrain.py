@@ -1,6 +1,6 @@
 import comet_ml
-from src.datasets import MNIST, CIFAR10, FashionMNIST, MoGSynthetic
-from src.models import FC1, CNN5, make_resnet18k, FCN
+from src.datasets import dataset_factory
+from src.models import FC1, CNN5, make_resnet18k, FCN, model_factory
 from src.trainers import TrainerEp, TrainerGS
 import matplotlib.pyplot as plt
 
@@ -17,59 +17,6 @@ import dotenv
 import yaml
  
     
-def process_dataset(cfg, augmentations=None):
-    cfg['dataset']['batch_size'] = cfg['trainer']['pretraining']['batch_size']
-    del cfg['trainer']['pretraining']['batch_size']
-    dataset_name = cfg['dataset'].pop('name')
-    cfg['dataset']['augmentations'] = augmentations if augmentations else []
-    
-    if dataset_name == 'mnist':
-        pass
-    elif dataset_name == 'cifar10':
-        num_classes = cfg['dataset'].pop('num_classes')
-        dataset = CIFAR10(
-            **cfg['dataset']
-        )
-    elif dataset_name == 'cifar100':
-        pass
-    elif dataset_name == 'mog':
-        pass
-    else: raise ValueError(f"Invalid dataset {dataset_name}.")
-    
-    return dataset, num_classes
-
-
-
-def process_model(cfg, num_classes):
-    model_type = cfg['model'].pop('type')
-    if cfg['model']['loss_fn'] == 'MSE':
-        cfg['model']['loss_fn'] = torch.nn.MSELoss()
-    elif cfg['model']['loss_fn'] == 'CE':
-        cfg['model']['loss_fn'] = torch.nn.CrossEntropyLoss()
-    else: raise ValueError(f"Invalid loss function {cfg['model']['loss_fn']}.")
-    
-    
-    if cfg['model']['metrics']:
-        metrics = {}
-        for metric_name in cfg['model']['metrics']:
-            if metric_name == 'ACC':
-                metrics[metric_name] = torchmetrics.Accuracy(task="multiclass", num_classes=num_classes)
-            elif metric_name == 'F1':
-                metrics[metric_name] = torchmetrics.F1Score(task="multiclass", num_classes=num_classes)
-            else: raise ValueError(f"Invalid metric {metric_name}.")
-        cfg['model']['metrics'] = metrics
-
-    if model_type == 'fc1':
-        model = FC1(**cfg)
-    elif model_type == 'fcN':
-        model = FCN(**cfg)
-    elif model_type == 'cnn5':
-        model = CNN5(**cfg['model'])
-    elif model_type == 'resnet18k':
-        model = make_resnet18k(**cfg)
-    else: raise ValueError(f"Invalid model type {model_type}.")
-    
-    return model
 
 
 def apply_strategy(cfg, dataset):
@@ -85,7 +32,7 @@ def apply_strategy(cfg, dataset):
     return dataset
 
 
-def pretrain_model(outputs_dir: Path, cfg: dict,  cfg_name:str):
+def pretrain_model(outputs_dir: Path, cfg: dict, cfg_name:str):
 
     cfg['trainer']['pretraining']['comet_api_key'] = os.getenv("COMET_API_KEY")
     
@@ -94,9 +41,9 @@ def pretrain_model(outputs_dir: Path, cfg: dict,  cfg_name:str):
         transformsv2.RandomCrop(32, padding=4),
         transformsv2.RandomHorizontalFlip(),
     ]
-    dataset, num_classes = process_dataset(cfg, augmentations)
+    dataset, num_classes = dataset_factory.create_dataset(cfg, augmentations)
     
-    model = process_model(cfg, num_classes)
+    model = model_factory.create_model(cfg, num_classes)
     
     dataset = apply_strategy(cfg, dataset)
     
