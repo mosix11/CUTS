@@ -12,45 +12,21 @@ strategy:
         noise_type: 'symmetric'
         seed: 8
       - set: 'Train'
-        noise_rate: 0.1
-        noise_type: 'symmetric'
-        seed: 8
-      - set: 'Train'
         noise_rate: 0.2
         noise_type: 'symmetric'
         seed: 8
       - set: 'Train'
-        noise_rate: 0.3
-        noise_type: 'symmetric'
-        seed: 8
-      - set: 'Train'
         noise_rate: 0.4
-        noise_type: 'symmetric'
-        seed: 8
-      - set: 'Train'
-        noise_rate: 0.5
         noise_type: 'symmetric'
         seed: 8
 
     finetuning:
       - set: 'Train'
-        noise_rate: 0.1
-        noise_type: 'symmetric'
-        seed: 8
-      - set: 'Train'
         noise_rate: 0.2
         noise_type: 'symmetric'
         seed: 8
       - set: 'Train'
-        noise_rate: 0.3
-        noise_type: 'symmetric'
-        seed: 8
-      - set: 'Train'
         noise_rate: 0.4
-        noise_type: 'symmetric'
-        seed: 8
-      - set: 'Train'
-        noise_rate: 0.5
         noise_type: 'symmetric'
         seed: 8
       - set: 'Train'
@@ -58,15 +34,7 @@ strategy:
         noise_type: 'symmetric'
         seed: 8
       - set: 'Train'
-        noise_rate: 0.7
-        noise_type: 'symmetric'
-        seed: 8
-      - set: 'Train'
         noise_rate: 0.8
-        noise_type: 'symmetric'
-        seed: 8
-      - set: 'Train'
-        noise_rate: 0.9
         noise_type: 'symmetric'
         seed: 8
       - set: 'Train'
@@ -88,7 +56,7 @@ dataset:
   normalize_imgs: True
   flatten: False
   valset_ratio: 0.0
-  num_workers: 4
+  num_workers: 8
   seed: *dataset_seed
 
 

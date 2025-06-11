@@ -239,8 +239,8 @@ def do_analysis(outputs_dir: Path, cfg: dict, cfg_name:str):
     # print(pretrain_cfgs[1])
     # print('\n\n\n')
     # print(finetune_cfgs[0])
-    gpu_per_experiment:float = 0.2
-    cpu_per_experiment:float = 4
+    gpu_per_experiment:float = 1.0
+    cpu_per_experiment:float = 8
     
 
     configs = {
