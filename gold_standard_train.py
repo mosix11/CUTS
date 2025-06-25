@@ -1,5 +1,5 @@
 import comet_ml
-from src.datasets import dataset_factory, CIFAR10, CIFAR100
+from src.datasets import dataset_factory
 from src.models import FC1, CNN5, make_resnet18k, FCN, model_factory
 from src.trainers import TrainerEp, TrainerGS
 import matplotlib.pyplot as plt
@@ -16,99 +16,101 @@ import os
 import dotenv
 import yaml
  
- 
-dotenv.load_dotenv(".env") 
-
-COMET_API_KEY = os.getenv("COMET_API_KEY")
-
-training_seed = 11
-dataset_seed = 11
-noise_seed = 8
+    
 
 
-outputs_dir = Path('outputs/single_experiment')
+def apply_strategy(cfg, dataset):
+    strategy = cfg['strategy']
+    # if strategy['finetuning_set'] == 'TrainingSet':
+    #     pass
+    # elif strategy['finetuning_set'] == 'HeldoutSet':
+    #     pass
+    # else: raise ValueError(f"Invalid strategy type {strategy['finetuning_set']}.")
+    
+    dataset.inject_noise(**strategy['noise']['pretraining'])
+    clean_set, noisy_set = dataset.get_clean_noisy_subsets(set='Train')
+    dataset.set_trainset(clean_set, shuffle=True)
+    return dataset
 
 
- 
-augmentations = [
+def pretrain_model(outputs_dir: Path, cfg: dict, cfg_name:str):
+
+    cfg['trainer']['pretraining']['comet_api_key'] = os.getenv("COMET_API_KEY")
+    
+    
+    augmentations = [
         transformsv2.RandomCrop(32, padding=4),
         transformsv2.RandomHorizontalFlip(),
     ]
+    dataset, num_classes = dataset_factory.create_dataset(cfg, augmentations)
+    
+    model = model_factory.create_model(cfg, num_classes)
+    
+    dataset = apply_strategy(cfg, dataset)
+    
+    experiment_name = f"{cfg_name}_gold"
+    experiment_tags = experiment_name.split("_")
 
+    experiment_dir = outputs_dir / Path(experiment_name)
 
-num_classes = 100
-dataset = CIFAR100(
-    batch_size=1024,
-    img_size=[32,32],
-    augmentations=augmentations,
-    normalize_imgs=True,
-    flatten=False,
-    valset_ratio=0.0,
-    return_index=True,
-    num_workers=8,
-    seed=dataset_seed
-)
+    weights_dir = experiment_dir / Path("weights")
+    weights_dir.mkdir(exist_ok=True, parents=True)
 
-dataset.inject_noise(
-    set='Train',
-    noise_rate=0.2,
-    noise_type='symmetric',
-    seed=noise_seed
-)
-clean_set, noisy_set = dataset.get_clean_noisy_subsets(set='Train')
-dataset.set_trainset(clean_set, shuffle=True)
+    plots_dir = experiment_dir / Path("plots")
+    plots_dir.mkdir(exist_ok=True, parents=True)
+    
+    trainer = TrainerEp(
+        outputs_dir=outputs_dir,
+        **cfg['trainer']['pretraining'],
+        exp_name=experiment_name,
+        exp_tags=experiment_tags,
+    )
+    
+    
+    # ckp = torch.load(experiment_dir / 'checkpoint/final_ckp.pth')
+    # model.load_state_dict(ckp['state_dict'])
+    results = trainer.fit(model, dataset, resume=False)
+    
+    # print(results)
 
-loss_fn = torch.nn.CrossEntropyLoss()
-metrics = {
-    'ACC': torchmetrics.Accuracy(task="multiclass", num_classes=num_classes),
-    'F1': torchmetrics.F1Score(task="multiclass", num_classes=num_classes)
-}
+    torch.save(model.state_dict(), weights_dir / Path("model_weights.pth"))
 
+    class_names = [f"Class {i}" for i in range(num_classes)]
+    confmat = trainer.confmat("Test")
+    misc_utils.plot_confusion_matrix(
+        cm=confmat,
+        class_names=class_names,
+        filepath=str(plots_dir / Path("confmat.png")),
+    )
+    
 
-expr_name = f'gold_cifar{num_classes}_cleanset_0.2noise_seed{noise_seed}'
+if __name__ == "__main__":
 
-model = make_resnet18k(
-    init_channels=64,
-    num_classes=num_classes,
-    loss_fn=loss_fn,
-    metrics=metrics
-)
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "-c",
+        "--config",
+        help="Configuration to used for model.",
+        type=str,
+    )
+    parser.add_argument(
+        "-r",
+        "--resume",
+        help="Resume training from the last checkpoint.",
+        action="store_true",
+    )
+    args = parser.parse_args()
 
-optim_cfg = {
-    'type': 'adamw',
-    'lr': 1e-4,
-    'betas': (0.9, 0.999)
-}
+    dotenv.load_dotenv(".env")
+    
+    cfg_path = Path('configs/single_experiment').joinpath(args.config)
 
-trainer = TrainerEp(
-    outputs_dir=outputs_dir,
-    max_epochs=600,
-    optimizer_cfg=optim_cfg,
-    save_best_model=False,
-    log_comet=True,
-    comet_api_key=COMET_API_KEY,
-    comet_project_name='gold_standards',
-    exp_name=expr_name,
-    seed=training_seed,
-)
+    if not cfg_path.exists(): raise RuntimeError('The specified config file does not exist.')
+    with open(cfg_path, 'r') as file:
+        cfg = yaml.full_load(file)
 
-results = trainer.fit(model, dataset, resume=False)
+    outputs_dir = Path("outputs/single_experiment").absolute()
+    outputs_dir.mkdir(exist_ok=True, parents=True)
 
-print(results)
-experiment_dir = outputs_dir / Path(expr_name)
+    pretrain_model(outputs_dir, cfg, cfg_name=cfg_path.stem)
 
-weights_dir = experiment_dir / Path("weights")
-weights_dir.mkdir(exist_ok=True, parents=True)
-
-plots_dir = experiment_dir / Path("plots")
-plots_dir.mkdir(exist_ok=True, parents=True)
-
-torch.save(model.state_dict(), weights_dir / Path("model_weights.pth"))
-
-class_names = [f"Class {i}" for i in range(num_classes)]
-confmat = trainer.confmat("Test")
-misc_utils.plot_confusion_matrix(
-    cm=confmat,
-    class_names=class_names,
-    filepath=str(plots_dir / Path("confmat.png")),
-)

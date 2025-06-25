@@ -45,7 +45,7 @@ model:
 
 trainer:
   pretraining:
-    max_epochs: 700
+    max_epochs: 5
     batch_size: 1024
     optimizer_cfg: 
       type: "adam"
