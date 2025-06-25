@@ -27,7 +27,7 @@ noise_seed = 8
 
 
 outputs_dir = Path('outputs/single_experiment')
-expr_name = 'pretrain_cleanset_0.4noise_seed8'
+expr_name = 'gold_cifar100_cleanset_0.5noise_seed8'
 
  
 augmentations = [
@@ -36,8 +36,8 @@ augmentations = [
     ]
 
 
-num_classes = 10
-dataset = CIFAR10(
+num_classes = 100
+dataset = CIFAR100(
     batch_size=1024,
     img_size=[32,32],
     augmentations=augmentations,
@@ -51,7 +51,7 @@ dataset = CIFAR10(
 
 dataset.inject_noise(
     set='Train',
-    noise_rate=0.4,
+    noise_rate=0.5,
     noise_type='symmetric',
     seed=noise_seed
 )
@@ -64,10 +64,9 @@ metrics = {
     'F1': torchmetrics.F1Score(task="multiclass", num_classes=num_classes)
 }
 
-model = CNN5(
-    num_channels=128,
+model = make_resnet18k(
+    init_channels=64,
     num_classes=num_classes,
-    gray_scale=False,
     loss_fn=loss_fn,
     metrics=metrics
 )
@@ -85,12 +84,12 @@ trainer = TrainerEp(
     save_best_model=False,
     log_comet=True,
     comet_api_key=COMET_API_KEY,
-    comet_project_name='task-vectors-cifar10',
+    comet_project_name='gold_standards',
     exp_name=expr_name,
     seed=training_seed,
 )
 
-results = trainer.fit(model, dataset, resume=True)
+results = trainer.fit(model, dataset, resume=False)
 
 print(results)
 experiment_dir = outputs_dir / Path(expr_name)

@@ -148,10 +148,14 @@ class TrainerEp:
         Unpacks a list/tuple into four variables, assigning default_value
         to any variables that don't have corresponding items.
         """
-        x = batch[0] if len(batch) > 0 else default_value
-        y = batch[1] if len(batch) > 1 else default_value
-        is_noisy = batch[2] if len(batch) > 2 else default_value
-        idx = batch[3] if len(batch) > 3 else default_value
+        # x = batch[0] if len(batch) > 0 else default_value
+        # y = batch[1] if len(batch) > 1 else default_value
+        # is_noisy = batch[2] if len(batch) > 2 else default_value
+        # idx = batch[3] if len(batch) > 3 else default_value
+        x = batch[0]
+        y = batch[1]
+        is_noisy = batch[2] if len(batch) == 4 else torch.zeros_like(y)
+        idx = batch[3] if len(batch) == 4 else batch[2]
         return x, y, is_noisy, idx
 
     def prepare_model(self, state_dict=None):
@@ -356,6 +360,8 @@ class TrainerEp:
                                     self.high_loss_sample_indices[sample_target].add(sample_idx)
             
             else:
+                # TODO remove is_noisy
+                # loss = self.model.training_step(input_batch, (target_batch, is_noisy), self.use_amp)
                 loss = self.model.training_step(input_batch, target_batch, self.use_amp)
 
             if self.model.loss_fn.reduction == 'none':
@@ -397,9 +403,11 @@ class TrainerEp:
             stat_key = f"Train/{met_name}"
             
             statistics[stat_key] = met_val
-            
-        if epoch_train_loss.avg == 0.0 or metrics_results['ACC'] == 1.0:
-            if self.early_stopping: self.early_stop = True
+          
+          
+        # TODO fix the problem of early stopping  
+        # if epoch_train_loss.avg == 0.0 or metrics_results['ACC'] == 1.0:
+        #     if self.early_stopping: self.early_stop = True
         
         if self.validation_freq > 0:
             if (self.epoch+1) % self.validation_freq == 0:
@@ -444,7 +452,7 @@ class TrainerEp:
         for i, batch in enumerate(dataloader):
             batch = self.prepare_batch(batch)
             input_batch, target_batch, is_noisy, idxs = self.unpack_batch(batch)
-            
+            # loss = self.model.validation_step(input_batch, (target_batch, is_noisy), self.use_amp)
             loss = self.model.validation_step(input_batch, target_batch, self.use_amp)
             if self.model.loss_fn.reduction == 'none':
                 loss = loss.mean()

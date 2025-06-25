@@ -120,7 +120,7 @@ class NoisyClassificationDataset(Dataset):
     def _add_noise_to_labels(self):
         original_labels = self._get_original_labels()
         noisy_labels = original_labels.clone()
-        self.is_noisy_flags = torch.zeros(len(original_labels), dtype=torch.bool)
+        self.is_noisy_flags = torch.zeros(len(original_labels))
 
         if self.noise_type == 'symmetric':
             num_noisy_labels = int(self.noise_rate * len(original_labels))
@@ -137,7 +137,7 @@ class NoisyClassificationDataset(Dataset):
                 if possible_flips:
                     rand_idx = torch.randint(0, len(possible_flips), (1,), generator=self.generator).item()
                     noisy_labels[idx] = possible_flips[rand_idx]
-                    self.is_noisy_flags[idx] = True
+                    self.is_noisy_flags[idx] = 1.0
 
         elif self.noise_type == 'asymmetric':
             for i, label_tensor in enumerate(original_labels):
@@ -164,7 +164,7 @@ class NoisyClassificationDataset(Dataset):
                     # # Add more specific rules as needed
 
                     if flipped:
-                        self.is_noisy_flags[i] = True
+                        self.is_noisy_flags[i] = 1.0
 
         elif self.noise_type == 'instance_dependent':
             raise NotImplementedError("Instance-dependent noise is complex and typically requires a separate model.")
