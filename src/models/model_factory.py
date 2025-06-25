@@ -27,13 +27,13 @@ def create_model(cfg, num_classes):
         cfg['model']['metrics'] = metrics
 
     if model_type == 'fc1':
-        model = FC1(**cfg)
+        model = FC1(**cfg['model'])
     elif model_type == 'fcN':
-        model = FCN(**cfg)
+        model = FCN(**cfg['model'])
     elif model_type == 'cnn5':
         model = CNN5(**cfg['model'])
     elif model_type == 'resnet18k':
-        model = make_resnet18k(**cfg)
+        model = make_resnet18k(**cfg['model'])
     else: raise ValueError(f"Invalid model type {model_type}.")
     
     return model

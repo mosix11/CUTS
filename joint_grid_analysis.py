@@ -117,7 +117,7 @@ def pretrain_trainable(config, outputs_dir:Path):
     torch.save(model.state_dict(), weights_dir / Path("model_weights.pth"))
     
     class_names = [f"Class {i}" for i in range(num_classes)]
-    confmat = trainer.confmat("Test", num_classes=num_classes)
+    confmat = trainer.confmat("Test")
     misc_utils.plot_confusion_matrix(
         cm=confmat,
         class_names=class_names,
@@ -164,7 +164,7 @@ def finetune_trainable(config, outputs_dir:Path):
     torch.save(model.state_dict(), weights_dir / Path("model_weights.pth"))
     
     class_names = [f"Class {i}" for i in range(num_classes)]
-    confmat = trainer.confmat("Test", num_classes=num_classes)
+    confmat = trainer.confmat("Test")
     misc_utils.plot_confusion_matrix(
         cm=confmat,
         class_names=class_names,

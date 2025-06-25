@@ -3,6 +3,33 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.amp import autocast
 
+def conv3x3(in_planes, out_planes, stride=1):
+    return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=1, bias=False)
+
+class BasicBlock(nn.Module):
+    expansion = 1
+
+    def __init__(self, in_planes, planes, stride=1):
+        super(BasicBlock, self).__init__()
+        self.conv1 = conv3x3(in_planes, planes, stride)
+        self.bn1 = nn.BatchNorm2d(planes)
+        self.conv2 = conv3x3(planes, planes)
+        self.bn2 = nn.BatchNorm2d(planes)
+
+        self.shortcut = nn.Sequential()
+        if stride != 1 or in_planes != self.expansion*planes:
+            self.shortcut = nn.Sequential(
+                nn.Conv2d(in_planes, self.expansion*planes, kernel_size=1, stride=stride, bias=False),
+                nn.BatchNorm2d(self.expansion*planes)
+            )
+
+    def forward(self, x):
+        out = F.relu(self.bn1(self.conv1(x)))
+        out = self.bn2(self.conv2(out))
+        out += self.shortcut(x)
+        out = F.relu(out)
+        return out
+    
 
 class PreActBlock(nn.Module):
     """Pre-activation version of the BasicBlock."""
@@ -98,25 +125,35 @@ class PreActResNet(nn.Module):
         out = self.linear(out)
         return out
 
-    def training_step(self, x, y, use_amp=False):
-        with autocast("cuda", enabled=use_amp):
+    def training_step(self, x, y, use_amp=False, return_preds=False):
+        with autocast('cuda', enabled=use_amp):
             preds = self(x)
             loss = self.loss_fn(preds, y)
         if self.metrics:
             for name, metric in self.metrics.items():
                 metric.update(preds, y)
-        return loss
+        if return_preds:
+            return loss, preds
+        else:
+            return loss
     
-    def validation_step(self, x, y, use_amp=False):
+    def validation_step(self, x, y, use_amp=False, return_preds=False):
         with torch.no_grad():
-            with autocast("cuda", enabled=use_amp):
+            with autocast('cuda', enabled=use_amp):
                 preds = self(x)
                 loss = self.loss_fn(preds, y)
         if self.metrics:
             for name, metric in self.metrics.items():
                 metric.update(preds, y)
-        return loss
+        if return_preds:
+            return loss, preds
+        else:
+            return loss
 
+    def predict(self, x):
+        with torch.no_grad():
+            preds = self(x)
+        return preds
 
     def compute_metrics(self):
         results = {}
@@ -131,7 +168,7 @@ class PreActResNet(nn.Module):
                 metric.reset()
 
     def get_identifier(self):
-        return f"resnet18|k{self.k}"
+        return f"resnet18k|k{self.k}"
     
     
 
@@ -144,15 +181,73 @@ class PreActResNet(nn.Module):
     
 
 def make_resnet18k(
-    k=64, num_classes=10, weight_init=None, loss_fn=nn.CrossEntropyLoss, metric=None
+    init_channels=64, num_classes=10, weight_init=None, loss_fn=nn.CrossEntropyLoss, metrics=None
 ) -> PreActResNet:
-    """Returns a ResNet18 with width parameter k. (k=64 is standard ResNet18)"""
+    """Returns a ResNet18 with width parameter init_channels. (init_channels=64 is standard ResNet18)"""
     return PreActResNet(
         PreActBlock,
         [2, 2, 2, 2],
         num_classes=num_classes,
-        init_channels=k,
+        init_channels=init_channels,
         weight_init=weight_init,
         loss_fn=loss_fn,
-        metric=metric,
+        metrics=metrics,
+    )
+    
+    
+def make_resnet34k(
+    init_channels=64, num_classes=10, weight_init=None, loss_fn=nn.CrossEntropyLoss, metrics=None
+) -> PreActResNet:
+    """Returns a ResNet18 with width parameter init_channels. (init_channels=64 is standard ResNet34)"""
+    return PreActResNet(
+        PreActBlock,
+        [3,4,6,3],
+        num_classes=num_classes,
+        init_channels=init_channels,
+        weight_init=weight_init,
+        loss_fn=loss_fn,
+        metrics=metrics,
+    )
+    
+
+def make_resnet18k(
+    init_channels=64, num_classes=10, weight_init=None, loss_fn=nn.CrossEntropyLoss, metrics=None
+) -> PreActResNet:
+    """Returns a ResNet18 with width parameter init_channels. (init_channels=64 is standard ResNet18)"""
+    return PreActResNet(
+        PreActBlock,
+        [2, 2, 2, 2],
+        num_classes=num_classes,
+        init_channels=init_channels,
+        weight_init=weight_init,
+        loss_fn=loss_fn,
+        metrics=metrics,
+    )
+    
+def make_resnet18k(
+    init_channels=64, num_classes=10, weight_init=None, loss_fn=nn.CrossEntropyLoss, metrics=None
+) -> PreActResNet:
+    """Returns a ResNet18 with width parameter init_channels. (init_channels=64 is standard ResNet18)"""
+    return PreActResNet(
+        PreActBlock,
+        [2, 2, 2, 2],
+        num_classes=num_classes,
+        init_channels=init_channels,
+        weight_init=weight_init,
+        loss_fn=loss_fn,
+        metrics=metrics,
+    )
+    
+def make_resnet18k(
+    init_channels=64, num_classes=10, weight_init=None, loss_fn=nn.CrossEntropyLoss, metrics=None
+) -> PreActResNet:
+    """Returns a ResNet18 with width parameter init_channels. (init_channels=64 is standard ResNet18)"""
+    return PreActResNet(
+        PreActBlock,
+        [2, 2, 2, 2],
+        num_classes=num_classes,
+        init_channels=init_channels,
+        weight_init=weight_init,
+        loss_fn=loss_fn,
+        metrics=metrics,
     )

@@ -3,6 +3,25 @@ from torch.utils.data import Dataset, Subset
 import warnings
 
 
+class DatasetWithIndex(Dataset):
+    
+    def __init__(self, dataset: Dataset):
+        super().__init__()
+        self.dataset = dataset
+        
+    def __len__(self):
+        return len(self.dataset)
+    
+    def __getitem__(self, idx):
+        data = self.dataset[idx]
+        if len(data) == 3:
+            x, y, is_noisy = data
+            return x, y, is_noisy, idx
+        elif len(data) == 2:
+            x, y = data
+            return x, y, idx
+        else:
+            raise RuntimeError('Data structure unknown!')
 
 class LabelRemapper(Dataset):
     """

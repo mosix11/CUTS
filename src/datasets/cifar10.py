@@ -3,7 +3,7 @@ from torchvision import datasets
 import torchvision.transforms.v2 as transforms
 from torch.utils.data import Dataset, DataLoader, random_split, Subset
 
-from .utils import LabelRemapper, NoisyClassificationDataset, apply_label_noise
+from .utils import DatasetWithIndex, LabelRemapper, NoisyClassificationDataset
 
 import os
 from pathlib import Path
@@ -107,28 +107,28 @@ class CIFAR10:
     
     def set_trainset(self, set, shuffle=False):
         self.trainset = set
-        self._build_dataloader(self.trainset, shuffle=shuffle)
+        self.train_loader = self._build_dataloader(self.trainset, shuffle=shuffle)
     
     def get_valset(self):
         return self.valset
     
-    def set_trainset(self, set):
+    def set_valset(self, set):
         self.valset = set
-        self._build_dataloader(self.valset, shuffle=False)
+        self.val_loader = self._build_dataloader(self.valset, shuffle=False)
     
     def get_testset(self):
         return self.testset
     
     def set_testset(self, set):
         self.testset = set
-        self._build_dataloader(self.testset, shuffle=False)
+        self.test_loader = self._build_dataloader(self.testset, shuffle=False)
     
     def get_heldoutset(self):
         return self.heldout_set
     
     def set_heldoutset(self, set, shuffle=False):
         self.heldout_set = set
-        self._build_dataloader(self.heldout_set, shuffle=shuffle)
+        self.heldout_loader = self._build_dataloader(self.heldout_set, shuffle=shuffle)
         
 
     def get_generator(self):
@@ -141,22 +141,31 @@ class CIFAR10:
         self.generator.manual_seed(seed)
         
         
-    def inject_noise(self, set='Train', noise_rate=0.0, noise_type='symmetric', seed=None, generator=None):
-        dataset = None
-        if set == 'Train':
-            dataset = self.trainset
-        elif set == 'Val':
-            dataset = self.valset
-        elif set == 'Test':
-            dataset = self.testset
-        elif set == 'Heldout':
-            dataset = self.heldout_set
-        else:
-            raise ValueError('set argument must be one of these values `Train`, `Val`, `Test`, `Heldout`')
+    def get_available_classes(self):
+        return self.available_classes
+    
+    def get_num_classes(self):
+        return len(self.available_classes)
+    
+    
+    def subset_set(self, set='Train', indices=[]):
+        dataset = self._get_set(set)
         
-        # unwrap the dataset
-        if isinstance(dataset, LabelRemapper):
-            dataset = dataset.dataset
+        dataset = Subset(dataset, indices)
+        
+        self._set_set(set, dataset)
+        
+    def inject_noise(self, set='Train', noise_rate=0.0, noise_type='symmetric', seed=None, generator=None):
+        dataset = self._get_set(set)
+        
+        if isinstance(dataset, Subset):
+            while isinstance(dataset.dataset, (LabelRemapper, DatasetWithIndex, NoisyClassificationDataset)):
+                dataset.dataset = dataset.dataset.dataset
+        else:
+            # unwrap the dataset
+            while isinstance(dataset, (LabelRemapper, DatasetWithIndex, NoisyClassificationDataset)):
+                dataset = dataset.dataset
+        
         
         dataset = NoisyClassificationDataset(
             dataset=dataset,
@@ -170,21 +179,30 @@ class CIFAR10:
         
         if self.remap_labels and self.class_subset:
             dataset = LabelRemapper(dataset, self.label_mapping)
-
+        if self.return_index:
+            dataset = DatasetWithIndex(dataset)
         
-        if set == 'Train':
-            self.trainset = dataset 
-            self.train_loader = self._build_dataloader(self.trainset, shuffle=True)
-        elif set == 'Val':
-            self.valset = dataset
-            self.val_loader = self._build_dataloader(self.valset, shuffle=False)
-        elif set == 'Test':
-            self.testset = dataset 
-            self.test_loader = self._build_dataloader(self.testset, shuffle=False)
-        elif set == 'Heldout':
-            self.heldout_set = dataset
-            self.heldout_loader = self._build_dataloader(self.heldout_set, shuffle=False)
+        self._set_set(set, dataset)
         
+        
+    def get_clean_noisy_subsets(self, set='Train'):
+        if not self.return_index:
+            raise RuntimeError('In order to be able to get the subsets of the clean and noisy samples, the dataset class must be initialized with `return_index=True`')
+        dataset = self._get_set(set)
+        
+        clean_indices = []
+        noisy_indices = []
+        for item in dataset:
+            if len(item) == 4:
+                x, y, is_noisy, idx = item
+                if is_noisy:
+                    noisy_indices.append(idx)
+                else:
+                    clean_indices.append(idx)
+            else:
+                raise RuntimeError('The chosen dataset is not noisy!')
+        
+        return Subset(dataset, clean_indices), Subset(dataset, noisy_indices)
         
     def replace_heldout_as_train_dl(self):
         self.train_loader = self._build_dataloader(self.heldout_set, shuffle=True)
@@ -277,12 +295,12 @@ class CIFAR10:
             test_dataset = LabelRemapper(test_dataset, self.label_mapping)
             if heldout_set: heldout_set = LabelRemapper(heldout_set, self.label_mapping)
 
-        # self.trainset = NoisyDataset(trainset, is_noisy_applied=self.label_noise > 0.0)
-        # self.valset = NoisyDataset(valset, is_noisy_applied=self.label_noise > 0.0) if valset else None
-        # self.testset = NoisyDataset(test_dataset, is_noisy_applied=False)
-        # if self.heldout_set:
-        #     is_noisy = noisy_heldout and self.label_noise > 0.0
-        #     self.heldout_set = NoisyDataset(self.heldout_set, is_noisy_applied=is_noisy)
+        
+        if self.return_index:
+            trainset = DatasetWithIndex(train_dataset)
+            if valset: valset = DatasetWithIndex(valset)
+            test_dataset = DatasetWithIndex(test_dataset)
+            if heldout_set: heldout_set = DatasetWithIndex(heldout_set)
         
         self.trainset = trainset
         self.valset = valset
@@ -352,3 +370,37 @@ class CIFAR10:
             pin_memory=True,
             generator=self.generator,
         )
+        
+        
+    def _get_set(self, set):
+        dataset = None
+        if set == 'Train':
+            dataset = self.trainset
+        elif set == 'Val':
+            dataset = self.valset
+        elif set == 'Test':
+            dataset = self.testset
+        elif set == 'Heldout':
+            dataset = self.heldout_set
+        else:
+            raise ValueError('set argument must be one of these values `Train`, `Val`, `Test`, `Heldout`')
+        
+        return dataset
+    
+    def _set_set(self, set, new_set):
+        if set == 'Train':
+            self.trainset = new_set 
+            self.train_loader = self._build_dataloader(self.trainset, shuffle=True)
+        elif set == 'Val':
+            self.valset = new_set
+            self.val_loader = self._build_dataloader(self.valset, shuffle=False)
+        elif set == 'Test':
+            self.testset = new_set 
+            self.test_loader = self._build_dataloader(self.testset, shuffle=False)
+        elif set == 'Heldout':
+            self.heldout_set = new_set
+            self.heldout_loader = self._build_dataloader(self.heldout_set, shuffle=False)
+            
+        else:
+            raise ValueError('set argument must be one of these values `Train`, `Val`, `Test`, `Heldout`')
+            

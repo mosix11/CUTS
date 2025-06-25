@@ -73,16 +73,19 @@ class CNN5(nn.Module):
                 self.metrics[name] = metric_instance
     
     
-    def training_step(self, x, y, use_amp=False):
+    def training_step(self, x, y, use_amp=False, return_preds=False):
         with autocast('cuda', enabled=use_amp):
             preds = self(x)
             loss = self.loss_fn(preds, y)
         if self.metrics:
             for name, metric in self.metrics.items():
                 metric.update(preds, y)
-        return loss
+        if return_preds:
+            return loss, preds
+        else:
+            return loss
         
-    def validation_step(self, x, y, use_amp=False):
+    def validation_step(self, x, y, use_amp=False, return_preds=False):
         with torch.no_grad():
             with autocast('cuda', enabled=use_amp):
                 preds = self(x)
@@ -90,7 +93,10 @@ class CNN5(nn.Module):
         if self.metrics:
             for name, metric in self.metrics.items():
                 metric.update(preds, y)
-        return loss
+        if return_preds:
+            return loss, preds
+        else:
+            return loss
 
 
     def compute_metrics(self):
@@ -112,6 +118,33 @@ class CNN5(nn.Module):
     
     def forward(self, x):
         return self.net(x)
+    
+    
+    
+    def freeze_last_layer(self):
+        """
+        Freezes the weights of the last linear layer (classification head).
+        """
+        # The last layer is at index -1 in the nn.Sequential module
+        last_layer = self.net[-1] 
+        if isinstance(last_layer, nn.Linear):
+            for param in last_layer.parameters():
+                param.requires_grad = False
+            print("Last layer (classification head) weights frozen.")
+        else:
+            print("The last layer is not an nn.Linear layer. No weights frozen.")
+
+    def unfreeze_last_layer(self):
+        """
+        Unfreezes the weights of the last linear layer (classification head).
+        """
+        last_layer = self.net[-1]
+        if isinstance(last_layer, nn.Linear):
+            for param in last_layer.parameters():
+                param.requires_grad = True
+            print("Last layer (classification head) weights unfrozen.")
+        else:
+            print("The last layer is not an nn.Linear layer.")
     
     
     def get_identifier(self):

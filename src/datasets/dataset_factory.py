@@ -14,7 +14,10 @@ def create_dataset(cfg, augmentations=None, phase:str='pretraining'):
             **cfg['dataset']
         )
     elif dataset_name == 'cifar100':
-        pass
+        num_classes = cfg['dataset'].pop('num_classes')
+        dataset = CIFAR10(
+            **cfg['dataset']
+        )
     elif dataset_name == 'mog':
         pass
     else: raise ValueError(f"Invalid dataset {dataset_name}.")

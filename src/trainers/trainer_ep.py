@@ -18,8 +18,11 @@ import numpy as np
 import dotenv
 import copy
 import json
+import collections
+import pickle
 
 from typing import List, Tuple, Union
+
 
 from ..utils import nn_utils, misc_utils
 
@@ -139,6 +142,17 @@ class TrainerEp:
             batch = [tens.to(self.gpu) for tens in batch]
             return batch
         else: return batch
+        
+    def unpack_batch(self, batch, default_value=None):
+        """
+        Unpacks a list/tuple into four variables, assigning default_value
+        to any variables that don't have corresponding items.
+        """
+        x = batch[0] if len(batch) > 0 else default_value
+        y = batch[1] if len(batch) > 1 else default_value
+        is_noisy = batch[2] if len(batch) > 2 else default_value
+        idx = batch[3] if len(batch) > 3 else default_value
+        return x, y, is_noisy, idx
 
     def prepare_model(self, state_dict=None):
         if state_dict:
@@ -305,15 +319,47 @@ class TrainerEp:
         
         for i, batch in pbar:
             batch = self.prepare_batch(batch)
-            if len(batch) == 3:
-                input_batch, target_batch, is_noisy = batch
-            else:
-                input_batch, target_batch = batch
-            
+            input_batch, target_batch, is_noisy, idxs = self.unpack_batch(batch)
             
             self.optim.zero_grad()
+                    
+                
+            if self.accumulate_low_loss or self.accumulate_high_loss:
+                loss, predictions = self.model.training_step(input_batch, target_batch, self.use_amp, return_preds=True)
+                
+                is_correct = (predictions.argmax(dim=-1) == target_batch)
+
+                # Update history and check consistency for each sample in the batch
+                for j in range(len(idxs)):
+                    sample_idx = idxs[j].item()
+                    sample_target = target_batch[j].item()
+                    sample_was_correct = is_correct[j].item()
+
+                    # Handle low loss (correctly classified) samples
+                    if self.accumulate_low_loss and not self.is_low_loss_buffer_full():
+                        self.low_loss_history[sample_idx].append(sample_was_correct)
+                        history = self.low_loss_history[sample_idx]
+                        if len(history) == self.low_loss_consistency_window:
+                            consistency_score = sum(history) / len(history)
+                            if consistency_score >= self.low_loss_consistency_threshold:
+                                if len(self.low_loss_sample_indices[sample_target]) < self.target_buffer_size_per_class_low:
+                                    self.low_loss_sample_indices[sample_target].add(sample_idx)
+
+                    # Handle high loss (wrongly classified) samples
+                    if self.accumulate_high_loss and not self.is_high_loss_buffer_full():
+                        self.high_loss_history[sample_idx].append(not sample_was_correct) # Note: append opposite
+                        history = self.high_loss_history[sample_idx]
+                        if len(history) == self.high_loss_consistency_window:
+                            consistency_score = sum(history) / len(history)
+                            if consistency_score >= self.high_loss_consistency_threshold:
+                                if len(self.high_loss_sample_indices[sample_target]) < self.target_buffer_size_per_class_high:
+                                    self.high_loss_sample_indices[sample_target].add(sample_idx)
             
-            loss = self.model.training_step(input_batch, target_batch, self.use_amp)
+            else:
+                loss = self.model.training_step(input_batch, target_batch, self.use_amp)
+
+            if self.model.loss_fn.reduction == 'none':
+                loss = loss.mean()
             
             if self.use_amp:
                 self.grad_scaler.scale(loss).backward()
@@ -349,6 +395,7 @@ class TrainerEp:
         }
         for met_name, met_val in metrics_results.items():
             stat_key = f"Train/{met_name}"
+            
             statistics[stat_key] = met_val
             
         if epoch_train_loss.avg == 0.0 or metrics_results['ACC'] == 1.0:
@@ -396,11 +443,11 @@ class TrainerEp:
         
         for i, batch in enumerate(dataloader):
             batch = self.prepare_batch(batch)
-            if len(batch) == 3:
-                input_batch, target_batch, is_noisy = batch
-            else:
-                input_batch, target_batch = batch
+            input_batch, target_batch, is_noisy, idxs = self.unpack_batch(batch)
+            
             loss = self.model.validation_step(input_batch, target_batch, self.use_amp)
+            if self.model.loss_fn.reduction == 'none':
+                loss = loss.mean()
             loss_met.update(loss.detach().cpu().item(), n=input_batch.shape[0])
         
         metrics_results = self.model.compute_metrics()
@@ -416,7 +463,8 @@ class TrainerEp:
         return results
     
     
-    def confmat(self, set='Val', num_classes=10):
+    def confmat(self, set='Val'):
+        num_classes = self.dataset.get_num_classes()
         self.model.eval()
         
         dataloader = None
@@ -434,10 +482,8 @@ class TrainerEp:
         
         for i, batch in enumerate(dataloader):
             batch = self.prepare_batch(batch)
-            if len(batch) == 3:
-                input_batch, target_batch, is_noisy = batch
-            else:
-                input_batch, target_batch = batch
+            input_batch, target_batch, is_noisy, idxs = self.unpack_batch(batch)
+            
             model_output = self.model.predict(input_batch) # Get raw model output (logits)
             predictions = torch.argmax(model_output, dim=-1) # Get predicted class labels
             
@@ -475,10 +521,96 @@ class TrainerEp:
         if 'best_prf' in checkpoint:
             self.best_model_perf = checkpoint['best_prf']
             
-            
-            
-    def activate_low_loss_samples_buffer(self):
-        self.accumulate_low_loss = True
+
     
-    def activate_high_loss_samples_buffer(self):
+    def activate_low_loss_samples_buffer(self, percentage: float = 0.3, consistency_window: int = 5, consistency_threshold: float = 0.8):
+        if not hasattr(self, 'train_dataloader'):
+            raise RuntimeError("Please call `setup_data_loaders` before activating the buffers.")
+        self.accumulate_low_loss = True
+        self.low_loss_perc = percentage
+        self.low_loss_consistency_window = consistency_window
+        self.low_loss_consistency_threshold = consistency_threshold
+        
+        available_classes = self.dataset.get_available_classes()
+        num_classes = len(available_classes)
+        num_train_samples = len(self.train_dataloader.dataset)
+        
+        self.target_buffer_size_per_class_low = int((num_train_samples * self.low_loss_perc) / num_classes)
+        self.low_loss_sample_indices = {i: set() for i in available_classes}
+        self.low_loss_history = {i: collections.deque(maxlen=self.low_loss_consistency_window) for i in range(num_train_samples)}
+    
+    def activate_high_loss_samples_buffer(self, percentage: float = 0.3, consistency_window: int = 5, consistency_threshold: float = 0.8):
+        if not hasattr(self, 'train_dataloader'):
+            raise RuntimeError("Please call `setup_data_loaders` before activating the buffers.")
         self.accumulate_high_loss = True
+        self.high_loss_perc = percentage
+        self.high_loss_consistency_window = consistency_window
+        self.high_loss_consistency_threshold = consistency_threshold
+
+        available_classes = self.dataset.get_available_classes()
+        num_classes = len(available_classes)
+        num_train_samples = len(self.train_dataloader.dataset)
+        
+        self.target_buffer_size_per_class_high = int((num_train_samples * self.high_loss_perc) / num_classes)
+        self.high_loss_sample_indices = {i: set() for i in available_classes}
+        self.high_loss_history = {i: collections.deque(maxlen=self.high_loss_consistency_window) for i in range(num_train_samples)}
+
+    def is_low_loss_buffer_full(self):
+        if not self.accumulate_low_loss: return True
+        for class_idx in self.low_loss_sample_indices:
+            if len(self.low_loss_sample_indices[class_idx]) < self.target_buffer_size_per_class_low:
+                return False
+        print("Low-loss buffer is full and balanced.")
+        self.save_low_loss_indices()
+        self.accumulate_low_loss = False
+        return True
+
+    def is_high_loss_buffer_full(self):
+        if not self.accumulate_high_loss: return True
+        for class_idx in self.high_loss_sample_indices:
+            if len(self.high_loss_sample_indices[class_idx]) < self.target_buffer_size_per_class_high:
+                return False
+        print("High-loss buffer is full and balanced.")
+        self.save_high_loss_indices()
+        self.accumulate_high_loss = False
+        return True
+    
+    
+    
+    def save_low_loss_indices(self):
+        if not hasattr(self, 'low_loss_sample_indices'):
+            print("Low-loss buffer was not activated. Nothing to save.")
+            return
+        
+        
+        output_path = self.log_dir / f'low_loss_indices_{self.low_loss_perc}.pkl'
+
+        # Convert sets to sorted lists for clean, deterministic output
+        indices_to_save = {
+            class_idx: sorted(list(idx_set))
+            for class_idx, idx_set in self.low_loss_sample_indices.items()
+        }
+
+        with open(output_path, 'wb') as f:
+            pickle.dump(indices_to_save, f)
+            
+        print(f"Successfully saved low-loss indices for {sum(len(v) for v in indices_to_save.values())} samples to: {output_path}")
+
+
+    def save_high_loss_indices(self):
+        if not hasattr(self, 'high_loss_sample_indices'):
+            print("High-loss buffer was not activated. Nothing to save.")
+            return
+
+        output_path = self.log_dir / f'high_loss_indices_{self.high_loss_perc}.pkl'
+
+        # Convert sets to sorted lists for clean, deterministic output
+        indices_to_save = {
+            class_idx: sorted(list(idx_set))
+            for class_idx, idx_set in self.high_loss_sample_indices.items()
+        }
+
+        with open(output_path, 'wb') as f:
+            pickle.dump(indices_to_save, f)
+
+        print(f"Successfully saved high-loss indices for {sum(len(v) for v in indices_to_save.values())} samples to: {output_path}")

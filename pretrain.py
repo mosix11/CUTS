@@ -65,13 +65,25 @@ def pretrain_model(outputs_dir: Path, cfg: dict, cfg_name:str):
         exp_tags=experiment_tags,
     )
     
+    if cfg['strategy']['finetuning_set'] == 'LowLoss':
+        percentage = cfg['strategy']['percentage']
+        trainer.setup_data_loaders(dataset)
+        trainer.activate_low_loss_samples_buffer(
+            percentage=percentage,
+            consistency_window=5,
+            consistency_threshold=0.8
+        )
+    
+    # ckp = torch.load(experiment_dir / 'checkpoint/final_ckp.pth')
+    # model.load_state_dict(ckp['state_dict'])
     results = trainer.fit(model, dataset, resume=False)
-    print(results)
+    
+    # print(results)
 
     torch.save(model.state_dict(), weights_dir / Path("model_weights.pth"))
 
     class_names = [f"Class {i}" for i in range(num_classes)]
-    confmat = trainer.confmat("Test", num_classes=num_classes)
+    confmat = trainer.confmat("Test")
     misc_utils.plot_confusion_matrix(
         cm=confmat,
         class_names=class_names,

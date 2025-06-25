@@ -15,19 +15,66 @@ import argparse
 import os
 import dotenv
 import yaml
+import pickle
 
 
-
-def apply_strategy(cfg, dataset, phase:str="finetuning"):
+def apply_strategy(cfg, dataset, pretrain_expr_dir:Path, phase:str="finetuning"):
     strategy = cfg['strategy']
     # if strategy['finetuning_set'] == 'TrainingSet':
     #     pass
     # elif strategy['finetuning_set'] == 'HeldoutSet':
     #     pass
     # else: raise ValueError(f"Invalid strategy type {strategy['finetuning_set']}.")    
-    dataset.inject_noise(**strategy['noise'][phase])
+    
     if phase == 'finetuning' and strategy['finetuning_set'] == 'Heldout':
+        dataset.inject_noise(**strategy['noise'][phase])
         dataset.replace_heldout_as_train_dl()
+    elif phase == 'finetuning' and strategy['finetuning_set'] == 'CleanNoiseSplit':
+        dataset.inject_noise(**strategy['noise']['pretraining'])
+        clean_set, noisy_set = dataset.get_clean_noisy_subsets(set='Train')
+        if strategy['noise']['finetuning']['set'] == 'TrainClean':
+            dataset.set_trainset(clean_set, shuffle=True)
+            strategy['noise']['finetuning']['set'] = 'Train'
+            dataset.inject_noise(**strategy['noise']['finetuning'])
+        
+        elif strategy['noise']['finetuning']['set'] == 'TrainNoise':
+            dataset.set_trainset(noisy_set, shuffle=True)
+            
+    elif phase == 'finetuning' and strategy['finetuning_set'] == 'LowLoss':
+        # low_loss_idxs_path = pretrain_expr_dir / f'log/low_loss_indices_{strategy['noise']['pretraining']['noise_rate']}.pkl'
+        low_loss_idxs_path = pretrain_expr_dir / f'log/low_loss_indices_{strategy['percentage']}.pkl'
+        with open(low_loss_idxs_path, 'rb') as mfile:
+            low_loss_indices = pickle.load(mfile)
+        all_easy_samples = [idx for class_list in low_loss_indices.values() for idx in class_list]
+        
+        dataset.inject_noise(**strategy['noise']['pretraining'])
+        dataset.subset_set(set='Train', indices=all_easy_samples)
+        
+        dataset.inject_noise(**strategy['noise']['finetuning'])
+        
+        # num = 0
+        # trainset = dataset.get_trainset()
+        # for item in trainset:
+        #     if item[2] == True:
+        #         num+=1
+        # print(len(trainset))
+        # print(num)
+        
+        # exit()
+        
+        # num_clean = 0
+        # num_noisy = 0
+        # for item in clean_set:
+        #     x, y, is_noisy, idx = item
+        #     if not is_noisy: num_clean+=1
+        #     else: print('Booooogh clean')
+        # for item in noisy_set:
+        #     x, y, is_noisy, idx = item
+        #     if is_noisy: num_noisy+=1
+        #     else: print('Booooogh noisy')
+        # print('Clean size', len(clean_set), 'Clean num', num_clean)
+        # print('Noisy size', len(noisy_set), 'Noisy num', num_noisy)
+        
         
     return dataset
 
@@ -42,8 +89,9 @@ def finetune_model(outputs_dir: Path, cfg: dict, cfg_name:str):
     
     model = model_factory.create_model(cfg, num_classes)
     
-    dataset = apply_strategy(cfg, dataset)
-
+    dataset = apply_strategy(cfg, dataset, outputs_dir / Path(f"{cfg_name}_pretrain"))
+    
+    
     base_model_ckp_path = outputs_dir/ Path(f"{cfg_name}_pretrain") / Path('weights/model_weights.pth')
     checkpoint = torch.load(base_model_ckp_path)
     model.load_state_dict(checkpoint)
@@ -73,7 +121,7 @@ def finetune_model(outputs_dir: Path, cfg: dict, cfg_name:str):
     torch.save(model.state_dict(), weights_dir / Path("model_weights.pth"))
 
     class_names = [f"Class {i}" for i in range(num_classes)]
-    confmat = trainer.confmat("Test", num_classes=num_classes)
+    confmat = trainer.confmat("Test")
     misc_utils.plot_confusion_matrix(
         cm=confmat,
         class_names=class_names,
