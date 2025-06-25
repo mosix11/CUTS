@@ -27,7 +27,7 @@ noise_seed = 8
 
 
 outputs_dir = Path('outputs/single_experiment')
-expr_name = 'gold_cifar100_cleanset_0.5noise_seed8'
+
 
  
 augmentations = [
@@ -51,7 +51,7 @@ dataset = CIFAR100(
 
 dataset.inject_noise(
     set='Train',
-    noise_rate=0.5,
+    noise_rate=0.2,
     noise_type='symmetric',
     seed=noise_seed
 )
@@ -63,6 +63,9 @@ metrics = {
     'ACC': torchmetrics.Accuracy(task="multiclass", num_classes=num_classes),
     'F1': torchmetrics.F1Score(task="multiclass", num_classes=num_classes)
 }
+
+
+expr_name = f'gold_cifar{num_classes}_cleanset_0.2noise_seed{noise_seed}'
 
 model = make_resnet18k(
     init_channels=64,
