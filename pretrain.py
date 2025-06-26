@@ -26,8 +26,9 @@ def apply_strategy(cfg, dataset):
     # elif strategy['finetuning_set'] == 'HeldoutSet':
     #     pass
     # else: raise ValueError(f"Invalid strategy type {strategy['finetuning_set']}.")
+    if 'noise' in strategy:
+        dataset.inject_noise(**strategy['noise']['pretraining'])
     
-    dataset.inject_noise(**strategy['noise']['pretraining'])
     
     return dataset
 
@@ -43,7 +44,7 @@ def pretrain_model(outputs_dir: Path, cfg: dict, cfg_name:str):
     ]
     dataset, num_classes = dataset_factory.create_dataset(cfg, augmentations)
     
-    model = model_factory.create_model(cfg, num_classes)
+    model = model_factory.create_model(cfg['model'], num_classes)
     
     dataset = apply_strategy(cfg, dataset)
     

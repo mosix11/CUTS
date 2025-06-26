@@ -91,7 +91,7 @@ def pretrain_trainable(config, outputs_dir:Path):
         transformsv2.RandomHorizontalFlip(),
     ]
     dataset, num_classes = dataset_factory.create_dataset(cfg, augmentations, phase='pretraining')
-    model = model_factory.create_model(cfg, num_classes) 
+    model = model_factory.create_model(cfg['model'], num_classes) 
     dataset = apply_strategy(cfg, dataset, phase='pretraining')
     
     
@@ -133,7 +133,7 @@ def finetune_trainable(config, outputs_dir:Path):
         transformsv2.RandomHorizontalFlip(),
     ]
     dataset, num_classes = dataset_factory.create_dataset(cfg, augmentations, phase='finetuning')
-    model = model_factory.create_model(cfg, num_classes) 
+    model = model_factory.create_model(cfg['model'], num_classes) 
     dataset = apply_strategy(cfg, dataset, phase='finetuning')
     
     

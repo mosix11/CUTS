@@ -1,6 +1,6 @@
 import comet_ml
 from src.datasets import dataset_factory, CIFAR10, CIFAR100
-from src.models import FC1, CNN5, CNN5_BH, make_resnet18k, FCN, model_factory, CompoundLoss
+from src.models import FC1, CNN5, make_resnet18k, FCN, model_factory, CompoundLoss
 from src.trainers import TrainerEp, TrainerGS
 import matplotlib.pyplot as plt
 

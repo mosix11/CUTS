@@ -52,6 +52,7 @@ def apply_strategy(cfg, dataset, pretrain_expr_dir:Path, phase:str="finetuning")
         
         dataset.inject_noise(**strategy['noise']['finetuning'])
         
+    
         # num = 0
         # trainset = dataset.get_trainset()
         # for item in trainset:
@@ -75,7 +76,9 @@ def apply_strategy(cfg, dataset, pretrain_expr_dir:Path, phase:str="finetuning")
         # print('Clean size', len(clean_set), 'Clean num', num_clean)
         # print('Noisy size', len(noisy_set), 'Noisy num', num_noisy)
         
+    elif phase == 'finetuning' and strategy['finetuning_set'] == 'ClassTVBinaryHead':
         
+        pass
     return dataset
 
 
@@ -87,7 +90,7 @@ def finetune_model(outputs_dir: Path, cfg: dict, cfg_name:str):
     ]
     dataset, num_classes = dataset_factory.create_dataset(cfg, augmentations, phase='finetuning')
     
-    model = model_factory.create_model(cfg, num_classes)
+    model = model_factory.create_model(cfg['model'], num_classes)
     
     dataset = apply_strategy(cfg, dataset, outputs_dir / Path(f"{cfg_name}_pretrain"))
     

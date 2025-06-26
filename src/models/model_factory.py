@@ -3,37 +3,39 @@ import torchmetrics
 from . import FC1, FCN, CNN5, make_resnet18k
 
 def create_model(cfg, num_classes):
-    model_type = cfg['model'].pop('type')
-    loss_fn = cfg['model']['loss_fn']
+    model_type = cfg.pop('type')
+    loss_fn = cfg['loss_fn']
     if loss_fn == 'MSE':
-        cfg['model']['loss_fn'] = torch.nn.MSELoss()
+        cfg['loss_fn'] = torch.nn.MSELoss()
     elif loss_fn == 'MSE-NR':
-        cfg['model']['loss_fn'] = torch.nn.MSELoss(reduction='none')
+        cfg['loss_fn'] = torch.nn.MSELoss(reduction='none')
     elif loss_fn == 'CE':
-        cfg['model']['loss_fn'] = torch.nn.CrossEntropyLoss()
+        cfg['loss_fn'] = torch.nn.CrossEntropyLoss()
     elif loss_fn == 'CE-NR':
-        cfg['model']['loss_fn'] = torch.nn.CrossEntropyLoss(reduction='none')
-    else: raise ValueError(f"Invalid loss function {cfg['model']['loss_fn']}.")
+        cfg['loss_fn'] = torch.nn.CrossEntropyLoss(reduction='none')
+    elif loss_fn == 'BCE':
+        cfg['loss_fn'] = torch.nn.BCEWithLogitsLoss()
+    else: raise ValueError(f"Invalid loss function {cfg['loss_fn']}.")
     
     
-    if cfg['model']['metrics']:
+    if cfg['metrics']:
         metrics = {}
-        for metric_name in cfg['model']['metrics']:
+        for metric_name in cfg['metrics']:
             if metric_name == 'ACC':
                 metrics[metric_name] = torchmetrics.Accuracy(task="multiclass", num_classes=num_classes)
             elif metric_name == 'F1':
                 metrics[metric_name] = torchmetrics.F1Score(task="multiclass", num_classes=num_classes)
             else: raise ValueError(f"Invalid metric {metric_name}.")
-        cfg['model']['metrics'] = metrics
+        cfg['metrics'] = metrics
 
     if model_type == 'fc1':
-        model = FC1(**cfg['model'])
+        model = FC1(**cfg)
     elif model_type == 'fcN':
-        model = FCN(**cfg['model'])
+        model = FCN(**cfg)
     elif model_type == 'cnn5':
-        model = CNN5(**cfg['model'])
+        model = CNN5(**cfg)
     elif model_type == 'resnet18k':
-        model = make_resnet18k(**cfg['model'])
+        model = make_resnet18k(**cfg)
     else: raise ValueError(f"Invalid model type {model_type}.")
     
     return model

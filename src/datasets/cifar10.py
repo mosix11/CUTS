@@ -3,7 +3,7 @@ from torchvision import datasets
 import torchvision.transforms.v2 as transforms
 from torch.utils.data import Dataset, DataLoader, random_split, Subset
 
-from .utils import DatasetWithIndex, LabelRemapper, NoisyClassificationDataset
+from .utils import DatasetWithIndex, LabelRemapper, NoisyClassificationDataset, BinarizedClassificationDataset
 
 import os
 from pathlib import Path
@@ -153,6 +153,14 @@ class CIFAR10:
         
         dataset = Subset(dataset, indices)
         
+        self._set_set(set, dataset)
+        
+    
+    def binarize_set(self, set='Train', target_class=-1):
+        if target_class not in self.available_classes:
+            raise ValueError('Target class is not in available classes.')
+        dataset = self._get_set(set)
+        dataset = BinarizedClassificationDataset(dataset, target_class)
         self._set_set(set, dataset)
         
     def inject_noise(self, set='Train', noise_rate=0.0, noise_type='symmetric', seed=None, generator=None):

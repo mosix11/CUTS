@@ -472,7 +472,7 @@ def apply_tv_grid_analysis(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_
             
         dataset, num_classes = dataset_factory.create_dataset(cfg, phase='finetuning')
     
-        model_base = model_factory.create_model(cfg, num_classes)
+        model_base = model_factory.create_model(cfg['model'], num_classes)
     
     
         pretrain_dir = outputs_dir / Path(f"pn={pt_noise}_pretrain")
