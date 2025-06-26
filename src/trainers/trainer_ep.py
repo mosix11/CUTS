@@ -283,11 +283,17 @@ class TrainerEp:
         final_results = {}
         final_results.update(self.evaluate(set='Train'))
         final_results.update(self.evaluate(set='Test'))
+        for key, value in final_results.items():
+            if isinstance(value, torch.Tensor):
+                final_results[key] = value.cpu().item()
         results = {
             'final': final_results,
         }
 
         if self.save_best_model:
+            for key, value in self.best_model_perf.items():
+                if isinstance(value, torch.Tensor):
+                    self.best_model_perf[key] = value.cpu().item()
             results['best'] = self.best_model_perf
         
         if self.log_comet:
@@ -297,6 +303,7 @@ class TrainerEp:
         final_ckp_path = self.checkpoint_dir / Path('final_ckp.pth')
         self.save_full_checkpoint(final_ckp_path)
         results_path = self.log_dir / Path('results.json')
+        
         with open(results_path, 'w') as json_file:
             json.dump(results, json_file, indent=4)
         
