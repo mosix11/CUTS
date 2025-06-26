@@ -22,9 +22,16 @@ def create_model(cfg, num_classes):
         metrics = {}
         for metric_name in cfg['metrics']:
             if metric_name == 'ACC':
-                metrics[metric_name] = torchmetrics.Accuracy(task="multiclass", num_classes=num_classes)
+                if num_classes == 1:   
+                    metrics[metric_name] = torchmetrics.Accuracy(task="binary", num_classes=num_classes)
+                else:
+                    metrics[metric_name] = torchmetrics.Accuracy(task="multiclass", num_classes=num_classes)
             elif metric_name == 'F1':
-                metrics[metric_name] = torchmetrics.F1Score(task="multiclass", num_classes=num_classes)
+                if num_classes == 1:
+                    metrics[metric_name] = torchmetrics.F1Score(task="binary", num_classes=num_classes)
+                else:
+                    metrics[metric_name] = torchmetrics.F1Score(task="multiclass", num_classes=num_classes)
+                    
             else: raise ValueError(f"Invalid metric {metric_name}.")
         cfg['metrics'] = metrics
 
