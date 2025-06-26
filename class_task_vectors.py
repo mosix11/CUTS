@@ -53,7 +53,7 @@ def finetune_model(outputs_dir: Path, cfg: dict, cfg_name:str):
         plots_dir = experiment_dir / Path("plots")
         plots_dir.mkdir(exist_ok=True, parents=True)
         
-        ft_model = model_factory.create_model(cfg_copy['ft_model'], num_classes)
+        ft_model = model_factory.create_model(cfg_copy['ft_model'], num_classes=1)
         ft_model.load_backbone_weights(state_dict=pt_weights)
         
         ft_dataset = copy.deepcopy(dataset)
