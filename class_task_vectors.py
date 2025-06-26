@@ -29,7 +29,7 @@ def finetune_model(outputs_dir: Path, cfg: dict, cfg_name:str):
     
     dataset, num_classes = dataset_factory.create_dataset(cfg, augmentations, phase='finetuning')
     
-    pt_model = model_factory.create_model(cfg['pt_model'], num_classes)
+    pt_model = model_factory.create_model(cfg['model'], num_classes)
     
     base_model_ckp_path = outputs_dir/ Path(f"{cfg_name}_pretrain") / Path('weights/model_weights.pth')
     pt_weights = torch.load(base_model_ckp_path)

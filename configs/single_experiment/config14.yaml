@@ -36,7 +36,7 @@ dataset:
   seed: *dataset_seed
 
 
-pt_model:
+model:
   type: 'cnn5'
   num_channels: 128
   num_classes: *num_classes
