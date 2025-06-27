@@ -149,7 +149,7 @@ class CNN5(nn.Module):
         return backbone_state_dict
     
     
-    def freeze_last_layer(self):
+    def freeze_classification_head(self):
         """
         Freezes the weights of the last linear layer (classification head).
         """
@@ -162,7 +162,7 @@ class CNN5(nn.Module):
         else:
             print("The last layer is not an nn.Linear layer. No weights frozen.")
 
-    def unfreeze_last_layer(self):
+    def unfreeze_classification_head(self):
         """
         Unfreezes the weights of the last linear layer (classification head).
         """

@@ -132,11 +132,15 @@ def finetune_model(outputs_dir: Path, cfg: dict, cfg_name:str):
     pt_model = model_factory.create_model(cfg['model'], num_classes)
     
     base_model_ckp_path = outputs_dir/ Path(f"{cfg_name}_pretrain") / Path('weights/model_weights.pth')
-    pt_weights = torch.load(base_model_ckp_path)
-    pt_model.load_state_dict(pt_weights)
+    pt_model.load_state_dict(torch.load(base_model_ckp_path))
     
     
     strategy = cfg['strategy']
+    # if strategy['methodology'] == 'ClassTVFreezeHead':
+    #     pt_weights = pt_model.get_backbone_weights()
+    # elif strategy['methodology'] == 'ClassTVFullWeight':
+    #     pt_weights = pt_model.state_dict()
+        
     for class_idx in range(num_classes):
         
         ft_dataset = copy.deepcopy(dataset)
@@ -149,11 +153,14 @@ def finetune_model(outputs_dir: Path, cfg: dict, cfg_name:str):
                 
         class_heldouts = Subset(heldout_set, class_samples_indices)
         
-        trainset = ft_dataset.get_trainset()
-        
-        extended_trainset = ConcatDataset([trainset, class_heldouts])
-        
-        ft_dataset.set_trainset(extended_trainset, shuffle=True)
+        if strategy['finetuning_set'] == 'Heldout+Train':
+            trainset = ft_dataset.get_trainset()
+            
+            extended_trainset = ConcatDataset([trainset, class_heldouts])
+            
+            ft_dataset.set_trainset(extended_trainset, shuffle=True)
+        elif strategy['finetuning_set'] == 'Heldout':
+            ft_dataset.set_trainset(class_heldouts, shuffle=True)
         
         # smpls = {k:0 for k in range(10)}
         
@@ -179,6 +186,12 @@ def finetune_model(outputs_dir: Path, cfg: dict, cfg_name:str):
         plots_dir.mkdir(exist_ok=True, parents=True)
         
         ft_model = copy.deepcopy(pt_model)
+        
+        if strategy['methodology'] == 'ClassTVFreezeHead':
+            ft_model.freeze_classification_head()
+        elif strategy['methodology'] == 'ClassTVFullWeight':
+            pass
+            
         
         
         trainer = TrainerEp(

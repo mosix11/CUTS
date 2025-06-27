@@ -4,7 +4,8 @@ dataset_seed: &dataset_seed 11
 
 
 strategy:
-  finetuning_set: &finetuning_set 'ClassTVFullWeight'
+  methodology: 'ClassTVFullWeight'
+  finetuning_set: &finetuning_set 'Heldout+Train'
 
   # noise:
   #   pretraining:
