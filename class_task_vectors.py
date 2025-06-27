@@ -8,6 +8,7 @@ from src.utils import nn_utils, misc_utils
 import torch
 import torchmetrics
 import torchvision.transforms.v2 as transformsv2
+from torch.utils.data import Dataset, Subset, ConcatDataset
 from functools import partial
 from pathlib import Path
 import pickle
@@ -134,10 +135,35 @@ def finetune_model(outputs_dir: Path, cfg: dict, cfg_name:str):
     pt_weights = torch.load(base_model_ckp_path)
     pt_model.load_state_dict(pt_weights)
     
-
     
     strategy = cfg['strategy']
     for class_idx in range(num_classes):
+        
+        ft_dataset = copy.deepcopy(dataset)
+        heldout_set = ft_dataset.get_heldoutset()
+        
+        class_samples_indices = []
+        for idx, sample in enumerate(heldout_set):
+            if sample[1] == class_idx:
+                class_samples_indices.append(idx)
+                
+        class_heldouts = Subset(heldout_set, class_samples_indices)
+        
+        trainset = ft_dataset.get_trainset()
+        
+        extended_trainset = ConcatDataset([trainset, class_heldouts])
+        
+        ft_dataset.set_trainset(extended_trainset, shuffle=True)
+        
+        # smpls = {k:0 for k in range(10)}
+        
+        # for sample in extended_trainset:
+        #     y = sample[1]
+        #     smpls[y] += 1
+            
+        # print(smpls)
+        
+        # continue
         
         cfg_copy = copy.deepcopy(cfg)
         
@@ -152,26 +178,7 @@ def finetune_model(outputs_dir: Path, cfg: dict, cfg_name:str):
         plots_dir = experiment_dir / Path("plots")
         plots_dir.mkdir(exist_ok=True, parents=True)
         
-        ft_model = model_factory.create_model(cfg_copy['ft_model'], num_classes=1)
-        ft_model.load_backbone_weights(state_dict=pt_weights)
-        
-        ft_dataset = copy.deepcopy(dataset)
-        
-        if 'noise' in strategy:
-            pass
-        
-        if strategy['finetuning_set'] == 'ClassTVBinaryHead':
-            ft_dataset.binarize_set('Train', target_class=class_idx)
-            ft_dataset.binarize_set('Test', target_class=class_idx)
-        
-        # trainset = ft_dataset.get_trainset()
-        # num = 0
-        # for item in trainset:
-        #     y = item[1]
-        #     if y:
-        #         num+=1
-        # print('Class', class_idx, num)
-
+        ft_model = copy.deepcopy(pt_model)
         
         
         trainer = TrainerEp(
@@ -186,13 +193,14 @@ def finetune_model(outputs_dir: Path, cfg: dict, cfg_name:str):
 
         torch.save(ft_model.state_dict(), weights_dir / Path("model_weights.pth"))
 
-        # class_names = [f"Class {i}" for i in range(num_classes)]
-        # confmat = trainer.confmat("Test")
-        # misc_utils.plot_confusion_matrix(
-        #     cm=confmat,
-        #     class_names=class_names,
-        #     filepath=str(plots_dir / Path("confmat.png")),
-        # )
+        class_names = [f"Class {i}" for i in range(num_classes)]
+        confmat = trainer.confmat("Test")
+        misc_utils.plot_confusion_matrix(
+            cm=confmat,
+            class_names=class_names,
+            filepath=str(plots_dir / Path("confmat.png")),
+            show=False
+        )
 
 
 def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str, search_range = [-1.5, 0.0]):

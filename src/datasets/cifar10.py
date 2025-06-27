@@ -130,6 +130,12 @@ class CIFAR10:
         self.heldout_set = set
         self.heldout_loader = self._build_dataloader(self.heldout_set, shuffle=shuffle)
         
+        
+    def replace_heldout_as_train_dl(self):
+        self.train_loader = self._build_dataloader(self.heldout_set, shuffle=True)
+        
+    def reset_train_dl(self):
+        self.train_loader = self._build_dataloader(self.trainset, shuffle=True)
 
     def get_generator(self):
         return self.generator
@@ -212,11 +218,7 @@ class CIFAR10:
         
         return Subset(dataset, clean_indices), Subset(dataset, noisy_indices)
         
-    def replace_heldout_as_train_dl(self):
-        self.train_loader = self._build_dataloader(self.heldout_set, shuffle=True)
-        
-    def reset_train_dl(self):
-        self.train_loader = self._build_dataloader(self.trainset, shuffle=True)
+
 
     def get_identifier(self):
         identifier = 'cifar10|'
