@@ -139,6 +139,14 @@ class CNN5(nn.Module):
         print("Backbone weights loaded successfully.")
     
         
+    def get_backbone_weights(self):
+        # Filter out the last layer's weights from the loaded state_dict
+        backbone_state_dict = {
+            k: v for k, v in self.state_dict().items() 
+            if not (k.startswith("net.17.weight") or k.startswith("net.17.bias"))
+        }
+        
+        return backbone_state_dict
     
     
     def freeze_last_layer(self):

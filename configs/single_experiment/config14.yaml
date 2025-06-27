@@ -26,7 +26,17 @@ dataset:
   subsample_size: [-1, -1]
   class_subset: []
   remap_labels: False
-  heldout_conf: null
+  heldout_conf: 
+    0: 0.75
+    1: 0.75
+    2: 0.75
+    3: 0.75
+    4: 0.75
+    5: 0.75
+    6: 0.75
+    7: 0.75
+    8: 0.75
+    9: 0.75
   grayscale: False
   normalize_imgs: True
   flatten: False
@@ -70,7 +80,7 @@ trainer:
     seed: *training_seed
 
   finetuning:
-    max_epochs: 400
+    max_epochs: 120
     batch_size: 1024
     optimizer_cfg: 
       type: "adam"
