@@ -4,7 +4,7 @@ dataset_seed: &dataset_seed 11
 
 
 strategy:
-  finetuning_set: &finetuning_set 'ClassTVFullWeight'
+  finetuning_set: &finetuning_set 'ClassTVFreezeHead'
 
   # noise:
   #   pretraining:
@@ -27,16 +27,16 @@ dataset:
   class_subset: []
   remap_labels: False
   heldout_conf: 
-    0: 0.75
-    1: 0.75
-    2: 0.75
-    3: 0.75
-    4: 0.75
-    5: 0.75
-    6: 0.75
-    7: 0.75
-    8: 0.75
-    9: 0.75
+    0: 0.85
+    1: 0.85
+    2: 0.85
+    3: 0.85
+    4: 0.85
+    5: 0.85
+    6: 0.85
+    7: 0.85
+    8: 0.85
+    9: 0.85
   grayscale: False
   normalize_imgs: True
   flatten: False

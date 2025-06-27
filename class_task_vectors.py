@@ -216,6 +216,9 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str, sear
     torch.use_deterministic_algorithms(True) 
     torch.set_float32_matmul_precision("high")
     
+    cpu = nn_utils.get_cpu_device()
+    gpu = nn_utils.get_gpu_device()
+    
     pretrain_dir = outputs_dir/ Path(f"{cfg_name}_pretrain")
     finetune_dir = outputs_dir/ Path(f"{cfg_name}_finetune")
     
@@ -224,13 +227,12 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str, sear
     pt_model = model_factory.create_model(cfg['model'], num_classes)
     
     base_model_ckp_path = pretrain_dir / Path('weights/model_weights.pth')
-    pt_weights = torch.load(base_model_ckp_path)
+    pt_weights = torch.load(base_model_ckp_path, map_location=cpu)
     pt_model.load_state_dict(pt_weights)
     
-    pt_bb_weights = pt_model.get_backbone_weights()
+    pt_weights = pt_model.state_dict()
     
-    cpu = nn_utils.get_cpu_device()
-    gpu = nn_utils.get_gpu_device()
+
     
     task_vectors = []
     
@@ -250,20 +252,19 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str, sear
         plots_dir = experiment_dir / Path("plots")
         plots_dir.mkdir(exist_ok=True, parents=True)
         
-        ft_state_dict = torch.load(weights_dir / 'model_weights.pth')
+        ft_state_dict = torch.load(weights_dir / 'model_weights.pth', map_location=cpu)
         
-        ft_model = model_factory.create_model(cfg_copy['ft_model'], num_classes=1)
-        ft_model.load_state_dict(ft_state_dict)
-        
-        ft_bb_weights = ft_model.get_backbone_weights()
-        
-        tv = TaskVector(pt_bb_weights, ft_bb_weights)
+        tv = TaskVector(pt_weights, ft_state_dict)
         
         task_vectors.append(tv)
         
     
         
-    task_vectors[0].apply_to(pt_model, scaling_coef=1.0)
+    for class_idx in range(num_classes):
+        task_vectors[class_idx].apply_to(pt_model, scaling_coef=0.05, strict=True)
+    
+    # task_vectors[0].apply_to(pt_model, scaling_coef=1.0, strict=True)
+    # task_vectors[1].apply_to(pt_model, scaling_coef=1.0, strict=True)
     
     metrics, all_preds, all_targets = evaluate_model(pt_model, dataset.get_test_dataloader(), device=gpu)
     confmat_metric = ConfusionMatrix(task="multiclass", num_classes=num_classes)
