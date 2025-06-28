@@ -68,7 +68,30 @@ def evaluate_model(model, dataloader, device):
     return metric_results, torch.tensor(all_preds), torch.tensor(all_targets) 
 
 
+def recompute_BN_layers(model, dataloader, device):
+    """
+    The method performs forward pass on the dataloader in `train` mode to adjust the
+    batch normalization layers statistics.
 
+    Args:
+        model (torch.nn.Module): The model to adjust.
+        dataloader (torch.utils.data.DataLoader): The data loader for adjsuting the stats.
+        device (torch.device): The device to run the model on.
+        
+    Returns:
+        model: The adjusted model.
+    """
+    
+    model.to(device)
+    model.train()
+    with torch.no_grad():
+        for batch in dataloader:
+            batch = prepare_batch(batch, device)
+            input_batch, target_batch = batch[:2]
+            model.training_step(input_batch, target_batch, use_amp=True)
+    model.eval()
+    
+    return model
 
 def pretrain_model(outputs_dir: Path, cfg: dict, cfg_name:str):
 
@@ -191,6 +214,7 @@ def finetune_model(outputs_dir: Path, cfg: dict, cfg_name:str):
             ft_model.freeze_classification_head()
         elif strategy['methodology'] == 'ClassTVFullWeight':
             pass
+        
             
         
         
@@ -273,8 +297,30 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str, sear
         
     
         
+    add_tv = task_vectors[0]
+    for class_idx in range(1, num_classes):
+        add_tv += task_vectors[class_idx]
+    
+    # add_tv.apply_to(pt_model, scaling_coef=1.0, strict=True)
+    # for key in add_tv.vector:
+    #     print(f'\nFor {key} :')
+    #     print(f'Pretrained model stats for layer: mean={pt_model.state_dict()[key].mean()}, std={pt_model.state_dict()[key].std()}, sum={pt_model.state_dict()[key].sum()}')
+    #     print(f'Sum of task vectors stats: mean={add_tv.vector[key].mean()}, std={add_tv.vector[key].std()}, sum={add_tv.vector[key].sum()}')
+    #     print(f'Task vector for class 0: mean={task_vectors[0].vector[key].mean()}, std={task_vectors[0].vector[key].std()}, sum={task_vectors[0].vector[key].sum()}')
+        # print(add_tv.vector[key].sum())
+        # print(task_vectors[0].vector[key].sum())
+        # print(task_vectors[1].vector[key].sum())
+    # print(add_tv.vector['net.0.weight'].sum())
+    # print(task_vectors[0].vector['net.0.weight'].sum())
+    # print(task_vectors[1].vector['net.0.weight'].sum())
+    
     for class_idx in range(num_classes):
-        task_vectors[class_idx].apply_to(pt_model, scaling_coef=0.05, strict=True)
+        task_vectors[class_idx].apply_to(pt_model, scaling_coef=0.1, strict=True)
+        pt_model = recompute_BN_layers(pt_model, dataset.get_train_dataloader(), device=gpu)
+        pt_model.to(cpu)
+        
+    # for key in add_tv.vector:
+    #     print(key)
     
     # task_vectors[0].apply_to(pt_model, scaling_coef=1.0, strict=True)
     # task_vectors[1].apply_to(pt_model, scaling_coef=1.0, strict=True)

@@ -1,0 +1,95 @@
+
+training_seed: &training_seed 11
+dataset_seed: &dataset_seed 11
+
+
+strategy:
+  methodology: 'ClassTVFreezeHead'
+  finetuning_set: &finetuning_set 'Heldout+Train'
+  
+  # noise:
+  #   pretraining:
+  #     set: 'Train'
+  #     noise_rate: 0.0
+  #     noise_type: 'symmetric'
+  #     seed: 8
+  #   finetuning:
+  #     set: *finetuning_set
+  #     noise_rate: 1.0
+  #     noise_type: 'symmetric'
+  #     seed: 8
+
+
+dataset:
+  name: "cifar10"
+  num_classes: &num_classes 10
+  img_size: [32, 32]
+  subsample_size: [-1, -1]
+  class_subset: []
+  remap_labels: False
+  heldout_conf: 
+    0: 0.85
+    1: 0.85
+    2: 0.85
+    3: 0.85
+    4: 0.85
+    5: 0.85
+    6: 0.85
+    7: 0.85
+    8: 0.85
+    9: 0.85
+  grayscale: True
+  normalize_imgs: True
+  flatten: True
+  valset_ratio: 0.0
+  return_index: True
+  num_workers: 8
+  seed: *dataset_seed
+
+
+model:
+  type: 'fc1'
+  input_dim: 1024
+  hidden_dim: 1024
+  output_dim: *num_classes
+  loss_fn: 'CE'
+  metrics: ['ACC', 'F1']
+
+
+trainer:
+  pretraining:
+    max_epochs: 600
+    batch_size: 1024
+    optimizer_cfg: 
+      type: "adam"
+      lr: 1.0e-4
+      betas: [0.9, 0.999]
+    lr_schedule_cfg: null
+    early_stopping: False
+    validation_freq: -1
+    save_best_model: False
+    checkpoint_freq: -1
+    run_on_gpu: True
+    use_amp: True
+    log_comet: True
+    comet_project_name: 'task-vectors-cifar10'
+    seed: *training_seed
+
+  finetuning:
+    max_epochs: 400
+    batch_size: 1024
+    optimizer_cfg: 
+      type: "adam"
+      lr: 1.0e-5
+      betas: [0.9, 0.999]
+    lr_schedule_cfg: null
+    early_stopping: False
+    validation_freq: -1
+    save_best_model: False
+    checkpoint_freq: -1
+    run_on_gpu: True
+    use_amp: True
+    log_comet: True
+    comet_project_name: 'task-vectors-cifar10'
+    seed: *training_seed
+

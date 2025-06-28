@@ -24,6 +24,26 @@ class CNN5(nn.Module):
         self.num_channels = num_channels
         self.num_classes = num_classes
         
+        # Layer 0: nn.Conv2d
+        # Layer 1: nn.BatchNorm2d
+        # Layer 2: nn.ReLU
+        # Layer 3: nn.Conv2d
+        # Layer 4: nn.BatchNorm2d
+        # Layer 5: nn.ReLU
+        # Layer 6: nn.MaxPool2d  (This takes up an index)
+        # Layer 7: nn.Conv2d
+        # Layer 8: nn.BatchNorm2d
+        # Layer 9: nn.ReLU
+        # Layer 10: nn.MaxPool2d (This takes up an index)
+        # Layer 11: nn.Conv2d
+        # Layer 12: nn.BatchNorm2d
+        # Layer 13: nn.ReLU
+        # Layer 14: nn.MaxPool2d (This takes up an index)
+        # Layer 15: nn.MaxPool2d (This takes up an index)
+        # Layer 16: Flatten()    (This takes up an index)
+        # Layer 17: nn.Linear    (This is your last layer)
+            
+        
         self.net = nn.Sequential(
             # Layer 0
             nn.Conv2d(1 if gray_scale else 3, num_channels, kernel_size=3, stride=1,
@@ -75,7 +95,7 @@ class CNN5(nn.Module):
     
     def training_step(self, x, y, use_amp=False, return_preds=False):
         with autocast('cuda', enabled=use_amp):
-            preds = self(x).squeeze()
+            preds = self(x)
             loss = self.loss_fn(preds, y)
         if self.metrics:
             for name, metric in self.metrics.items():
@@ -88,7 +108,7 @@ class CNN5(nn.Module):
     def validation_step(self, x, y, use_amp=False, return_preds=False):
         with torch.no_grad():
             with autocast('cuda', enabled=use_amp):
-                preds = self(x).squeeze()
+                preds = self(x)
                 loss = self.loss_fn(preds, y)
         if self.metrics:
             for name, metric in self.metrics.items():

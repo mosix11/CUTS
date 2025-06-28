@@ -36,7 +36,103 @@ class FC1(nn.Module):
             for name, metric_instance in metrics.items():
                 self.metrics[name] = metric_instance
             
+            
+            
+    def training_step(self, x, y, use_amp=False, return_preds=False):        
+        with autocast('cuda', enabled=use_amp):
+            preds = self(x)
+            if isinstance(self.loss_fn, torch.nn.MSELoss):
+                y_onehot = F.one_hot(y, num_classes=self.output_dim).float()
+                loss = self.loss_fn(preds, y_onehot)
+            else:
+                loss = self.loss_fn(preds, y)
+        if self.metrics:
+            for name, metric in self.metrics.items():
+                metric.update(preds, y)
+                
+        if return_preds:
+            return loss, preds
+        else:
+            return loss
         
+    def validation_step(self, x, y, use_amp=False, return_preds=False):
+        with torch.no_grad():
+            with autocast('cuda', enabled=use_amp):
+                preds = self(x)
+                if isinstance(self.loss_fn, torch.nn.MSELoss):
+                    y_onehot = F.one_hot(y, num_classes=self.output_dim).float()
+                    loss = self.loss_fn(preds, y_onehot)
+                else:
+                    loss = self.loss_fn(preds, y)
+        if self.metrics:
+            for name, metric in self.metrics.items():
+                metric.update(preds, y)
+                
+        if return_preds:
+            return loss, preds
+        else:
+            return loss
+
+
+    def compute_metrics(self):
+        results = {}
+        if self.metrics: 
+            for name, metric in self.metrics.items():
+                results[name] = metric.compute().cpu().item()
+        return results
+    
+    def reset_metrics(self):
+        if self.metrics:
+            for name, metric in self.metrics.items():
+                metric.reset()
+    
+    def predict(self, x):
+        with torch.no_grad():
+            preds = self(x)
+        return preds
+    
+    def forward(self, x: torch.Tensor):
+        x = F.relu(self.h1(x))
+        x = self.out(x)
+        return x
+    
+    def get_identifier(self):
+        return f"fc1|h{self.hidden_dim}|p{self._count_trainable_parameters()}"
+    
+    
+    # def get_backbone_weights(self):
+    #     # Filter out the last layer's weights from the loaded state_dict
+    #     backbone_state_dict = {
+    #         k: v for k, v in self.state_dict().items() 
+    #         if not (k.startswith("net.17.weight") or k.startswith("net.17.bias"))
+    #     }
+        
+    #     return backbone_state_dict
+    
+    def freeze_classification_head(self):
+        """
+        Freezes the weights of the last linear layer (classification head).
+        """
+        # The last layer is at index -1 in the nn.Sequential module
+        last_layer = self.out
+        if isinstance(last_layer, nn.Linear):
+            for param in last_layer.parameters():
+                param.requires_grad = False
+            print("Last layer (classification head) weights frozen.")
+        else:
+            print("The last layer is not an nn.Linear layer. No weights frozen.")
+
+    def unfreeze_classification_head(self):
+        """
+        Unfreezes the weights of the last linear layer (classification head).
+        """
+        last_layer = self.out
+        if isinstance(last_layer, nn.Linear):
+            for param in last_layer.parameters():
+                param.requires_grad = True
+            print("Last layer (classification head) weights unfrozen.")
+        else:
+            print("The last layer is not an nn.Linear layer.")
     
     def reuse_weights(self, old_state: dict):
         """
@@ -222,58 +318,7 @@ class FC1(nn.Module):
         return stats
 
 
-    def training_step(self, x, y, use_amp=False):        
-        with autocast('cuda', enabled=use_amp):
-            preds = self(x)
-            if isinstance(self.loss_fn, torch.nn.MSELoss):
-                y_onehot = F.one_hot(y, num_classes=self.output_dim).float()
-                loss = self.loss_fn(preds, y_onehot)
-            else:
-                loss = self.loss_fn(preds, y)
-        if self.metrics:
-            for name, metric in self.metrics.items():
-                metric.update(preds, y)
-        return loss
-        
-    def validation_step(self, x, y, use_amp=False):
-        with torch.no_grad():
-            with autocast('cuda', enabled=use_amp):
-                preds = self(x)
-                if isinstance(self.loss_fn, torch.nn.MSELoss):
-                    y_onehot = F.one_hot(y, num_classes=self.output_dim).float()
-                    loss = self.loss_fn(preds, y_onehot)
-                else:
-                    loss = self.loss_fn(preds, y)
-        if self.metrics:
-            for name, metric in self.metrics.items():
-                metric.update(preds, y)
-        return loss
 
-
-    def compute_metrics(self):
-        results = {}
-        if self.metrics: 
-            for name, metric in self.metrics.items():
-                results[name] = metric.compute()
-        return results
-    
-    def reset_metrics(self):
-        if self.metrics:
-            for name, metric in self.metrics.items():
-                metric.reset()
-    
-    def predict(self, x):
-        with torch.no_grad():
-            preds = self(x)
-        return preds
-    
-    def forward(self, x: torch.Tensor):
-        x = F.relu(self.h1(x))
-        x = self.out(x)
-        return x
-    
-    def get_identifier(self):
-        return f"fc1|h{self.hidden_dim}|p{self._count_trainable_parameters()}"
     
 
     

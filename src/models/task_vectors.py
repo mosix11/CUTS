@@ -20,6 +20,7 @@ class TaskVector:
                         continue
                     if pretrained_state_dict[key].dtype not in [torch.float32, torch.float16, torch.bfloat16]:
                         continue  # Skip non-float entries
+                    # if key 
                     self.vector[key] = finetuned_state_dict[key] - pretrained_state_dict[key]
 
     def __add__(self, other):
@@ -61,5 +62,5 @@ class TaskVector:
                         print(f"Warning: key {key} not found in model. Skipping.")
                         continue
                 updated_state_dict[key] = updated_state_dict[key] + scaling_coef * self.vector[key]
-            model.load_state_dict(updated_state_dict, strict=False)
+            model.load_state_dict(updated_state_dict, strict=strict)
         return model

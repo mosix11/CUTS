@@ -26,10 +26,10 @@ def apply_strategy(cfg, dataset):
     # elif strategy['finetuning_set'] == 'HeldoutSet':
     #     pass
     # else: raise ValueError(f"Invalid strategy type {strategy['finetuning_set']}.")
-    
-    dataset.inject_noise(**strategy['noise']['pretraining'])
-    clean_set, noisy_set = dataset.get_clean_noisy_subsets(set='Train')
-    dataset.set_trainset(clean_set, shuffle=True)
+    if 'noise' in strategy:
+        dataset.inject_noise(**strategy['noise']['pretraining'])
+        clean_set, noisy_set = dataset.get_clean_noisy_subsets(set='Train')
+        dataset.set_trainset(clean_set, shuffle=True)
     return dataset
 
 
@@ -42,9 +42,12 @@ def pretrain_model(outputs_dir: Path, cfg: dict, cfg_name:str):
         transformsv2.RandomCrop(32, padding=4),
         transformsv2.RandomHorizontalFlip(),
     ]
+    
+    
+    
     dataset, num_classes = dataset_factory.create_dataset(cfg, augmentations)
     
-    model = model_factory.create_model(cfg, num_classes)
+    model = model_factory.create_model(cfg['model'], num_classes)
     
     dataset = apply_strategy(cfg, dataset)
     
@@ -99,6 +102,12 @@ if __name__ == "__main__":
         help="Resume training from the last checkpoint.",
         action="store_true",
     )
+    parser.add_argument(
+        "-a",
+        "--addhelout",
+        help="Whether to add heldout set to training set or not.",
+        action="store_true"
+    )
     args = parser.parse_args()
 
     dotenv.load_dotenv(".env")
@@ -111,6 +120,11 @@ if __name__ == "__main__":
 
     outputs_dir = Path("outputs/single_experiment").absolute()
     outputs_dir.mkdir(exist_ok=True, parents=True)
+
+    if args.addhelout:
+        if cfg['dataset']['heldout_conf'] != None:
+            cfg['dataset']['heldout_conf'] = None
+        
 
     pretrain_model(outputs_dir, cfg, cfg_name=cfg_path.stem)
 
