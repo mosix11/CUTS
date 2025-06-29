@@ -1,8 +1,15 @@
+# Hypothesis:
 # This is config 18 where we did not use BN layer in the CNN5 to see if the problem of model collapsing goes away and
 # it did in fact solved the problem. So far we get cosine similariy between 0.2 to 0.3 for the test class 0 and other classes.
 # The goal of config 19 is to check whether by excluding training samples from fine tuninig samples and only use heldout samples from 
 # one class for fine tuning, this will give us more orthogonal task vectors or not. In order to keep the formation of the 
 # last classfication head, we freeze it so it does not collapse to output only one class without learning anything.
+
+# Results:
+# Checking the finetuned models for each class, it is obvious that the models learnt function is getting destoryed if we only finetune
+# on examples of one class. There must exist some samples from each class to prevent the model to get far away from learnt function
+# in the pretraining phase. So the conclusion is, the support of the distribution of the samples in the finetuning phase should be
+# the same as pre training distribution so the model does not collapse on the fine tuning class.
 
 training_seed: &training_seed 11
 dataset_seed: &dataset_seed 11
