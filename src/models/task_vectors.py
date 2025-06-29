@@ -20,7 +20,9 @@ class TaskVector:
                         continue
                     if pretrained_state_dict[key].dtype not in [torch.float32, torch.float16, torch.bfloat16]:
                         continue  # Skip non-float entries
-                    # if key 
+                    # TODO maybe remove the BN exclusion?
+                    if 'running_mean' in key or 'running_var' in key:
+                        continue
                     self.vector[key] = finetuned_state_dict[key] - pretrained_state_dict[key]
 
     def __add__(self, other):

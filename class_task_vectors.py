@@ -316,8 +316,8 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str, sear
     
     for class_idx in range(num_classes):
         task_vectors[class_idx].apply_to(pt_model, scaling_coef=0.1, strict=True)
-        pt_model = recompute_BN_layers(pt_model, dataset.get_train_dataloader(), device=gpu)
-        pt_model.to(cpu)
+        # pt_model = recompute_BN_layers(pt_model, dataset.get_train_dataloader(), device=gpu)
+        # pt_model.to(cpu)
         
     # for key in add_tv.vector:
     #     print(key)

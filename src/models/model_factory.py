@@ -1,6 +1,6 @@
 import torch
 import torchmetrics
-from . import FC1, FCN, CNN5, make_resnet18k
+from . import FC1, FCN, CNN5, CNN5_NoNorm, make_resnet18k
 
 def create_model(cfg, num_classes):
     model_type = cfg.pop('type')
@@ -41,6 +41,8 @@ def create_model(cfg, num_classes):
         model = FCN(**cfg)
     elif model_type == 'cnn5':
         model = CNN5(**cfg)
+    elif model_type == 'cnn5_nonorm':
+        model = CNN5_NoNorm(**cfg)
     elif model_type == 'resnet18k':
         model = make_resnet18k(**cfg)
     else: raise ValueError(f"Invalid model type {model_type}.")
