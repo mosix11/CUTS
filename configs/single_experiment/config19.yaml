@@ -1,20 +1,16 @@
-# Config 15 with CNN5 no norm
-# The goal of this config is to check the whether BN layers are causing the problem of model collapsing and outputting only class 0 in the
-# Config 15 or not. As we saw in configs 16 and 17, where we changed the model from CNN5 to FC1, the model did not collapse and
-# we could use scaling factors greater than 0.1 when adding all task vectors to the pretrained model. So the problem seemed to stem from
-# BN layers.
+# This is config 18 where we did not use BN layer in the CNN5 to see if the problem of model collapsing goes away and
+# it did in fact solved the problem. So far we get cosine similariy between 0.2 to 0.3 for the test class 0 and other classes.
+# The goal of config 19 is to check whether by excluding training samples from fine tuninig samples and only use heldout samples from 
+# one class for fine tuning, this will give us more orthogonal task vectors or not. In order to keep the formation of the 
+# last classfication head, we freeze it so it does not collapse to output only one class without learning anything.
 
-# The results of config 18 showed that the problem was in fact stemming from BN layers. However we don't still get orthogonal task vectors
-# and the cosine similarity of the task vectors associatiated to different classes ar not close to zero (class 0 to other classes between
-# 0.2 to 0.3). Let's try changing `finetuning_set = 'Heldout+Train'` to `finetuning_set = 'Heldout'` and see if we get more orthogonal 
-# task vectors in config 19.
 training_seed: &training_seed 11
 dataset_seed: &dataset_seed 11
 
 
 strategy:
   methodology: 'ClassTVFreezeHead'
-  finetuning_set: &finetuning_set 'Heldout+Train'
+  finetuning_set: &finetuning_set 'Heldout'
   
   # noise:
   #   pretraining:

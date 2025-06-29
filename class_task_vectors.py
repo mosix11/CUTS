@@ -315,7 +315,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str, sear
     # print(task_vectors[1].vector['net.0.weight'].sum())
     
     for class_idx in range(num_classes):
-        task_vectors[class_idx].apply_to(pt_model, scaling_coef=0.1, strict=True)
+        task_vectors[class_idx].apply_to(pt_model, scaling_coef=0.19, strict=True)
         # pt_model = recompute_BN_layers(pt_model, dataset.get_train_dataloader(), device=gpu)
         # pt_model.to(cpu)
         
@@ -324,6 +324,9 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str, sear
     
     # task_vectors[0].apply_to(pt_model, scaling_coef=1.0, strict=True)
     # task_vectors[1].apply_to(pt_model, scaling_coef=1.0, strict=True)
+    # for class_idx in range(1, num_classes):
+    #     print(task_vectors[0].cosine_similarity(task_vectors[class_idx]))
+    
     
     metrics, all_preds, all_targets = evaluate_model(pt_model, dataset.get_test_dataloader(), device=gpu)
     confmat_metric = ConfusionMatrix(task="multiclass", num_classes=num_classes)
