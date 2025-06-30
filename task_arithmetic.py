@@ -364,7 +364,7 @@ def apply_tv_single_expr(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_na
     
     dataset, num_classes = dataset_factory.create_dataset(cfg, phase='finetuning')
     
-    model_base = model_factory.create_model(cfg, num_classes)
+    model_base = model_factory.create_model(cfg['model'], num_classes)
     
     cpu = nn_utils.get_cpu_device()
     gpu = nn_utils.get_gpu_device()
