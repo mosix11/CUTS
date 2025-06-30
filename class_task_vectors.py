@@ -293,7 +293,7 @@ def finetune_gold_model(outputs_dir: Path, cfg: dict, cfg_name:str):
     elif strategy['methodology'] == 'ClassTVFullWeight':
         pass
     
-    
+    cfg['trainer']['finetuning']['max_epochs'] = 700
     trainer = TrainerEp(
         outputs_dir=outputs_dir,
         **cfg['trainer']['finetuning'],
@@ -428,20 +428,23 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str, sear
     
     
     
-    otrh_tvs = TaskVector.orthogonalize_task_vectors(task_vectors)
+    otrh_tvs, res_tvs = TaskVector.orthogonalize_task_vectors(task_vectors)
     
     for class_idx in range(num_classes):
-        otrh_tvs[class_idx].apply_to(pt_model, scaling_coef=0.24, strict=True)
+        res_tvs[class_idx].apply_to(pt_model, scaling_coef=0.25, strict=True)
+        
+    for class_idx in range(num_classes):
+        otrh_tvs[class_idx].apply_to(pt_model, scaling_coef=0.2, strict=True)
     
-    task_sim = []
-    for i in range(num_classes):
-        anchor_tv = otrh_tvs[i]
-        task_sim.append([])
-        for j in range(num_classes):
-            other_tv = otrh_tvs[j]
-            cos_sim = anchor_tv.cosine_similarity(other_tv)
-            task_sim[i].append(cos_sim)
-    task_sim = np.array(task_sim)
+    # task_sim = []
+    # for i in range(num_classes):
+    #     anchor_tv = otrh_tvs[i]
+    #     task_sim.append([])
+    #     for j in range(num_classes):
+    #         other_tv = otrh_tvs[j]
+    #         cos_sim = anchor_tv.cosine_similarity(other_tv)
+    #         task_sim[i].append(cos_sim)
+    # task_sim = np.array(task_sim)
     
     metrics, all_preds, all_targets = evaluate_model(pt_model, dataset.get_test_dataloader(), device=gpu)
     confmat_metric = ConfusionMatrix(task="multiclass", num_classes=num_classes)
@@ -450,7 +453,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str, sear
     class_names = [f'Class {i}' for i in range(10)]
     misc_utils.plot_confusion_matrix(cm=confmat, class_names=class_names, filepath=results_dir / Path('confusion_matrix_tv.png'), show=True)
     
-    misc_utils.plot_confusion_matrix(cm=task_sim, class_names=class_names, filepath=None, show=True)
+    # misc_utils.plot_confusion_matrix(cm=task_sim, class_names=class_names, filepath=None, show=True)
     
     
     print(metrics)

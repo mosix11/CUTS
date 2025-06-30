@@ -148,28 +148,36 @@ class TaskVector:
     @staticmethod
     def orthogonalize_task_vectors(task_vectors: List):
         """
-        Given a list of task vectors, return orthogonalized task vectors.
-        Each output vector is orthogonal to the rest.
-        
+        Given a list of task vectors, return:
+        - orthogonalized task vectors
+        - residual task vectors (original - orthogonalized)
+
         Args:
-            task_vector_dicts (List[TaskVector]): List of task vectors.
-        
+            task_vectors (List[TaskVector]): List of task vectors.
+
         Returns:
-            List[Dict[str, torch.Tensor]]: Orthogonalized task vectors.
+            Tuple:
+                - List[TaskVector]: Orthogonalized task vectors.
+                - List[TaskVector]: Residual components removed to achieve orthogonality.
         """
         flat_vectors = [tv.flatten_vector() for tv in task_vectors]
         flat_matrix = torch.stack(flat_vectors)  # Shape: (N, D)
 
         orthogonalized = []
+        residuals = []
+
         for i in range(flat_matrix.size(0)):
             vi = flat_matrix[i].clone()
             for uj in orthogonalized:
                 proj = torch.dot(vi, uj) / uj.norm()**2 * uj
                 vi = vi - proj
             orthogonalized.append(vi)
+            residuals.append(flat_matrix[i] - vi)
 
         orth_tvs = []
-        for orth_tv, orig_tv in zip(orthogonalized, task_vectors):
-            unflt_orth_tv = orig_tv.unflatten_vector(orth_tv)
-            orth_tvs.append(unflt_orth_tv)
-        return orth_tvs
+        residual_tvs = []
+        for orth_tv, res_tv, orig_tv in zip(orthogonalized, residuals, task_vectors):
+            orth_tvs.append(orig_tv.unflatten_vector(orth_tv))
+            residual_tvs.append(orig_tv.unflatten_vector(res_tv))
+
+        return orth_tvs, residual_tvs
