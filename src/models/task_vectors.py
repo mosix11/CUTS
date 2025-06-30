@@ -146,11 +146,12 @@ class TaskVector:
 
 
     @staticmethod
-    def orthogonalize_task_vectors(task_vectors: List):
+    def orthogonalize_task_vectors_GSP(task_vectors: List["TaskVector"]):
         """
         Given a list of task vectors, return:
         - orthogonalized task vectors
         - residual task vectors (original - orthogonalized)
+        with Gram-Schmidt process
 
         Args:
             task_vectors (List[TaskVector]): List of task vectors.
@@ -181,3 +182,51 @@ class TaskVector:
             residual_tvs.append(orig_tv.unflatten_vector(res_tv))
 
         return orth_tvs, residual_tvs
+    
+    
+    
+    @staticmethod
+    def decompose_task_vectors_SVD(task_vectors: List["TaskVector"], variance_threshold: float = 0.90):
+        """
+        Perform order-invariant SVD-based decomposition of task vectors into shared and residual components.
+
+        Args:
+            task_vectors (List[TaskVector]): List of TaskVector objects (same structure).
+            variance_threshold (float): Fraction of variance to keep for shared space (default: 0.90).
+
+        Returns:
+            shared_components (List[TaskVector]): Projected vectors in shared subspace.
+            residual_components (List[TaskVector]): Remaining orthogonal (class-specific) parts.
+        """
+        assert len(task_vectors) > 1, "Need at least 2 task vectors for decomposition."
+
+        # Flatten all task vectors into a matrix (C x D)
+        flat_vectors = [tv.flatten_vector() for tv in task_vectors]
+        T = torch.stack(flat_vectors)  # (C, D)
+
+        # Perform SVD
+        U, S, Vh = torch.linalg.svd(T, full_matrices=False)  # Vh: (D, D)
+
+        # Decide how many components to keep
+        explained_var = S ** 2
+        explained_var_ratio = explained_var / explained_var.sum()
+        cumulative = torch.cumsum(explained_var_ratio, dim=0)
+        k = (cumulative < variance_threshold).sum().item() + 1  # Smallest k s.t. ≥ threshold
+
+        # Shared subspace basis (k leading singular vectors)
+        Vk = Vh[:k, :]  # Shape: (k, D)
+
+        # Projection onto shared space: T_shared = T @ Vk.T @ Vk
+        T_shared = T @ Vk.T @ Vk  # (C, D)
+        T_residual = T - T_shared  # (C, D)
+
+        # Unflatten back to TaskVector structure
+        shared_components = []
+        residual_components = []
+        for i in range(len(task_vectors)):
+            shared_tv = task_vectors[i].unflatten_vector(T_shared[i])
+            residual_tv = task_vectors[i].unflatten_vector(T_residual[i])
+            shared_components.append(shared_tv)
+            residual_components.append(residual_tv)
+
+        return residual_components, shared_components 

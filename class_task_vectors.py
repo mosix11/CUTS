@@ -371,10 +371,51 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str, sear
         task_vectors.append(tv)
         
     
-        
-    add_tv = task_vectors[0]
-    for class_idx in range(1, num_classes):
-        add_tv += task_vectors[class_idx]
+    
+    # otrh_tvs, shrd_tvs = TaskVector.orthogonalize_task_vectors_GSP(task_vectors)
+    
+    otrh_tvs, shrd_tvs = TaskVector.decompose_task_vectors_SVD(task_vectors)
+    
+    task_sim = []
+    for i in range(num_classes):
+        anchor_tv = task_vectors[i]
+        task_sim.append([])
+        for j in range(num_classes):
+            other_tv = task_vectors[j]
+            cos_sim = anchor_tv.cosine_similarity(other_tv)
+            task_sim[i].append(cos_sim)
+    task_sim = np.array(task_sim)
+    
+    orth_task_sim = []
+    for i in range(num_classes):
+        anchor_tv = otrh_tvs[i]
+        orth_task_sim.append([])
+        for j in range(num_classes):
+            other_tv = otrh_tvs[j]
+            cos_sim = anchor_tv.cosine_similarity(other_tv)
+            orth_task_sim[i].append(cos_sim)
+    orth_task_sim = np.array(orth_task_sim)
+    
+    res_task_sim = []
+    for i in range(num_classes):
+        anchor_tv = shrd_tvs[i]
+        res_task_sim.append([])
+        for j in range(num_classes):
+            other_tv = shrd_tvs[j]
+            cos_sim = anchor_tv.cosine_similarity(other_tv)
+            res_task_sim[i].append(cos_sim)
+    res_task_sim = np.array(res_task_sim)
+    
+    # print('Original Task Vectors Similarity:', task_sim)
+    
+    # print('Residual (Orthogonal) Task Vectors Similarity:', orth_task_sim)
+    
+    # print('Shared Task Vectors Similarity:', orth_task_sim)
+    
+    
+    # add_tv = task_vectors[0]
+    # for class_idx in range(1, num_classes):
+    #     add_tv += task_vectors[class_idx]
     
     # add_tv.apply_to(pt_model, scaling_coef=1.0, strict=True)
     # for key in add_tv.vector:
@@ -397,54 +438,30 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str, sear
     # for key in add_tv.vector:
     #     print(key)
     
-    # task_vectors[0].apply_to(pt_model, scaling_coef=1.0, strict=True)
+
+    
+
+    
+    
+    
+    # TODO
+    # Add class specific accuracy
+    # Add finetune model performance on separate classes and average the overall acc
+    
+    
+    # otrh_tvs[0].apply_to(pt_model, scaling_coef=-1.0, strict=True)
     # task_vectors[1].apply_to(pt_model, scaling_coef=1.0, strict=True)
     
+    for class_idx in range(num_classes):
+        task_vectors[class_idx].apply_to(pt_model, scaling_coef=0.142, strict=True)
+    
     # for class_idx in range(num_classes):
-    #     task_vectors[class_idx].apply_to(pt_model, scaling_coef=0.12, strict=True)
-    
-    # task_sim = []
-    # for i in range(num_classes):
-    #     anchor_tv = task_vectors[i]
-    #     task_sim.append([])
-    #     for j in range(num_classes):
-    #         other_tv = task_vectors[j]
-    #         cos_sim = anchor_tv.cosine_similarity(other_tv)
-    #         task_sim[i].append(cos_sim)
-    # task_sim = np.array(task_sim)
-    
-    
-    
-    
-    # metrics, all_preds, all_targets = evaluate_model(pt_model, dataset.get_test_dataloader(), device=gpu)
-    # confmat_metric = ConfusionMatrix(task="multiclass", num_classes=num_classes)
-    # confmat = confmat_metric(all_preds, all_targets)
-    
-    # class_names = [f'Class {i}' for i in range(10)]
-    # misc_utils.plot_confusion_matrix(cm=confmat, class_names=class_names, filepath=results_dir / Path('confusion_matrix_tv.png'), show=False)
-    
-    # misc_utils.plot_confusion_matrix(cm=task_sim, class_names=class_names, filepath=None, show=True)
-    
-    
-    
-    
-    otrh_tvs, res_tvs = TaskVector.orthogonalize_task_vectors(task_vectors)
-    
-    for class_idx in range(num_classes):
-        res_tvs[class_idx].apply_to(pt_model, scaling_coef=0.25, strict=True)
+    #     shrd_tvs[class_idx].apply_to(pt_model, scaling_coef=0.14, strict=True)
         
-    for class_idx in range(num_classes):
-        otrh_tvs[class_idx].apply_to(pt_model, scaling_coef=0.2, strict=True)
+    # for class_idx in range(num_classes):
+    #     otrh_tvs[class_idx].apply_to(pt_model, scaling_coef=0.2, strict=True)
     
-    # task_sim = []
-    # for i in range(num_classes):
-    #     anchor_tv = otrh_tvs[i]
-    #     task_sim.append([])
-    #     for j in range(num_classes):
-    #         other_tv = otrh_tvs[j]
-    #         cos_sim = anchor_tv.cosine_similarity(other_tv)
-    #         task_sim[i].append(cos_sim)
-    # task_sim = np.array(task_sim)
+    
     
     metrics, all_preds, all_targets = evaluate_model(pt_model, dataset.get_test_dataloader(), device=gpu)
     confmat_metric = ConfusionMatrix(task="multiclass", num_classes=num_classes)
@@ -453,8 +470,9 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str, sear
     class_names = [f'Class {i}' for i in range(10)]
     misc_utils.plot_confusion_matrix(cm=confmat, class_names=class_names, filepath=results_dir / Path('confusion_matrix_tv.png'), show=True)
     
-    # misc_utils.plot_confusion_matrix(cm=task_sim, class_names=class_names, filepath=None, show=True)
-    
+    misc_utils.plot_confusion_matrix(cm=task_sim, class_names=class_names, filepath=None, show=False)
+    misc_utils.plot_confusion_matrix(cm=orth_task_sim, class_names=class_names, filepath=None, show=False)
+    misc_utils.plot_confusion_matrix(cm=res_task_sim, class_names=class_names, filepath=None, show=False)
     
     print(metrics)
         
