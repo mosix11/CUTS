@@ -665,3 +665,4 @@ class CNN5_NoNorm(nn.Module):
         These are the parameters whose gradients are computed and are updated during backpropagation.
         """
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
+    

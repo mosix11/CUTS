@@ -1,4 +1,5 @@
 import torch
+from typing import List
 
 class TaskVector:
     def __init__(self, pretrained_state_dict=None, finetuned_state_dict=None, vector=None):
@@ -68,7 +69,23 @@ class TaskVector:
         return model
     
     
+    def flatten_vector(self):
+        """
+        Flatten a task vector dictionary into a single 1D vector.
+        """
+        return torch.cat([v.flatten() for k, v in sorted(self.vector.items())])
     
+    def unflatten_vector(self, flat_vector):
+        """
+        Unflatten a 1D tensor into a dictionary using the shapes in reference_dict.
+        """
+        new_dict = {}
+        pointer = 0
+        for k, v in sorted(self.vector.items()):
+            numel = v.numel()
+            new_dict[k] = flat_vector[pointer:pointer+numel].reshape_as(v)
+            pointer += numel
+        return TaskVector(vector=new_dict)
     
     def cosine_similarity(self, other_task_vector):
         """
@@ -126,3 +143,33 @@ class TaskVector:
             
             cosine_sim = dot_product_sum / (norm_self * norm_other)
             return cosine_sim
+
+
+    @staticmethod
+    def orthogonalize_task_vectors(task_vectors: List):
+        """
+        Given a list of task vectors, return orthogonalized task vectors.
+        Each output vector is orthogonal to the rest.
+        
+        Args:
+            task_vector_dicts (List[TaskVector]): List of task vectors.
+        
+        Returns:
+            List[Dict[str, torch.Tensor]]: Orthogonalized task vectors.
+        """
+        flat_vectors = [tv.flatten_vector() for tv in task_vectors]
+        flat_matrix = torch.stack(flat_vectors)  # Shape: (N, D)
+
+        orthogonalized = []
+        for i in range(flat_matrix.size(0)):
+            vi = flat_matrix[i].clone()
+            for uj in orthogonalized:
+                proj = torch.dot(vi, uj) / uj.norm()**2 * uj
+                vi = vi - proj
+            orthogonalized.append(vi)
+
+        orth_tvs = []
+        for orth_tv, orig_tv in zip(orthogonalized, task_vectors):
+            unflt_orth_tv = orig_tv.unflatten_vector(orth_tv)
+            orth_tvs.append(unflt_orth_tv)
+        return orth_tvs

@@ -8,6 +8,7 @@
 # and the cosine similarity of the task vectors associatiated to different classes ar not close to zero (class 0 to other classes between
 # 0.2 to 0.3). Let's try changing `finetuning_set = 'Heldout+Train'` to `finetuning_set = 'Heldout'` and see if we get more orthogonal 
 # task vectors in config 19.
+
 training_seed: &training_seed 11
 dataset_seed: &dataset_seed 11
 

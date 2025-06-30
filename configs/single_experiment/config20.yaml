@@ -1,4 +1,11 @@
 # CNN5 with GN
+
+# Here we use the same config as config18 but there we had CNN5 without any normalization layers and here we have CNN5 with 
+# Group Normalization layers replacing Batch Normalization layers as in config 15 BN caused problems in the task vectors.
+
+# Resutls:
+# It seems GN also causes some problems with task vectors, but it is less aggressive than BN.
+
 training_seed: &training_seed 11
 dataset_seed: &dataset_seed 11
 

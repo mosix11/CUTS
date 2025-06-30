@@ -642,10 +642,11 @@ def describe_structure(obj, depth=0):
 
 def plot_confusion_matrix(cm, class_names=None, title='Confusion Matrix', filepath=None, show=True):
     """
-    Plots the confusion matrix and optionally saves it to a file and/or displays it.
+    Plots the confusion matrix (for integers) or a similarity matrix (for floats)
+    and optionally saves it to a file and/or displays it.
 
     Args:
-        cm (np.ndarray): The confusion matrix (2D numpy array).
+        cm (np.ndarray or torch.Tensor): The matrix to plot (2D numpy array or torch tensor).
         class_names (list, optional): A list of class names to display on the axes.
                                         If None, will use 0, 1, 2...
         title (str): The title of the plot.
@@ -657,12 +658,30 @@ def plot_confusion_matrix(cm, class_names=None, title='Confusion Matrix', filepa
         print("Warning: Neither 'filepath' is provided nor 'show' is set to True. The plot will not be saved or displayed.")
         return
 
+    # Convert torch tensor to numpy array if it's a torch tensor
+    if isinstance(cm, torch.Tensor):
+        # Move to CPU if it's on GPU, then convert to numpy
+        cm_np = cm.detach().cpu().numpy()
+    else:
+        cm_np = cm # Assume it's already a numpy array
+
+    # Determine the format string based on the data type of the matrix
+    if np.issubdtype(cm_np.dtype, np.integer):
+        fmt = 'd'  # Integer format for confusion matrices
+    elif np.issubdtype(cm_np.dtype, np.floating):
+        fmt = '.2f'  # Float format with 2 decimal places for similarity matrices
+    else:
+        # Fallback for other types, or raise an error if unsupported
+        fmt = '.2f' # Default to float format for safety
+
     plt.figure(figsize=(8, 6))
-    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', cbar=False,
+    # Use cm_np here
+    sns.heatmap(cm_np, annot=True, fmt=fmt, cmap='Blues', cbar=True, # Changed cbar to True for similarity
                 xticklabels=class_names, yticklabels=class_names)
     plt.title(title)
-    plt.xlabel('Predicted Label')
-    plt.ylabel('True Label')
+    # Adjust labels based on whether it's integer (likely confusion matrix) or float (likely similarity)
+    plt.xlabel('Predicted Label' if np.issubdtype(cm_np.dtype, np.integer) else 'Vector Index')
+    plt.ylabel('True Label' if np.issubdtype(cm_np.dtype, np.integer) else 'Vector Index')
     plt.tight_layout()
 
     if filepath:
