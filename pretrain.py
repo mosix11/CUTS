@@ -89,6 +89,7 @@ def pretrain_model(outputs_dir: Path, cfg: dict, cfg_name:str):
         cm=confmat,
         class_names=class_names,
         filepath=str(plots_dir / Path("confmat.png")),
+        show=False,
     )
     
 
