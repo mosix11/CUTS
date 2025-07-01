@@ -1,11 +1,11 @@
-# config 22 with low loss percentage being 0,2
+# config 22 with low loss percentage being 0,6
 training_seed: &training_seed 11
 dataset_seed: &dataset_seed 11
 
 
 strategy:
   finetuning_set: &finetuning_set 'LowLoss'
-  percentage: 0.2
+  percentage: 0.6
   noise:
     pretraining:
       set: 'Train'
