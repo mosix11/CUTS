@@ -1,6 +1,7 @@
 import torch
 import torchmetrics
 from . import FC1, FCN, CNN5, CNN5_NoNorm, CNN5_GN, make_resnet18k
+from . import TorchvisionModels, TimmModels
 
 def create_model(cfg, num_classes):
     model_type = cfg.pop('type')
@@ -47,6 +48,19 @@ def create_model(cfg, num_classes):
         model = CNN5_GN(**cfg)
     elif model_type == 'resnet18k':
         model = make_resnet18k(**cfg)
+    elif model_type.startswith('torchvision'):
+        model_type = model_type.removeprefix('torchvision_')
+        model = TorchvisionModels(
+            model_type=model_type,
+            **cfg
+        )
+    elif model_type.startswith('timm'):
+        model_type = model_type.removeprefix('timm_')
+        model = TimmModels(
+            model_type=model_type,
+            **cfg
+        )
+    
     else: raise ValueError(f"Invalid model type {model_type}.")
     
     return model

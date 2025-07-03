@@ -1,0 +1,110 @@
+# Train on corrupted low loss samples
+training_seed: &training_seed 11
+dataset_seed: &dataset_seed 11
+
+
+strategy:
+  methodology: 'FullWeights'
+  finetuning_set: &finetuning_set 'LowLoss'
+  percentage: 0.40
+
+  task_vectors:
+
+    tv_train:
+      set: 'Train'
+      noise_rate: 0.4
+      noise_type: 'symmetric'
+      seed: 8
+
+    tv_noise:
+      - set: 'Train'
+        noise_rate: 0.6
+        noise_type: 'symmetric'
+        seed: 8
+
+      - set: 'Train'
+        noise_rate: 0.8
+        noise_type: 'symmetric'
+        seed: 8
+
+      - set: 'Train'
+        noise_rate: 1.0
+        noise_type: 'symmetric'
+        seed: 8
+
+      - set: 'Train'
+        noise_rate: 0.6
+        noise_type: 'symmetric'
+        seed: 12
+
+      - set: 'Train'
+        noise_rate: 0.8
+        noise_type: 'symmetric'
+        seed: 12
+
+      - set: 'Train'
+        noise_rate: 1.0
+        noise_type: 'symmetric'
+        seed: 12
+
+
+dataset:
+  name: "cifar10"
+  num_classes: &num_classes 10
+  img_size: [32, 32]
+  subsample_size: [-1, -1]
+  batch_size: 1024
+  class_subset: []
+  remap_labels: False
+  heldout_conf: null
+  grayscale: False
+  normalize_imgs: True
+  flatten: False
+  valset_ratio: 0.0
+  return_index: True
+  num_workers: 8
+  seed: *dataset_seed
+
+
+model:
+  type: 'torchvision_resnet18'
+  pt_weights: 'IMAGENET1K_V1'
+  num_classes: *num_classes
+  loss_fn: 'CE-NR'
+  metrics: ['ACC', 'F1']
+
+trainer:
+  ft_train:
+    max_epochs: 500
+    optimizer_cfg: 
+      type: "adam"
+      lr: 5.0e-5
+      betas: [0.9, 0.999]
+    lr_schedule_cfg: null
+    early_stopping: False
+    validation_freq: -1
+    save_best_model: False
+    checkpoint_freq: -1
+    run_on_gpu: True
+    use_amp: True
+    log_comet: True
+    comet_project_name: 'imgnet-pretrained-models'
+    seed: *training_seed
+
+  ft_noise:
+    max_epochs: 500
+    optimizer_cfg: 
+      type: "adam"
+      lr: 5.0e-5
+      betas: [0.9, 0.999]
+    lr_schedule_cfg: null
+    early_stopping: False
+    validation_freq: -1
+    save_best_model: False
+    checkpoint_freq: -1
+    run_on_gpu: True
+    use_amp: True
+    log_comet: True
+    comet_project_name: 'imgnet-pretrained-models'
+    seed: *training_seed
+

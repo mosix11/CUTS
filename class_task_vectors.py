@@ -435,8 +435,8 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str, sear
         # pt_model = recompute_BN_layers(pt_model, dataset.get_train_dataloader(), device=gpu)
         # pt_model.to(cpu)
         
-    # for key in add_tv.vector:
-    #     print(key)
+    for key in task_vectors[0].vector:
+        print(key)
     
 
     
@@ -451,9 +451,12 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str, sear
     
     # otrh_tvs[0].apply_to(pt_model, scaling_coef=-1.0, strict=True)
     # task_vectors[1].apply_to(pt_model, scaling_coef=1.0, strict=True)
-    
+
     for class_idx in range(num_classes):
-        task_vectors[class_idx].apply_to(pt_model, scaling_coef=0.142, strict=True)
+        task_vectors[class_idx].apply_to(pt_model, scaling_coef=0.05, strict=True)
+    
+    # for class_idx in range(num_classes):
+    #     task_vectors[class_idx].apply_to(pt_model, scaling_coef=0.142, strict=True)
     
     # for class_idx in range(num_classes):
     #     shrd_tvs[class_idx].apply_to(pt_model, scaling_coef=0.14, strict=True)
@@ -527,15 +530,15 @@ if __name__ == "__main__":
 
     dotenv.load_dotenv(".env")
     
-    cfg_path = Path('configs/single_experiment').joinpath(args.config)
+    cfg_path = Path('configs/single_experiment/class_tvs') / f"{args.config}.yaml"
 
     if not cfg_path.exists(): raise RuntimeError('The specified config file does not exist.')
     with open(cfg_path, 'r') as file:
         cfg = yaml.full_load(file)
 
-    outputs_dir = Path("outputs/single_experiment").absolute()
+    outputs_dir = Path("outputs/single_experiment/class_tvs").absolute()
     outputs_dir.mkdir(exist_ok=True, parents=True)
-    results_dir = Path("results/single_experiment").absolute()
+    results_dir = Path("results/single_experiment/class_tvs").absolute()
     results_dir.mkdir(exist_ok=True, parents=True)
 
     if args.tv:

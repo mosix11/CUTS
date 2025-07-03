@@ -41,7 +41,6 @@ def apply_strategy(cfg, dataset, pretrain_expr_dir:Path, phase:str="finetuning")
             dataset.set_trainset(noisy_set, shuffle=True)
             
     elif phase == 'finetuning' and strategy['finetuning_set'] == 'LowLoss':
-        # low_loss_idxs_path = pretrain_expr_dir / f'log/low_loss_indices_{strategy['noise']['pretraining']['noise_rate']}.pkl'
         low_loss_idxs_path = pretrain_expr_dir / f'log/low_loss_indices_{strategy['percentage']}.pkl'
         with open(low_loss_idxs_path, 'rb') as mfile:
             low_loss_indices = pickle.load(mfile)
@@ -151,13 +150,13 @@ if __name__ == "__main__":
 
     dotenv.load_dotenv(".env")
     
-    cfg_path = Path('configs/single_experiment').joinpath(args.config)
+    cfg_path = Path('configs/single_experiment/pretrain_on_noisy') / f"{args.config}.yaml"
 
     if not cfg_path.exists(): raise RuntimeError('The specified config file does not exist.')
     with open(cfg_path, 'r') as file:
         cfg = yaml.full_load(file)
 
-    outputs_dir = Path("outputs/single_experiment").absolute()
+    outputs_dir = Path("outputs/single_experiment/pretrain_on_noisy").absolute()
     outputs_dir.mkdir(exist_ok=True, parents=True)
 
     finetune_model(outputs_dir, cfg, cfg_name=cfg_path.stem)

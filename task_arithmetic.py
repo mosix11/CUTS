@@ -26,111 +26,7 @@ from collections import OrderedDict
 import seaborn as sns
 
 
-def plot_multiple_confusion_matrices(
-    filepaths,
-    titles=None,
-    results=None,
-    main_title='Combined Confusion Matrices',
-    save_filepath=None,
-    show=True
-):
-    """
-    Combines and displays multiple confusion matrix plots vertically in a single figure,
-    with an optional table of performance results at the bottom.
 
-    Args:
-        filepaths (list): A list of paths to the confusion matrix images.
-        titles (list, optional): A list of titles for each confusion matrix.
-                                 Must be the same length as filepaths.
-        results (list, optional): A list of dictionaries, where each dictionary
-                                  specifies the performance metrics for a model
-                                  associated with a confusion matrix.
-                                  Each dictionary should be in the format:
-                                  {'ACC': float, 'Loss': float, 'F1': float}.
-                                  Must be the same length as filepaths.
-        main_title (str): Overall title for the combined figure. Defaults to 'Combined Confusion Matrices'.
-        save_filepath (str, optional): Path to save the combined figure. If None, the figure is not saved.
-        show (bool): If True, display the combined figure. Defaults to True.
-    """
-    num_matrices = len(filepaths)
-    if titles and len(titles) != num_matrices:
-        raise ValueError("The number of titles must match the number of filepaths.")
-    if results and len(results) != num_matrices:
-        raise ValueError("The number of results dictionaries must match the number of filepaths.")
-
-    images = []
-    try:
-        for fp in filepaths:
-            images.append(Image.open(fp))
-    except FileNotFoundError as e:
-        print(f"Error: One or more confusion matrix image files not found. {e}")
-        return
-
-    # Determine figure height based on number of matrices and if a table is included
-    fig_height_per_matrix = 6
-    table_height = 0
-    if results:
-        # Estimate height needed for the table (adjust as needed for more padding)
-        table_height = 0.6 * len(results) + 1.8 # Increased basic estimate per row + header
-        fig, axes = plt.subplots(num_matrices + 1, 1, figsize=(10, num_matrices * fig_height_per_matrix + table_height))
-    else:
-        fig, axes = plt.subplots(num_matrices, 1, figsize=(10, num_matrices * fig_height_per_matrix))
-
-
-    for i, img in enumerate(images):
-        axes[i].imshow(img)
-        axes[i].axis('off')  # Turn off axis labels and ticks for the image
-        if titles and titles[i]:
-            axes[i].text(-0.1, 0.5, titles[i], transform=axes[i].transAxes,
-                         fontsize=12, va='center', ha='right', rotation=90) # Vertical title on the left
-
-    if results:
-        # Prepare data for the table
-        df = pd.DataFrame(results)
-        # Add a 'Model' column for row labels if titles are provided
-        if titles:
-            df.insert(0, 'Model', titles)
-        else:
-            df.insert(0, 'Model', [f'Model {j+1}' for j in range(num_matrices)])
-
-        # Format numerical columns to 3 decimal places
-        for col in df.columns:
-            # Check if the column can be converted to numeric before formatting
-            # This avoids errors if 'Model' column or other non-numeric columns are present
-            if pd.api.types.is_numeric_dtype(df[col]):
-                df[col] = df[col].apply(lambda x: f"{x:.3f}")
-
-        # Create the table
-        table_ax = axes[-1] # The last subplot for the table
-        table_ax.axis('off') # Turn off axis for the table plot
-        
-        # Adjust column widths dynamically
-        num_columns = len(df.columns)
-        col_widths = [1.0 / num_columns] * num_columns
-
-        table = table_ax.table(cellText=df.values,
-                               colLabels=df.columns,
-                               loc='center',
-                               cellLoc='center',
-                               colWidths=col_widths)
-        table.auto_set_font_size(False)
-        table.set_fontsize(10)
-        table.scale(1, 1.5) # Adjust table scale for more vertical padding (increased from 1.2 to 1.5)
-
-        # Corrected way to set specific cell properties for padding
-        for key, cell in table.get_celld().items():
-            cell.set_height(0.1)  # You can adjust this value to control vertical padding
-
-    fig.suptitle(main_title, fontsize=16, y=0.99 if results else 1.02) # Overall title at the top, adjusted if table exists
-    plt.tight_layout(rect=[0.05, 0.03, 1, 0.96 if results else 0.98]) # Adjust layout to make space for main title and side titles and potentially table
-
-    if save_filepath:
-        plt.savefig(save_filepath, bbox_inches='tight')
-
-    if show:
-        plt.show()
-    
-    plt.close() # Close the figure to free memory
 
 
 
@@ -426,7 +322,7 @@ def apply_tv_single_expr(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_na
         },   
     ]
     
-    plot_multiple_confusion_matrices(
+    misc_utils.plot_multiple_confusion_matrices(
         filepaths=[pretrain_dir / Path('plots/confmat.png'), finetune_dir / Path('plots/confmat.png'), results_dir / Path('confusion_matrix_tv.png')],
         titles=["Pretrained", "Finetuned", "TV"],
         results=results_list,

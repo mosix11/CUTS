@@ -131,6 +131,14 @@ class CIFAR10:
         self.heldout_loader = self._build_dataloader(self.heldout_set, shuffle=shuffle)
         
         
+    def change_batch_size(self, batch_size:int):
+        self.batch_size = batch_size
+        self.train_loader = self._build_dataloader(self.trainset, shuffle=True)
+        self.val_loader = self._build_dataloader(self.valset) if self.valset else None
+        self.test_loader = self._build_dataloader(self.testset)
+        self.heldout_loader = self._build_dataloader(self.heldout_set) if self.heldout_set else None
+        
+        
     def replace_heldout_as_train_dl(self):
         self.train_loader = self._build_dataloader(self.heldout_set, shuffle=True)
         

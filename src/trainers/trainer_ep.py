@@ -340,31 +340,56 @@ class TrainerEp:
                 
                 is_correct = (predictions.argmax(dim=-1) == target_batch)
 
-                # Update history and check consistency for each sample in the batch
+                # # Update history and check consistency for each sample in the batch
+                # for j in range(len(idxs)):
+                #     sample_idx = idxs[j].item()
+                #     sample_target = target_batch[j].item()
+                #     sample_was_correct = is_correct[j].item()
+
+                #     # Handle low loss (correctly classified) samples
+                #     if self.accumulate_low_loss and not self.is_low_loss_buffer_full():
+                #         self.low_loss_history[sample_idx].append(sample_was_correct)
+                #         history = self.low_loss_history[sample_idx]
+                #         if len(history) == self.low_loss_consistency_window:
+                #             consistency_score = sum(history) / len(history)
+                #             if consistency_score >= self.low_loss_consistency_threshold:
+                #                 if len(self.low_loss_sample_indices[sample_target]) < self.target_buffer_size_per_class_low:
+                #                     self.low_loss_sample_indices[sample_target].add(sample_idx)
+
+                #     # Handle high loss (wrongly classified) samples
+                #     if self.accumulate_high_loss and not self.is_high_loss_buffer_full():
+                #         self.high_loss_history[sample_idx].append(not sample_was_correct) # Note: append opposite
+                #         history = self.high_loss_history[sample_idx]
+                #         if len(history) == self.high_loss_consistency_window:
+                #             consistency_score = sum(history) / len(history)
+                #             if consistency_score >= self.high_loss_consistency_threshold:
+                #                 if len(self.high_loss_sample_indices[sample_target]) < self.target_buffer_size_per_class_high:
+                #                     self.high_loss_sample_indices[sample_target].add(sample_idx)
+                                    
+                #  Update history and check consistency for each sample in the batch           
                 for j in range(len(idxs)):
                     sample_idx = idxs[j].item()
                     sample_target = target_batch[j].item()
                     sample_was_correct = is_correct[j].item()
 
+
                     # Handle low loss (correctly classified) samples
-                    if self.accumulate_low_loss and not self.is_low_loss_buffer_full():
+                    if self.accumulate_low_loss:
                         self.low_loss_history[sample_idx].append(sample_was_correct)
                         history = self.low_loss_history[sample_idx]
                         if len(history) == self.low_loss_consistency_window:
                             consistency_score = sum(history) / len(history)
                             if consistency_score >= self.low_loss_consistency_threshold:
-                                if len(self.low_loss_sample_indices[sample_target]) < self.target_buffer_size_per_class_low:
-                                    self.low_loss_sample_indices[sample_target].add(sample_idx)
+                                self.low_loss_sample_indices[sample_target].add(sample_idx)
 
-                    # Handle high loss (wrongly classified) samples
-                    if self.accumulate_high_loss and not self.is_high_loss_buffer_full():
-                        self.high_loss_history[sample_idx].append(not sample_was_correct) # Note: append opposite
+                    # Handle low loss (correctly classified) samples
+                    if self.accumulate_high_loss:
+                        self.high_loss_history[sample_idx].append(not sample_was_correct)
                         history = self.high_loss_history[sample_idx]
                         if len(history) == self.high_loss_consistency_window:
                             consistency_score = sum(history) / len(history)
                             if consistency_score >= self.high_loss_consistency_threshold:
-                                if len(self.high_loss_sample_indices[sample_target]) < self.target_buffer_size_per_class_high:
-                                    self.high_loss_sample_indices[sample_target].add(sample_idx)
+                                self.high_loss_sample_indices[sample_target].add(sample_idx)
             
             else:
                 # TODO remove is_noisy
@@ -398,6 +423,11 @@ class TrainerEp:
         #     f"Time taken: {int((time.time() - epoch_start_time)//60)}:"
         #     f"{int((time.time() - epoch_start_time)%60)} minutes"
         # )
+        
+        if self.accumulate_low_loss:
+            self.check_and_save_low_loss_buffers()
+        if self.accumulate_high_loss:
+            self.check_and_save_high_loss_buffers()
         
         metrics_results = self.model.compute_metrics()
         self.model.reset_metrics()
@@ -538,94 +568,227 @@ class TrainerEp:
             
 
     
-    def activate_low_loss_samples_buffer(self, percentage: float = 0.3, consistency_window: int = 5, consistency_threshold: float = 0.8):
+    # def activate_low_loss_samples_buffer(self, percentage: float = 0.3, consistency_window: int = 5, consistency_threshold: float = 0.8):
+    #     if not hasattr(self, 'train_dataloader'):
+    #         raise RuntimeError("Please call `setup_data_loaders` before activating the buffers.")
+    #     self.accumulate_low_loss = True
+    #     self.low_loss_perc = percentage
+    #     self.low_loss_consistency_window = consistency_window
+    #     self.low_loss_consistency_threshold = consistency_threshold
+        
+    #     available_classes = self.dataset.get_available_classes()
+    #     num_classes = len(available_classes)
+    #     num_train_samples = len(self.train_dataloader.dataset)
+        
+    #     self.target_buffer_size_per_class_low = int((num_train_samples * self.low_loss_perc) / num_classes)
+    #     self.low_loss_sample_indices = {i: set() for i in available_classes}
+    #     self.low_loss_history = {i: collections.deque(maxlen=self.low_loss_consistency_window) for i in range(num_train_samples)}
+    
+    # def activate_high_loss_samples_buffer(self, percentage: float = 0.3, consistency_window: int = 5, consistency_threshold: float = 0.8):
+    #     if not hasattr(self, 'train_dataloader'):
+    #         raise RuntimeError("Please call `setup_data_loaders` before activating the buffers.")
+    #     self.accumulate_high_loss = True
+    #     self.high_loss_perc = percentage
+    #     self.high_loss_consistency_window = consistency_window
+    #     self.high_loss_consistency_threshold = consistency_threshold
+
+    #     available_classes = self.dataset.get_available_classes()
+    #     num_classes = len(available_classes)
+    #     num_train_samples = len(self.train_dataloader.dataset)
+        
+    #     self.target_buffer_size_per_class_high = int((num_train_samples * self.high_loss_perc) / num_classes)
+    #     self.high_loss_sample_indices = {i: set() for i in available_classes}
+    #     self.high_loss_history = {i: collections.deque(maxlen=self.high_loss_consistency_window) for i in range(num_train_samples)}
+
+    # def is_low_loss_buffer_full(self):
+    #     if not self.accumulate_low_loss: return True
+    #     for class_idx in self.low_loss_sample_indices:
+    #         if len(self.low_loss_sample_indices[class_idx]) < self.target_buffer_size_per_class_low:
+    #             return False
+    #     print("Low-loss buffer is full and balanced.")
+    #     self.save_low_loss_indices()
+    #     self.accumulate_low_loss = False
+    #     return True
+
+    # def is_high_loss_buffer_full(self):
+    #     if not self.accumulate_high_loss: return True
+    #     for class_idx in self.high_loss_sample_indices:
+    #         if len(self.high_loss_sample_indices[class_idx]) < self.target_buffer_size_per_class_high:
+    #             return False
+    #     print("High-loss buffer is full and balanced.")
+    #     self.save_high_loss_indices()
+    #     self.accumulate_high_loss = False
+    #     return True
+    
+    
+    
+    # def save_low_loss_indices(self):
+    #     if not hasattr(self, 'low_loss_sample_indices'):
+    #         print("Low-loss buffer was not activated. Nothing to save.")
+    #         return
+        
+        
+    #     output_path = self.log_dir / f'low_loss_indices_{self.low_loss_perc}.pkl'
+
+    #     # Convert sets to sorted lists for clean, deterministic output
+    #     indices_to_save = {
+    #         class_idx: sorted(list(idx_set))
+    #         for class_idx, idx_set in self.low_loss_sample_indices.items()
+    #     }
+
+    #     with open(output_path, 'wb') as f:
+    #         pickle.dump(indices_to_save, f)
+            
+    #     print(f"Successfully saved low-loss indices for {sum(len(v) for v in indices_to_save.values())} samples to: {output_path}")
+
+
+    # def save_high_loss_indices(self):
+    #     if not hasattr(self, 'high_loss_sample_indices'):
+    #         print("High-loss buffer was not activated. Nothing to save.")
+    #         return
+
+    #     output_path = self.log_dir / f'high_loss_indices_{self.high_loss_perc}.pkl'
+
+    #     # Convert sets to sorted lists for clean, deterministic output
+    #     indices_to_save = {
+    #         class_idx: sorted(list(idx_set))
+    #         for class_idx, idx_set in self.high_loss_sample_indices.items()
+    #     }
+
+    #     with open(output_path, 'wb') as f:
+    #         pickle.dump(indices_to_save, f)
+
+    #     print(f"Successfully saved high-loss indices for {sum(len(v) for v in indices_to_save.values())} samples to: {output_path}")
+
+
+    def activate_low_loss_samples_buffer(self, consistency_window: int = 5, consistency_threshold: float = 0.8):
         if not hasattr(self, 'train_dataloader'):
             raise RuntimeError("Please call `setup_data_loaders` before activating the buffers.")
+        
         self.accumulate_low_loss = True
-        self.low_loss_perc = percentage
         self.low_loss_consistency_window = consistency_window
         self.low_loss_consistency_threshold = consistency_threshold
         
-        available_classes = self.dataset.get_available_classes()
-        num_classes = len(available_classes)
-        num_train_samples = len(self.train_dataloader.dataset)
+        # Set up dynamic percentage targets
+        self.low_loss_percentages = [p / 100.0 for p in range(5, 100, 5)] # 0.05, 0.10, ... 0.95
+        self.current_low_loss_perc_index = 0
         
-        self.target_buffer_size_per_class_low = int((num_train_samples * self.low_loss_perc) / num_classes)
+        available_classes = self.dataset.get_available_classes()
+        self.num_classes = len(available_classes)
+        self.num_train_samples = len(self.train_dataloader.dataset)
+        
         self.low_loss_sample_indices = {i: set() for i in available_classes}
-        self.low_loss_history = {i: collections.deque(maxlen=self.low_loss_consistency_window) for i in range(num_train_samples)}
-    
-    def activate_high_loss_samples_buffer(self, percentage: float = 0.3, consistency_window: int = 5, consistency_threshold: float = 0.8):
+        self.low_loss_history = {i: collections.deque(maxlen=self.low_loss_consistency_window) for i in range(self.num_train_samples)}
+        print("Low-loss sample buffer activated. Will save indices at 5% increments.")
+
+    def activate_high_loss_samples_buffer(self, consistency_window: int = 5, consistency_threshold: float = 0.8):
         if not hasattr(self, 'train_dataloader'):
             raise RuntimeError("Please call `setup_data_loaders` before activating the buffers.")
+            
         self.accumulate_high_loss = True
-        self.high_loss_perc = percentage
         self.high_loss_consistency_window = consistency_window
         self.high_loss_consistency_threshold = consistency_threshold
 
-        available_classes = self.dataset.get_available_classes()
-        num_classes = len(available_classes)
-        num_train_samples = len(self.train_dataloader.dataset)
+        # Set up dynamic percentage targets
+        self.high_loss_percentages = [p / 100.0 for p in range(5, 100, 5)]
+        self.current_high_loss_perc_index = 0
         
-        self.target_buffer_size_per_class_high = int((num_train_samples * self.high_loss_perc) / num_classes)
+        available_classes = self.dataset.get_available_classes()
+        self.num_classes = len(available_classes)
+        self.num_train_samples = len(self.train_dataloader.dataset)
+        
         self.high_loss_sample_indices = {i: set() for i in available_classes}
-        self.high_loss_history = {i: collections.deque(maxlen=self.high_loss_consistency_window) for i in range(num_train_samples)}
+        self.high_loss_history = {i: collections.deque(maxlen=self.high_loss_consistency_window) for i in range(self.num_train_samples)}
+        print("High-loss sample buffer activated. Will save indices at 5% increments.")
 
-    def is_low_loss_buffer_full(self):
-        if not self.accumulate_low_loss: return True
-        for class_idx in self.low_loss_sample_indices:
-            if len(self.low_loss_sample_indices[class_idx]) < self.target_buffer_size_per_class_low:
-                return False
-        print("Low-loss buffer is full and balanced.")
-        self.save_low_loss_indices()
-        self.accumulate_low_loss = False
-        return True
+    def check_and_save_low_loss_buffers(self):
+        # Loop as long as we might be able to save the next tier in the same epoch
+        while self.current_low_loss_perc_index < len(self.low_loss_percentages):
+            current_target_perc = self.low_loss_percentages[self.current_low_loss_perc_index]
+            target_size_per_class = int((self.num_train_samples * current_target_perc) / self.num_classes)
 
-    def is_high_loss_buffer_full(self):
-        if not self.accumulate_high_loss: return True
-        for class_idx in self.high_loss_sample_indices:
-            if len(self.high_loss_sample_indices[class_idx]) < self.target_buffer_size_per_class_high:
-                return False
-        print("High-loss buffer is full and balanced.")
-        self.save_high_loss_indices()
-        self.accumulate_high_loss = False
-        return True
-    
-    
-    
-    def save_low_loss_indices(self):
+            # Check if the current target is met
+            all_classes_met = True
+            for class_idx in self.low_loss_sample_indices:
+                if len(self.low_loss_sample_indices[class_idx]) < target_size_per_class:
+                    all_classes_met = False
+                    break
+            
+            if all_classes_met:
+                # If met, save the indices for this percentage and move to the next target
+                self.save_low_loss_indices(current_target_perc)
+                self.current_low_loss_perc_index += 1
+            else:
+                # If not met, stop checking for this epoch
+                break
+        
+        # Deactivate if all targets are completed
+        if self.current_low_loss_perc_index >= len(self.low_loss_percentages):
+            print("All low-loss percentage targets have been met and saved.")
+            self.accumulate_low_loss = False
+
+    def check_and_save_high_loss_buffers(self):
+        while self.current_high_loss_perc_index < len(self.high_loss_percentages):
+            current_target_perc = self.high_loss_percentages[self.current_high_loss_perc_index]
+            target_size_per_class = int((self.num_train_samples * current_target_perc) / self.num_classes)
+            
+            all_classes_met = True
+            for class_idx in self.high_loss_sample_indices:
+                if len(self.high_loss_sample_indices[class_idx]) < target_size_per_class:
+                    all_classes_met = False
+                    break
+            
+            if all_classes_met:
+                self.save_high_loss_indices(current_target_perc)
+                self.current_high_loss_perc_index += 1
+            else:
+                break
+                
+        if self.current_high_loss_perc_index >= len(self.high_loss_percentages):
+            print("All high-loss percentage targets have been met and saved.")
+            self.accumulate_high_loss = False
+
+    def save_low_loss_indices(self, percentage: float):
         if not hasattr(self, 'low_loss_sample_indices'):
             print("Low-loss buffer was not activated. Nothing to save.")
             return
         
+        output_path = self.log_dir / f'low_loss_indices_{percentage:.2f}.pkl'
         
-        output_path = self.log_dir / f'low_loss_indices_{self.low_loss_perc}.pkl'
+        # Calculate the exact number of samples needed per class and slice the list.
+        target_size_per_class = int((self.num_train_samples * percentage) / self.num_classes)
 
-        # Convert sets to sorted lists for clean, deterministic output
         indices_to_save = {
-            class_idx: sorted(list(idx_set))
+            class_idx: sorted(list(idx_set))[:target_size_per_class] # Slice the list here
             for class_idx, idx_set in self.low_loss_sample_indices.items()
         }
 
         with open(output_path, 'wb') as f:
             pickle.dump(indices_to_save, f)
             
-        print(f"Successfully saved low-loss indices for {sum(len(v) for v in indices_to_save.values())} samples to: {output_path}")
+        total_saved = sum(len(v) for v in indices_to_save.values())
+        # Improved percentage formatting in the print statement
+        # print(f"✅ Saved low-loss indices for {total_saved} samples ({percentage:.2%}) to: {output_path}")
 
 
-    def save_high_loss_indices(self):
+    def save_high_loss_indices(self, percentage: float):
         if not hasattr(self, 'high_loss_sample_indices'):
             print("High-loss buffer was not activated. Nothing to save.")
             return
 
-        output_path = self.log_dir / f'high_loss_indices_{self.high_loss_perc}.pkl'
+        output_path = self.log_dir / f'high_loss_indices_{percentage:.2f}.pkl'
 
-        # Convert sets to sorted lists for clean, deterministic output
+        # Calculate the exact number of samples needed per class and slice the list.
+        target_size_per_class = int((self.num_train_samples * percentage) / self.num_classes)
+        
         indices_to_save = {
-            class_idx: sorted(list(idx_set))
+            class_idx: sorted(list(idx_set))[:target_size_per_class] # Slice the list here
             for class_idx, idx_set in self.high_loss_sample_indices.items()
         }
 
         with open(output_path, 'wb') as f:
             pickle.dump(indices_to_save, f)
 
-        print(f"Successfully saved high-loss indices for {sum(len(v) for v in indices_to_save.values())} samples to: {output_path}")
+        total_saved = sum(len(v) for v in indices_to_save.values())
+        # Improved percentage formatting in the print statement
+        # print(f"✅ Saved high-loss indices for {total_saved} samples ({percentage:.2%}) to: {output_path}")
