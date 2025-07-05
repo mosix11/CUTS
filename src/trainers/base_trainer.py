@@ -7,7 +7,7 @@ from torch.amp import autocast
 from torch.optim.lr_scheduler import MultiStepLR, ReduceLROnPlateau, CosineAnnealingLR
 from .custom_lr_schedulers import InverseSquareRootLR
 
-from torchmetrics import ConfusionMatrix
+
 
 import os
 from pathlib import Path
@@ -26,10 +26,15 @@ from typing import List, Tuple, Union
 
 from ..utils import nn_utils, misc_utils
 
+from abc import ABC, abstractmethod
 
-# Trainer based on epochs
-class TrainerEp:
 
+class BaseTrainer(ABC):
+    """
+    Abstract base class for trainers.
+    Implements the Template Method design pattern.
+    """
+    
     def __init__(
         self,
         outputs_dir: Path = Path("./outputs"),
@@ -125,7 +130,7 @@ class TrainerEp:
         self.accumulate_low_loss = False
         self.accumulate_high_loss = False
         
-
+        
     def setup_data_loaders(self, dataset):
         self.dataset = dataset
         self.train_dataloader = dataset.get_train_dataloader()
@@ -137,29 +142,22 @@ class TrainerEp:
         )
         self.num_test_batches = len(self.test_dataloader)
         
+        
+    def prepare_model(self, state_dict=None):
+        if state_dict:
+            self.model.load_state_dict(state_dict)
+        if self.run_on_gpu:
+            self.model.to(self.gpu)
+        
     def prepare_batch(self, batch):
         if self.run_on_gpu:
             batch = [tens.to(self.gpu) for tens in batch]
             return batch
         else: return batch
         
-    def unpack_batch(self, batch, default_value=None):
-        """
-        Unpacks a list/tuple into four variables, assigning default_value
-        to any variables that don't have corresponding items.
-        """
-        x = batch[0]
-        y = batch[1]
-        idx = batch[2]
-        is_noisy = batch[3] if len(batch) == 4 else torch.zeros_like(y)
-        return x, y, idx, is_noisy
-
-    def prepare_model(self, state_dict=None):
-        if state_dict:
-            self.model.load_state_dict(state_dict)
-        if self.run_on_gpu:
-            self.model.to(self.gpu)
-
+        
+    
+    
     def configure_optimizers(self, optim_state_dict=None, last_epoch=-1, last_gradient_step=-1):
         optim_cfg = copy.deepcopy(self.optimizer_cfg)
         del optim_cfg['type']
@@ -218,7 +216,10 @@ class TrainerEp:
         # if self.early_stopping:
         #     self.early_stopping = nn_utils.EarlyStopping(patience=8, min_delta=0.001, mode='max', verbose=False)
         self.optim = optim
-
+        
+        
+        
+        
     def configure_logger(self, experiment_key=None):
         experiment_config = comet_ml.ExperimentConfig(
             name=self.exp_name,
@@ -235,7 +236,55 @@ class TrainerEp:
         with open(self.log_dir / Path('comet_exp_key'), 'w') as mfile:
             mfile.write(self.comet_experiment.get_key()) 
 
+
+    def save_full_checkpoint(self, path):
+        save_dict = {
+            'model_state': self.model.state_dict(),
+            'optim_state': self.optim.state_dict(),
+            'epoch': self.epoch+1,
+        }
+        if self.log_comet:
+            save_dict['exp_key'] = self.comet_experiment.get_key()
+        if self.save_best_model:
+            save_dict['best_prf'] = self.best_model_perf
+        torch.save(save_dict, path)
+        
+    def load_full_checkpoint(self, path):
+        checkpoint = torch.load(path)
+        self.prepare_model(checkpoint["model_state"])
+        self.configure_optimizers(
+            checkpoint["optim_state"], last_epoch=checkpoint["epoch"]
+        )
+        self.epoch = checkpoint["epoch"]
+        if self.log_comet:
+            self.configure_logger(checkpoint["exp_key"])
+            
+        if 'best_prf' in checkpoint:
+            self.best_model_perf = checkpoint['best_prf']
+            
+            
+            
+            
+            
+            
+    @abstractmethod
+    def _fit_epoch(self) -> dict:
+        """
+        Runs a single training epoch.
+        This method MUST be implemented by subclasses.
+        
+        Returns:
+            dict: A dictionary of training metrics for the epoch (e.g., {'Train/Loss': 0.1, 'Train/ACC': 0.95}).
+        """
+        pass
+            
+            
+            
     def fit(self, model, dataset, resume=False):
+        """
+        This is the main "template method". It orchestrates the training process.
+        DO NOT OVERRIDE THIS METHOD.
+        """
         self.setup_data_loaders(dataset)
         self.model = model
         if resume:
@@ -252,29 +301,58 @@ class TrainerEp:
                 self.configure_logger()
             self.epoch = 0
 
-
         self.grad_scaler = GradScaler("cuda", enabled=self.use_amp)
-
         self.early_stop = False
         
         if model.loss_fn.reduction != 'none' and (self.accumulate_low_loss or self.accumulate_high_loss):
             raise RuntimeError('In order to accumulate samples with low or high loss in a subset, the reduction type of the loss function should be set to `none`.')
             
-        
+            
         # Whether to log the progress for each batch or for each epoch
         if self.batch_prog:
-            for self.epoch in range(self.epoch, self.max_epochs):
-                if self.early_stop: break
-                self.fit_epoch()
+            pbar = range(self.epoch, self.max_epochs)
         else:
             pbar = tqdm(range(self.epoch, self.max_epochs), total=self.max_epochs)
-            for self.epoch in pbar:
+            
+        for self.epoch in pbar:
+            if isinstance(pbar, tqdm):
                 pbar.set_description(f"Processing Training Epoch {self.epoch + 1}/{self.max_epochs}")
-                if self.early_stopping and self.early_stop:
-                    break
-                self.fit_epoch()
+                
+            if self.early_stopping and self.early_stop: break
 
+            # 1. Call the abstract training method (implemented by subclass)
+            self.model.train()
+            statistics = self._fit_epoch()
+            
+            if self.accumulate_low_loss:
+                self.check_and_save_low_loss_buffers()
+            if self.accumulate_high_loss:
+                self.check_and_save_high_loss_buffers()
+            
+            if self.model_log_call:
+                model_logs = self.model.log_stats()
+                statistics.update(model_logs)
+            
+            # 2. Call the abstract evaluation method (implemented by subclass)
+            if self.validation_freq > 0 and (self.epoch + 1) % self.validation_freq == 0:
+                val_stats = self.evaluate(set_name='Val')
+                statistics.update(val_stats)
 
+                # 3. Handle saving best model (generic logic)
+                if self.save_best_model and val_stats['Val/ACC'] > self.best_model_perf.get('Val/ACC', 0):
+                    self.best_model_perf = {**statistics, 'epoch': self.epoch}
+                    self.save_full_checkpoint(self.checkpoint_dir / 'best_ckp.pth')
+            
+            # 4. Handle logging, checkpointing, etc. (generic logic)
+            if self.checkpoint_freq > 0 and (self.epoch+1) % self.checkpoint_freq == 0:
+                self.save_full_checkpoint(self.checkpoint_dir / 'resume_ckp.pth')
+            
+            
+            
+            if self.log_comet:
+                self.comet_experiment.log_metrics(statistics, step=self.epoch)
+
+        # Final evaluation, saving, etc.
         final_results = {}
         final_results.update(self.evaluate(set='Train'))
         final_results.update(self.evaluate(set='Test'))
@@ -303,238 +381,55 @@ class TrainerEp:
             json.dump(results, json_file, indent=4)
         
         return results
-
-
-    def fit_epoch(self):
-
-        # ******** Training Part ********
-        self.model.train()
-
-        # epoch_start_time = time.time()
-        epoch_train_loss = misc_utils.AverageMeter()
-
-        
-        if self.batch_prog:
-            pbar = tqdm(
-                enumerate(self.train_dataloader),
-                total=self.num_train_batches,
-                desc="Processing Training Epoch {}".format(self.epoch + 1),
-            )
-        else:
-            pbar = enumerate(self.train_dataloader)
-        
-        for i, batch in pbar:
-            batch = self.prepare_batch(batch)
-            input_batch, target_batch, idxs, is_noisy  = self.unpack_batch(batch)
             
-            self.optim.zero_grad()
-                    
-                
-            if self.accumulate_low_loss or self.accumulate_high_loss:
-                loss, predictions = self.model.training_step(input_batch, target_batch, self.use_amp, return_preds=True)
-                
-                is_correct = (predictions.argmax(dim=-1) == target_batch)
-
-                for j in range(len(idxs)):
-                    sample_idx = idxs[j].item()
-                    sample_target = target_batch[j].item()
-                    sample_was_correct = is_correct[j].item()
-
-
-                    # Handle low loss (correctly classified) samples
-                    if self.accumulate_low_loss:
-                        self.low_loss_history[sample_idx].append(sample_was_correct)
-                        history = self.low_loss_history[sample_idx]
-                        if len(history) == self.low_loss_consistency_window:
-                            consistency_score = sum(history) / len(history)
-                            if consistency_score >= self.low_loss_consistency_threshold:
-                                self.low_loss_sample_indices[sample_target].add(sample_idx)
-
-                    # Handle low loss (correctly classified) samples
-                    if self.accumulate_high_loss:
-                        self.high_loss_history[sample_idx].append(not sample_was_correct)
-                        history = self.high_loss_history[sample_idx]
-                        if len(history) == self.high_loss_consistency_window:
-                            consistency_score = sum(history) / len(history)
-                            if consistency_score >= self.high_loss_consistency_threshold:
-                                self.high_loss_sample_indices[sample_target].add(sample_idx)
             
-            else:
-                # TODO remove is_noisy
-                # loss = self.model.training_step(input_batch, (target_batch, is_noisy), self.use_amp)
-                loss = self.model.training_step(input_batch, target_batch, self.use_amp)
-
-            if self.model.loss_fn.reduction == 'none':
-                loss = loss.mean()
             
-            if self.use_amp:
-                self.grad_scaler.scale(loss).backward()
-                self.grad_scaler.step(self.optim)
-                self.grad_scaler.update()
-            else:
-                loss.backward()
-                self.optim.step()
-                
-            epoch_train_loss.update(loss.detach().cpu().item(), n=input_batch.shape[0])
             
-        
-            
-        if self.lr_scheduler:
-            self.lr_scheduler.step()
-            
+    @abstractmethod
+    def _evaluate_set(self, dataloader) -> dict:
+        """
+        Evaluates the model on a given dataloader (e.g., validation or test).
+        This method MUST be implemented by subclasses.
 
-                
-        # print( 
-        #     f"Epoch {self.epoch + 1}/{self.max_epochs}, "
-        #     f"Training Loss: {epoch_train_loss.avg}, "
-        #     f"Average Acc: {epoch_train_acc.avg}, "
-        #     f"Time taken: {int((time.time() - epoch_start_time)//60)}:"
-        #     f"{int((time.time() - epoch_start_time)%60)} minutes"
-        # )
-        
-        if self.accumulate_low_loss:
-            self.check_and_save_low_loss_buffers()
-        if self.accumulate_high_loss:
-            self.check_and_save_high_loss_buffers()
-        
-        metrics_results = self.model.compute_metrics()
-        self.model.reset_metrics()
-        
-        statistics = {
-            'Train/Loss': epoch_train_loss.avg,
-            'Train/LR': self.optim.param_groups[0]['lr']
-        }
-        for met_name, met_val in metrics_results.items():
-            stat_key = f"Train/{met_name}"
-            
-            statistics[stat_key] = met_val
-          
-          
-        # TODO fix the problem of early stopping  
-        # if epoch_train_loss.avg == 0.0 or metrics_results['ACC'] == 1.0:
-        #     if self.early_stopping: self.early_stop = True
-        
-        if self.validation_freq > 0:
-            if (self.epoch+1) % self.validation_freq == 0:
-                res = self.evaluate(set='Val')
-                for met, val in res.items():
-                    statistics[met] = val
-                if self.save_best_model:
-                    if self.best_model_perf['Val/ACC'] < statistics['Val/ACC']:
-                        self.best_model_perf = copy.deepcopy(statistics)
-                        self.best_model_perf['epoch'] = self.epoch
-                        ckp_path = self.checkpoint_dir / Path('best_ckp.pth')
-                        self.save_full_checkpoint(ckp_path)
-        
-        if self.checkpoint_freq > 0 and (self.epoch+1) % self.checkpoint_freq == 0:
-            ckp_path = self.checkpoint_dir / Path('resume_ckp.pth')
-            self.save_full_checkpoint(ckp_path)
-                
-        if self.model_log_call:
-            model_logs = self.model.log_stats()
-            statistics.update(model_logs)
-        if self.log_comet:
-            self.comet_experiment.log_metrics(statistics, step=self.epoch)
+        Args:
+            dataloader (DataLoader): The dataloader to evaluate on.
 
-
-
-    def evaluate(self, set='Val'):
+        Returns:
+            dict: A dictionary of evaluation metrics (e.g., {'Val/Loss': 0.2, 'Val/ACC': 0.9}).
+        """
+        pass
+        
+    def evaluate(self, set_name: str = 'Val') -> dict:
+        """
+        Public-facing evaluation method.
+        """
         self.model.eval()
         self.model.reset_metrics()
-        loss_met = misc_utils.AverageMeter()
         
-        dataloader = None
-        if set == 'Train':
+        if set_name == 'Train':
             dataloader = self.train_dataloader
-        elif set == 'Val':
+        elif set_name == 'Val':
             dataloader = self.val_dataloader
-        elif set == 'Test':
-            dataloader = self.test_dataloader
-        else:
-            raise ValueError("Invalid set specified. Choose 'train', 'val', or 'test'.")
-
-        
-        for i, batch in enumerate(dataloader):
-            batch = self.prepare_batch(batch)
-            input_batch, target_batch, idxs, is_noisy = self.unpack_batch(batch)
-            # loss = self.model.validation_step(input_batch, (target_batch, is_noisy), self.use_amp)
-            loss = self.model.validation_step(input_batch, target_batch, self.use_amp)
-            if self.model.loss_fn.reduction == 'none':
-                loss = loss.mean()
-            loss_met.update(loss.detach().cpu().item(), n=input_batch.shape[0])
-        
-        metrics_results = self.model.compute_metrics()
-        self.model.reset_metrics()
-            
-        results = {
-            f"{set}/Loss": loss_met.avg,
-        }
-        for met_name, met_val in metrics_results.items():
-            stat_key = f"{set}/{met_name}"
-            results[stat_key] = met_val
-            
-        return results
-    
-    
-    def confmat(self, set='Val'):
-        num_classes = self.dataset.get_num_classes()
-        self.model.eval()
-        
-        dataloader = None
-        if set == 'Train':
-            dataloader = self.train_dataloader
-        elif set == 'Val':
-            dataloader = self.val_dataloader
-        elif set == 'Test':
+        elif set_name == 'Test':
             dataloader = self.test_dataloader
         else:
             raise ValueError("Invalid set specified. Choose 'Train', 'Val', or 'Test'.")
         
-        all_preds = []
-        all_targets = []
+        metrics = self._evaluate_set(dataloader)
         
-        for i, batch in enumerate(dataloader):
-            batch = self.prepare_batch(batch)
-            input_batch, target_batch, idxs, is_noisy = self.unpack_batch(batch)
+        # Add the set name prefix to the metrics
+        return {f"{set_name}/{k}": v for k, v in metrics.items()}
             
-            model_output = self.model.predict(input_batch) # Get raw model output (logits)
-            predictions = torch.argmax(model_output, dim=-1) # Get predicted class labels
             
-            all_preds.extend(predictions.detach().cpu())
-            all_targets.extend(target_batch.detach().cpu())
             
-        confmat = ConfusionMatrix(task="multiclass", num_classes=num_classes)
-        cm = confmat(torch.tensor(all_preds), torch.tensor(all_targets))
-        return cm
-        
-    
-    
-    def save_full_checkpoint(self, path):
-        save_dict = {
-            'model_state': self.model.state_dict(),
-            'optim_state': self.optim.state_dict(),
-            'epoch': self.epoch+1,
-        }
-        if self.log_comet:
-            save_dict['exp_key'] = self.comet_experiment.get_key()
-        if self.save_best_model:
-            save_dict['best_prf'] = self.best_model_perf
-        torch.save(save_dict, path)
-        
-    def load_full_checkpoint(self, path):
-        checkpoint = torch.load(path)
-        self.prepare_model(checkpoint["model_state"])
-        self.configure_optimizers(
-            checkpoint["optim_state"], last_epoch=checkpoint["epoch"]
-        )
-        self.epoch = checkpoint["epoch"]
-        if self.log_comet:
-            self.configure_logger(checkpoint["exp_key"])
             
-        if 'best_prf' in checkpoint:
-            self.best_model_perf = checkpoint['best_prf']
             
-
+            
+            
+            
+            
+            
+            
     def activate_low_loss_samples_buffer(self, consistency_window: int = 5, consistency_threshold: float = 0.8):
         if not hasattr(self, 'train_dataloader'):
             raise RuntimeError("Please call `setup_data_loaders` before activating the buffers.")

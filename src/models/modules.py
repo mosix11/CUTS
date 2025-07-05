@@ -10,14 +10,14 @@ class ExampleTiedDropout(nn.Module):
       but with a fixed seed based on the example index.
     """
 
-    def __init__(self, p_fixed=0.2, p_mem=0.1, num_training_samples=60000):
+    def __init__(self, p_gen=0.2, p_mem=0.1, num_training_samples=60000):
         super().__init__()
-        self.p_fixed = p_fixed
+        self.p_fixed = p_gen
         self.p_mem = p_mem
         self.max_id = num_training_samples
         self.mask_tensor = None  # shape: [max_id, C, H, W]
 
-    def forward(self, X, idx):
+    def forward(self, X, indices):
         # Skip dropout entirely if p_fixed is 1.0 (i.e., keep everything)
         if self.p_fixed == 1.0:
             return X
@@ -26,27 +26,29 @@ class ExampleTiedDropout(nn.Module):
         device = X.device
         fixed_channels = int(self.p_fixed * C)
 
+        
         if self.training:
+            indices = indices.to('cpu')
             # Create mask_tensor on first forward call
             if self.mask_tensor is None:
-                self.mask_tensor = torch.zeros((self.max_id, C, H, W), device=device)
-
+                self.mask_tensor = torch.zeros((self.max_id, C, H, W), dtype=torch.bool, device='cpu')
+            
             # Build per-example dropout masks
             for i in range(B):
-                sample_idx = idx[i].item()
+                sample_idx = indices[i].cpu().item()
 
                 # Skip mask generation if already exists
                 if torch.count_nonzero(self.mask_tensor[sample_idx]) != 0:
                     continue
 
                 # Start with fixed neurons
-                mask = torch.zeros((C, H, W), device=device)
+                mask = torch.zeros((C, H, W), device='cpu')
                 mask[:fixed_channels] = 1.0
 
                 # Generate example-specific memorization mask
                 mem_channels = C - fixed_channels
                 gen = torch.Generator(device='cpu').manual_seed(sample_idx)
-                mem_mask = torch.bernoulli(torch.full((mem_channels,), self.p_mem), generator=gen).to(device)
+                mem_mask = torch.bernoulli(torch.full((mem_channels,), self.p_mem), generator=gen).to('cpu')
                 mem_mask = mem_mask.view(-1, 1, 1).expand(-1, H, W)
                 mask[fixed_channels:] = mem_mask
 
@@ -54,7 +56,7 @@ class ExampleTiedDropout(nn.Module):
                 self.mask_tensor[sample_idx] = mask
 
             # Apply the dropout mask
-            masks = self.mask_tensor[idx].to(device)  # shape [B, C, H, W]
+            masks = self.mask_tensor[indices].to(device)  # shape [B, C, H, W]
             return X * masks
 
         else:
