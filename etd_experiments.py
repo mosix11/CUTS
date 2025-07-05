@@ -48,7 +48,7 @@ def evaluate_model(model, dataloader, device):
     all_targets = []
     
     model.to(device)
-    model.train()
+    model.eval()
     with torch.no_grad():
         for batch in dataloader:
             batch = prepare_batch(batch, device)
@@ -110,6 +110,10 @@ def eval_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     plots_dir = experiment_dir / Path("plots")
 
     trained_weights = torch.load(weights_dir / 'model_weights.pth', map_location=cpu)
+    print(trained_weights.keys())
+    trained_weights = torch.load(experiment_dir / 'checkpoint/final_ckp.pth', map_location=cpu)['model_state']
+    print(trained_weights.keys())
+    
     model.load_state_dict(trained_weights)
     
     testset_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), device=gpu)

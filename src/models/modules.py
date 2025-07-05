@@ -112,22 +112,25 @@ class ExampleTiedDropout(nn.Module):
         self.generator = None
 
     def forward(self, X: torch.Tensor, idx: torch.Tensor) -> torch.Tensor:
-        if self.p_fixed == 1.0 and self.training:
+        if self.p_fixed == 1.0:
             return X # No dropout to apply
 
-        device = X.device
         
-        # Lazily initialize buffers on the first forward pass
-        if self.masks is None:
-            num_channels = X.shape[1]
-            # Stores the 1D boolean mask for each training sample
-            self.masks = torch.zeros(self.num_training_samples, num_channels, dtype=torch.bool, device=device)
-            # Tracks which masks have been created
-            self.masks_initialized = torch.zeros(self.num_training_samples, dtype=torch.bool, device=device)
-            
-            self.generator = torch.Generator(device=device)
 
         if self.training:
+            
+            device = X.device
+        
+            # Lazily initialize buffers on the first forward pass
+            if self.masks is None:
+                num_channels = X.shape[1]
+                # Stores the 1D boolean mask for each training sample
+                self.masks = torch.zeros(self.num_training_samples, num_channels, dtype=torch.bool, device=device)
+                # Tracks which masks have been created
+                self.masks_initialized = torch.zeros(self.num_training_samples, dtype=torch.bool, device=device)
+                
+                self.generator = torch.Generator(device=device)
+                
             # Determine which samples in the current batch need their masks generated for the first time
             uninitialized_indices = idx[~self.masks_initialized[idx]]
 
