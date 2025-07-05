@@ -110,9 +110,9 @@ def eval_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     plots_dir = experiment_dir / Path("plots")
 
     trained_weights = torch.load(weights_dir / 'model_weights.pth', map_location=cpu)
-    print(trained_weights.keys())
-    trained_weights = torch.load(experiment_dir / 'checkpoint/final_ckp.pth', map_location=cpu)['model_state']
-    print(trained_weights.keys())
+    # print(trained_weights.keys())
+    # trained_weights = torch.load(experiment_dir / 'checkpoint/final_ckp.pth', map_location=cpu)['model_state']
+    # print(trained_weights.keys())
     
     model.load_state_dict(trained_weights)
     
@@ -182,9 +182,11 @@ def train_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     )
     
     
-    torch.save(model.state_dict(), weights_dir / Path("model_weights.pth"))
+    
     
     results = trainer.fit(model, dataset, resume=False)
+    
+    torch.save(model.state_dict(), weights_dir / Path("model_weights.pth"))
 
     class_names = [f"Class {i}" for i in range(num_classes)]
     confmat = trainer.confmat("Test")
