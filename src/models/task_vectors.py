@@ -116,6 +116,23 @@ class TaskVector:
         return model
     
     
+    def dot(self, other):
+        """Dot product of two task vectors."""
+        with torch.no_grad():
+            dot_product = 0.0
+            for key in self.vector:
+                if key not in other.vector:
+                    print(f"Warning, key {key} is not present in both task vectors.")
+                    continue
+                dot_product += torch.sum(self.vector[key] * other.vector[key])
+        return dot_product
+    
+    
+    def norm(self):
+        """Norm of a task vector."""
+        return torch.sqrt(self.dot(self))
+    
+    
     def flatten_vector(self):
         """
         Flatten a task vector dictionary into a single 1D vector.

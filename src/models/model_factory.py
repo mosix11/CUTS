@@ -1,6 +1,8 @@
 import torch
 import torchmetrics
-from . import FC1, FCN, CNN5, CNN5_NoNorm, CNN5_GN, make_resnet18k
+from . import FC1, FCN, CNN5, CNN5_NoNorm, CNN5_GN
+from . import PreActResNet9, PreActResNet18, PreActResNet34, PreActResNet50, PreActResNet101, PreActResNet152
+from . import PostActResNet9, PostActResNet18, PostActResNet34, PostActResNet50, PostActResNet101, PostActResNet152
 from . import TorchvisionModels, TimmModels
 
 def create_model(cfg, num_classes):
@@ -46,9 +48,32 @@ def create_model(cfg, num_classes):
         model = CNN5_NoNorm(**cfg)
     elif model_type == 'cnn5_gn':
         model = CNN5_GN(**cfg)
-    elif model_type == 'resnet18k':
-        model = make_resnet18k(**cfg)
-    elif model_type.startswith('torchvision'):
+    elif model_type == 'resnet9v2':
+        model = PreActResNet9(**cfg)
+    elif model_type == 'resnet18v2':
+        model = PreActResNet18(**cfg)
+    elif model_type == 'resnet34v2':
+        model = PreActResNet34(**cfg)
+    elif model_type == 'resnet50v2':
+        model = PreActResNet50(**cfg)
+    elif model_type == 'resnet101v2':
+        model = PreActResNet101(**cfg)
+    elif model_type == 'resnet152v2':
+        model = PreActResNet152(**cfg)
+    elif model_type == 'resnet9v1':
+        model = PostActResNet9(**cfg)
+    elif model_type == 'resnet18v1':
+        model = PostActResNet18(**cfg)
+    elif model_type == 'resnet34v1':
+        model = PostActResNet34(**cfg)
+    elif model_type == 'resnet50v1':
+        model = PostActResNet50(**cfg)
+    elif model_type == 'resnet101v1':
+        model = PostActResNet101(**cfg)
+    elif model_type == 'resnet152v1':
+        model = PostActResNet152(**cfg)
+        
+    elif model_type.startswith('torchvision'): 
         model_type = model_type.removeprefix('torchvision_')
         model = TorchvisionModels(
             model_type=model_type,

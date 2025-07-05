@@ -25,6 +25,57 @@ import json
 from tqdm import tqdm
 from collections import OrderedDict
 
+
+
+
+def prepare_batch(batch, device):
+    batch = [tens.to(device) for tens in batch]
+    return batch
+
+
+
+def evaluate_model(model, dataloader, device):
+    """
+    Evaluates the given model on the provided dataloader.
+
+    Args:
+        model (torch.nn.Module): The model to evaluate.
+        dataloader (torch.utils.data.DataLoader): The data loader for evaluation.
+        device (torch.device): The device to run evaluation on.
+
+    Returns:
+        tuple: A tuple containing (all_predictions, all_targets, metrics_dict).
+    """
+    loss_met = misc_utils.AverageMeter()
+    model.reset_metrics()
+    all_preds = []
+    all_targets = []
+    
+    model.to(device)
+    model.eval()
+    with torch.no_grad():
+        for batch in dataloader:
+            batch = prepare_batch(batch, device)
+            input_batch, target_batch = batch[:2]
+            
+            loss = model.validation_step(input_batch, target_batch, use_amp=True)
+            if model.loss_fn.reduction == 'none':
+                loss = loss.mean()
+            loss_met.update(loss.detach().cpu().item(), n=input_batch.shape[0])
+            
+            model_output = model.predict(input_batch)
+            predictions = torch.argmax(model_output, dim=-1) 
+            
+            all_preds.extend(predictions.cpu())
+            all_targets.extend(target_batch.cpu())
+            
+    metric_results = model.compute_metrics()
+    metric_results['Loss'] = loss_met.avg
+    model.reset_metrics()
+    
+    return metric_results, torch.tensor(all_preds), torch.tensor(all_targets) 
+
+
 def search_optimal_coefficient(base_model, task_vector, search_range, dataset, num_classes, device):
     """
     Performs a search to find the optimal task vector scaling coefficient.
@@ -90,116 +141,30 @@ def search_optimal_coefficient(base_model, task_vector, search_range, dataset, n
 
     return best_coef, best_results, best_cm_tensor
 
-def prepare_batch(batch, device):
-    batch = [tens.to(device) for tens in batch]
-    return batch
-
-def evaluate_model(model, dataloader, device):
-    """
-    Evaluates the given model on the provided dataloader.
-
-    Args:
-        model (torch.nn.Module): The model to evaluate.
-        dataloader (torch.utils.data.DataLoader): The data loader for evaluation.
-        device (torch.device): The device to run evaluation on.
-
-    Returns:
-        tuple: A tuple containing (all_predictions, all_targets, metrics_dict).
-    """
-    loss_met = misc_utils.AverageMeter()
-    model.reset_metrics()
-    all_preds = []
-    all_targets = []
-    
-    model.to(device)
-    model.eval()
-    with torch.no_grad():
-        for batch in dataloader:
-            batch = prepare_batch(batch, device)
-            input_batch, target_batch = batch[:2]
-            
-            loss = model.validation_step(input_batch, target_batch, use_amp=True)
-            if model.loss_fn.reduction == 'none':
-                loss = loss.mean()
-            loss_met.update(loss.detach().cpu().item(), n=input_batch.shape[0])
-            
-            model_output = model.predict(input_batch)
-            predictions = torch.argmax(model_output, dim=-1) 
-            
-            all_preds.extend(predictions.cpu())
-            all_targets.extend(target_batch.cpu())
-            
-    metric_results = model.compute_metrics()
-    metric_results['Loss'] = loss_met.avg
-    model.reset_metrics()
-    
-    return metric_results, torch.tensor(all_preds), torch.tensor(all_targets) 
 
 
+def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
+    cfg['trainer']['pretraining']['comet_api_key'] = os.getenv("COMET_API_KEY")
+    cfg['trainer']['finetuning']['comet_api_key'] = os.getenv("COMET_API_KEY")
 
-
-def finetune_model(outputs_dir: Path, cfg: dict, cfg_name:str):
-    cfg['trainer']['ft_train']['comet_api_key'] = os.getenv("COMET_API_KEY")
-    cfg['trainer']['ft_noise']['comet_api_key'] = os.getenv("COMET_API_KEY")
-    
     augmentations = [
         transformsv2.RandomCrop(32, padding=4),
         transformsv2.RandomHorizontalFlip(),
     ]
+
     
-    
-    
-    if not outputs_dir.joinpath(f"{cfg_name}/no_noise/weights/model_weights.pth").exists():
+    if not outputs_dir.joinpath(f"{cfg_name}/gold/weights/model_weights.pth").exists():
         cfg_cpy = copy.deepcopy(cfg)
         dataset, num_classes = dataset_factory.create_dataset(cfg_cpy, augmentations)
-    
-        model = model_factory.create_model(cfg_cpy['model'], num_classes)
         
-        experiment_name = f"{cfg_name}/no_noise"
-        experiment_dir = outputs_dir / Path(experiment_name)
-
-        weights_dir = experiment_dir / Path("weights")
-        weights_dir.mkdir(exist_ok=True, parents=True)
-
-        plots_dir = experiment_dir / Path("plots")
-        plots_dir.mkdir(exist_ok=True, parents=True)
-        
-        
-        trainer = TrainerEp(
-            outputs_dir=outputs_dir,
-            **cfg_cpy['trainer']['ft_train'],
-            exp_name=experiment_name,
-            exp_tags=None,
-        )
-        
-        results = trainer.fit(model, dataset, resume=False)
-
-        torch.save(model.state_dict(), weights_dir / Path("model_weights.pth"))
-
-        class_names = [f"Class {i}" for i in range(num_classes)]
-        confmat = trainer.confmat("Test")
-        misc_utils.plot_confusion_matrix(
-            cm=confmat,
-            class_names=class_names,
-            filepath=str(plots_dir / Path("confmat.png")),
-            show=False,
-        )
-    
-        
-        
-    
-    if not outputs_dir.joinpath(f"{cfg_name}/clean_set/weights/model_weights.pth").exists():
-        cfg_cpy = copy.deepcopy(cfg)
-        dataset, num_classes = dataset_factory.create_dataset(cfg_cpy, augmentations)
-    
         model = model_factory.create_model(cfg_cpy['model'], num_classes)
         
         strategy = cfg_cpy['strategy']
-        dataset.inject_noise(**strategy['task_vectors']['tv_train'])
+        dataset.inject_noise(**strategy['noise']['pretraining'])
         clean_set, noisy_set = dataset.get_clean_noisy_subsets(set='Train')
         dataset.set_trainset(clean_set, shuffle=True)
             
-        experiment_name = f"{cfg_name}/clean_set"
+        experiment_name = f"{cfg_name}/gold"
         experiment_dir = outputs_dir / Path(experiment_name)
 
         weights_dir = experiment_dir / Path("weights")
@@ -212,7 +177,7 @@ def finetune_model(outputs_dir: Path, cfg: dict, cfg_name:str):
 
         trainer = TrainerEp(
             outputs_dir=outputs_dir,
-            **cfg_cpy['trainer']['ft_train'],
+            **cfg_cpy['trainer']['pretraining'],
             exp_name=experiment_name,
             exp_tags=None,
         )
@@ -230,17 +195,20 @@ def finetune_model(outputs_dir: Path, cfg: dict, cfg_name:str):
             show=False,
         )
         
-        
-    if not outputs_dir.joinpath(f"{cfg_name}/train_set/weights/model_weights.pth").exists():
+
+    if not outputs_dir.joinpath(f"{cfg_name}/pretrain/weights/model_weights.pth").exists():
         cfg_cpy = copy.deepcopy(cfg)
         dataset, num_classes = dataset_factory.create_dataset(cfg_cpy, augmentations)
-    
+        
         model = model_factory.create_model(cfg_cpy['model'], num_classes)
         
         strategy = cfg_cpy['strategy']
-        dataset.inject_noise(**strategy['task_vectors']['tv_train'])
-            
-        experiment_name = f"{cfg_name}/train_set"
+        
+        dataset.inject_noise(**strategy['noise']['pretraining'])
+        
+        experiment_name = f"{cfg_name}/pretrain"
+        experiment_tags = None
+
         experiment_dir = outputs_dir / Path(experiment_name)
 
         weights_dir = experiment_dir / Path("weights")
@@ -251,22 +219,67 @@ def finetune_model(outputs_dir: Path, cfg: dict, cfg_name:str):
         
         trainer = TrainerEp(
             outputs_dir=outputs_dir,
-            **cfg_cpy['trainer']['ft_train'],
+            **cfg['trainer']['pretraining'],
             exp_name=experiment_name,
-            exp_tags=None,
+            exp_tags=experiment_tags,
         )
         
-        
-        if strategy['finetuning_set'] == 'LowLoss':
-            # percentage = strategy['percentage']
+        if cfg['strategy']['finetuning_set'] == 'LowLoss':
             trainer.setup_data_loaders(dataset)
             trainer.activate_low_loss_samples_buffer(
-                # percentage=percentage,
                 consistency_window=5,
                 consistency_threshold=0.8
             )
 
-       
+        results = trainer.fit(model, dataset, resume=False)
+        
+        # print(results)
+
+        torch.save(model.state_dict(), weights_dir / Path("model_weights.pth"))
+
+        class_names = [f"Class {i}" for i in range(num_classes)]
+        confmat = trainer.confmat("Test")
+        misc_utils.plot_confusion_matrix(
+            cm=confmat,
+            class_names=class_names,
+            filepath=str(plots_dir / Path("confmat.png")),
+            show=False,
+        )
+
+
+    if not outputs_dir.joinpath(f"{cfg_name}/finetune_gold/weights/model_weights.pth").exists():
+        cfg_cpy = copy.deepcopy(cfg)
+        dataset, num_classes = dataset_factory.create_dataset(cfg_cpy, augmentations)
+        
+        model = model_factory.create_model(cfg_cpy['model'], num_classes)
+        
+        base_model_ckp_path = outputs_dir/ Path(f"{cfg_name}/pretrain") / Path('weights/model_weights.pth')
+        checkpoint = torch.load(base_model_ckp_path)
+        model.load_state_dict(checkpoint)
+        
+        strategy = cfg_cpy['strategy']
+        dataset.inject_noise(**strategy['noise']['pretraining'])
+        clean_set, noisy_set = dataset.get_clean_noisy_subsets(set='Train')
+        dataset.set_trainset(clean_set, shuffle=True)
+            
+        experiment_name = f"{cfg_name}/finetune_gold"
+        experiment_dir = outputs_dir / Path(experiment_name)
+
+        weights_dir = experiment_dir / Path("weights")
+        weights_dir.mkdir(exist_ok=True, parents=True)
+
+        plots_dir = experiment_dir / Path("plots")
+        plots_dir.mkdir(exist_ok=True, parents=True)
+        
+        
+
+        trainer = TrainerEp(
+            outputs_dir=outputs_dir,
+            **cfg_cpy['trainer']['pretraining'],
+            exp_name=experiment_name,
+            exp_tags=None,
+        )
+        
         results = trainer.fit(model, dataset, resume=False)
 
         torch.save(model.state_dict(), weights_dir / Path("model_weights.pth"))
@@ -279,20 +292,22 @@ def finetune_model(outputs_dir: Path, cfg: dict, cfg_name:str):
             filepath=str(plots_dir / Path("confmat.png")),
             show=False,
         )
+
     
-    
-    for idx, noise_tv in enumerate(cfg['strategy']['task_vectors']['tv_noise']):
-        
-        if not outputs_dir.joinpath(f"{cfg_name}/noise_{noise_tv['noise_rate']}_{noise_tv['seed']}/weights/model_weights.pth").exists():
+    for idx, noise_tv in enumerate(cfg['strategy']['noise']['finetuning']):
+        if not outputs_dir.joinpath(f"{cfg_name}/finetune_{noise_tv['noise_rate']}_{noise_tv['seed']}/weights/model_weights.pth").exists():
             cfg_cpy = copy.deepcopy(cfg)
             dataset, num_classes = dataset_factory.create_dataset(cfg_cpy, augmentations)
             
             model = model_factory.create_model(cfg_cpy['model'], num_classes)
             
-            strategy = cfg_cpy['strategy']
-            dataset.inject_noise(**strategy['task_vectors']['tv_train'])
+            base_model_ckp_path = outputs_dir/ Path(f"{cfg_name}/pretrain") / Path('weights/model_weights.pth')
+            checkpoint = torch.load(base_model_ckp_path)
+            model.load_state_dict(checkpoint)
             
-            experiment_name = f"{cfg_name}/noise_{noise_tv['noise_rate']}_{noise_tv['seed']}"
+            strategy = cfg_cpy['strategy']
+            
+            experiment_name = f"{cfg_name}/finetune_{noise_tv['noise_rate']}_{noise_tv['seed']}"
             experiment_dir = outputs_dir / Path(experiment_name)
 
             weights_dir = experiment_dir / Path("weights")
@@ -301,23 +316,40 @@ def finetune_model(outputs_dir: Path, cfg: dict, cfg_name:str):
             plots_dir = experiment_dir / Path("plots")
             plots_dir.mkdir(exist_ok=True, parents=True)
             
-            
-            low_loss_idxs_path = outputs_dir / f"{cfg_name}/train_set" / f"log/low_loss_indices_{strategy['percentage']:.2f}.pkl"
-            with open(low_loss_idxs_path, 'rb') as mfile:
-                low_loss_indices = pickle.load(mfile)
-            all_easy_samples = [idx for class_list in low_loss_indices.values() for idx in class_list]
-            
-            dataset.subset_set(set='Train', indices=all_easy_samples)
-            dataset.inject_noise(**noise_tv)
+            if strategy['finetuning_set'] == 'Heldout':
+                dataset.inject_noise(**strategy['noise']['finetuning'])
+                dataset.replace_heldout_as_train_dl()
+            elif strategy['finetuning_set'] == 'CleanNoiseSplit':
+                dataset.inject_noise(**strategy['noise']['pretraining'])
+                clean_set, noisy_set = dataset.get_clean_noisy_subsets(set='Train')
+                if strategy['noise']['finetuning']['set'] == 'TrainClean':
+                    dataset.set_trainset(clean_set, shuffle=True)
+                    strategy['noise']['finetuning']['set'] = 'Train'
+                    dataset.inject_noise(**strategy['noise']['finetuning'])
+                
+                elif strategy['noise']['finetuning']['set'] == 'TrainNoise':
+                    dataset.set_trainset(noisy_set, shuffle=True)
+                    
+            elif strategy['finetuning_set'] == 'LowLoss':
+                low_loss_idxs_path = outputs_dir/ Path(f"{cfg_name}/pretrain") / f'log/low_loss_indices_{strategy['percentage']:.2f}.pkl'
+                with open(low_loss_idxs_path, 'rb') as mfile:
+                    low_loss_indices = pickle.load(mfile)
+                all_easy_samples = [idx for class_list in low_loss_indices.values() for idx in class_list]
+                
+                dataset.inject_noise(**strategy['noise']['pretraining'])
+                dataset.subset_set(set='Train', indices=all_easy_samples)
+                
+                dataset.inject_noise(**noise_tv)
+                
             
             trainer = TrainerEp(
                 outputs_dir=outputs_dir,
-                **cfg_cpy['trainer']['ft_noise'],
+                **cfg['trainer']['finetuning'],
                 exp_name=experiment_name,
-                exp_tags=None,
             )
             
             results = trainer.fit(model, dataset, resume=False)
+            print(results)
 
             torch.save(model.state_dict(), weights_dir / Path("model_weights.pth"))
 
@@ -327,13 +359,10 @@ def finetune_model(outputs_dir: Path, cfg: dict, cfg_name:str):
                 cm=confmat,
                 class_names=class_names,
                 filepath=str(plots_dir / Path("confmat.png")),
-                show=False,
+                show=False
             )
-        
-
-
-
-
+            
+            
 def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     training_seed = cfg['training_seed']
     if training_seed:
@@ -346,85 +375,77 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
     torch.use_deterministic_algorithms(True) 
     torch.set_float32_matmul_precision("high")
-
-    dataset, num_classes = dataset_factory.create_dataset(cfg)
-    
-    model_base = model_factory.create_model(cfg['model'], num_classes)
     
     cpu = nn_utils.get_cpu_device()
     gpu = nn_utils.get_gpu_device()
     
+    
+    dataset, num_classes = dataset_factory.create_dataset(cfg)
+    
+    model_base = model_factory.create_model(cfg['model'], num_classes)
+    
     base_expr_dir = outputs_dir / cfg_name
-    
-    pretrain_weights = model_base.state_dict()
-    no_noise_weights = torch.load(base_expr_dir / 'no_noise/weights/model_weights.pth', map_location=cpu)
-    clean_set_weights = torch.load(base_expr_dir / 'clean_set/weights/model_weights.pth', map_location=cpu)
-    train_set_weights = torch.load(base_expr_dir / 'train_set/weights/model_weights.pth', map_location=cpu)
-    
-    noisy_weights = OrderedDict()
-    for idx, noise_tv in enumerate(cfg['strategy']['task_vectors']['tv_noise']):
-        noisy_weight = torch.load(base_expr_dir / f'noise_{noise_tv['noise_rate']}_{noise_tv['seed']}/weights/model_weights.pth', map_location=cpu)
-        noisy_weights[f'{noise_tv['noise_rate']}_{noise_tv['seed']}'] = noisy_weight
+    gold_dir = base_expr_dir / 'gold'
+    pretrain_dir = base_expr_dir / 'pretrain'
+    finetune_dirs = OrderedDict()
+    for idx, noise_tv in enumerate(cfg['strategy']['noise']['finetuning']):
+        ft_expr_dir = base_expr_dir / f"finetune_{noise_tv['noise_rate']}_{noise_tv['seed']}"
+        finetune_dirs[f"{noise_tv['noise_rate']}_{noise_tv['seed']}"] = ft_expr_dir
         
+    gold_weights = torch.load(gold_dir / 'weights/model_weights.pth', map_location=cpu)
+    pretrain_weights = torch.load(pretrain_dir / 'weights/model_weights.pth', map_location=cpu)
+    finetune_weights = OrderedDict()
+    for ft_expr, ft_dir in finetune_dirs.items():
+        finetune_weights[ft_expr] = torch.load(ft_dir / 'weights/model_weights.pth', map_location=cpu)
     
-    with open(base_expr_dir / Path('no_noise/log/results.json'), 'r') as file:
-        no_noise_results = json.load(file)
-    with open(base_expr_dir / Path('clean_set/log/results.json'), 'r') as file:
-        clean_set_results = json.load(file)
-    with open(base_expr_dir / Path('train_set/log/results.json'), 'r') as file:
-        train_set_results = json.load(file)
+    model_base
+    
+    finetune_tvs = OrderedDict()
+    for ft_expr, ft_weight in finetune_weights.items():
+        finetune_tvs[ft_expr] = TaskVector(pretrain_weights, ft_weight)
         
-    pretrain_results, _, _ = evaluate_model(model_base, dataset.get_test_dataloader(), device=gpu)
-    
-    no_noise_tv = TaskVector(pretrain_weights, no_noise_weights)
-    clean_set_tv = TaskVector(pretrain_weights, clean_set_weights)
-    train_set_tv = TaskVector(pretrain_weights, train_set_weights)
-    noisy_tvs = OrderedDict()
-    for task, n_weights in noisy_weights.items():
-        noisy_tvs[task] = TaskVector(pretrain_weights, n_weights)
-        
-    
-    print(pretrain_results)
-    print(no_noise_results)
-    print(clean_set_results)
-    print(train_set_results)
-    
-    train_set_tv.apply_to(model_base.to(cpu), scaling_coef=1.0, strict=True)
-    noisy_tvs['1.0_8'].apply_to(model_base.to(cpu), scaling_coef=-0.2, strict=True)
-    
-    # test_results, _, _ = evaluate_model(model_base, dataset.get_test_dataloader(), device=gpu)
-    # print(test_results)
-    
-    task_vectors = [no_noise_tv, clean_set_tv, train_set_tv]
-    # for task, tv in noisy_tvs.items():
-    #     task_vectors.append(tv)
+    ft_tvs_list = list(finetune_tvs.values())
     
     task_sim = []
-    for i in range(len(task_vectors)):
-        anchor_tv = task_vectors[i]
+    for i in range(len(ft_tvs_list)):
+        anchor_tv = ft_tvs_list[i]
         task_sim.append([])
-        for j in range(len(task_vectors)):
-            other_tv = task_vectors[j]
+        for j in range(len(ft_tvs_list)):
+            other_tv = ft_tvs_list[j]
             cos_sim = anchor_tv.cosine_similarity(other_tv)
             task_sim[i].append(cos_sim)
     task_sim = np.array(task_sim)
     
-    # search_range = [0.0, 1.5]
-    # best_coef, best_results, best_cm = search_optimal_coefficient(
-    #     base_model=model_base,
-    #     task_vector=task_vector,
-    #     dataset=dataset,
-    #     search_range=search_range,
-    #     device=gpu,
-    #     num_classes=num_classes
-    # )
     
-        
-    # pretrain_weights = torch.load(base_model_ckp_path, map_location=cpu)
-    class_names = ['no_noise', 'clean_set', 'train_set']
-    # class_names.extend(list(noisy_tvs.keys()))
+    otrh_tvs, shrd_tvs = TaskVector.decompose_task_vectors_SVD(ft_tvs_list)
+    
+    orth_task_sim = []
+    for i in range(len(ft_tvs_list)):
+        anchor_tv = otrh_tvs[i]
+        orth_task_sim.append([])
+        for j in range(len(ft_tvs_list)):
+            other_tv = otrh_tvs[j]
+            cos_sim = anchor_tv.cosine_similarity(other_tv)
+            orth_task_sim[i].append(cos_sim)
+    orth_task_sim = np.array(orth_task_sim)
+    
+    shrd_tvs_sim = []
+    for i in range(len(ft_tvs_list)):
+        anchor_tv = shrd_tvs[i]
+        shrd_tvs_sim.append([])
+        for j in range(len(ft_tvs_list)):
+            other_tv = shrd_tvs[j]
+            cos_sim = anchor_tv.cosine_similarity(other_tv)
+            shrd_tvs_sim[i].append(cos_sim)
+    shrd_tvs_sim = np.array(shrd_tvs_sim)
+    
+    
+    class_names = list(finetune_tvs.keys())
     misc_utils.plot_confusion_matrix(cm=task_sim, class_names=class_names, filepath=None, show=True)
-
+    misc_utils.plot_confusion_matrix(cm=orth_task_sim, class_names=class_names, filepath=None, show=True)
+    misc_utils.plot_confusion_matrix(cm=shrd_tvs_sim, class_names=class_names, filepath=None, show=True)
+    
+    
 
 
 if __name__ == "__main__":
@@ -444,39 +465,27 @@ if __name__ == "__main__":
     )
     
     parser.add_argument(
-        "-f",
-        "--finetune",
-        help="Finetune the pretrained model on the tasks.",
-        action="store_true",
-    )
-    
-    
-    parser.add_argument(
         "-t",
-        "--taskvector",
-        help="Perform task arithmetics.",
+        "--tv",
+        help="Apply task vectors to an already trained and finetuned experiment.",
         action="store_true",
     )
-    
-    
-    
     args = parser.parse_args()
 
     dotenv.load_dotenv(".env")
     
-    cfg_path = Path('configs/single_experiment/imgnet_pretrained_models') / f"{args.config}.yaml"
+    cfg_path = Path('configs/single_experiment/pretrain_on_noisy') / f"{args.config}.yaml"
 
     if not cfg_path.exists(): raise RuntimeError('The specified config file does not exist.')
     with open(cfg_path, 'r') as file:
         cfg = yaml.full_load(file)
 
-    outputs_dir = Path("outputs/single_experiment/imgnet_pretrained_models").absolute()
+    outputs_dir = Path("outputs/single_experiment/pretrain_on_noisy").absolute()
     outputs_dir.mkdir(exist_ok=True, parents=True)
-    results_dir = Path("results/single_experiment/imgnet_pretrained_models").absolute()
+    results_dir = Path("results/single_experiment/pretrain_on_noisy").absolute()
     results_dir.mkdir(exist_ok=True, parents=True)
 
-    if args.taskvector:
+    if args.tv:
         apply_tv(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)
-    elif args.finetune:
-        finetune_model(outputs_dir, cfg, cfg_name=cfg_path.stem)
-
+    else:
+        pt_ft_model(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)

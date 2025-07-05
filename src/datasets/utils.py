@@ -16,7 +16,7 @@ class DatasetWithIndex(Dataset):
         data = self.dataset[idx]
         if len(data) == 3:
             x, y, is_noisy = data
-            return x, y, is_noisy, idx
+            return x, y, idx, is_noisy 
         elif len(data) == 2:
             x, y = data
             return x, y, idx

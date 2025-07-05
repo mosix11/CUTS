@@ -11,3 +11,5 @@ python-dotenv
 ray[tune]
 PyYaml
 seaborn
+timm
+thop

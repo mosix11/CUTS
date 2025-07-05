@@ -3,7 +3,7 @@ from torchvision import datasets
 import torchvision.transforms.v2 as transforms
 from torch.utils.data import Dataset, DataLoader, random_split, Subset
 
-from .utils import DatasetWithIndex, LabelRemapper, NoisyClassificationDataset
+from .utils import DatasetWithIndex, LabelRemapper, NoisyClassificationDataset, BinarizedClassificationDataset
 
 import os
 from pathlib import Path
@@ -27,7 +27,6 @@ class CIFAR100:
         normalize_imgs: bool = False,
         flatten: bool = False,
         valset_ratio: float = 0.05,
-        return_index: bool = False,
         num_workers: int = 2,
         seed: int = None,
     ) -> None:
@@ -52,7 +51,6 @@ class CIFAR100:
         self.flatten = flatten
         self.valset_ratio = valset_ratio
         self.trainset_ratio = 1 - self.valset_ratio
-        self.return_index = return_index
 
         if self.class_subset:
             self.available_classes = self.class_subset
@@ -155,6 +153,13 @@ class CIFAR100:
         
         self._set_set(set, dataset)
         
+    def binarize_set(self, set='Train', target_class=-1):
+        if target_class not in self.available_classes:
+            raise ValueError('Target class is not in available classes.')
+        dataset = self._get_set(set)
+        dataset = BinarizedClassificationDataset(dataset, target_class)
+        self._set_set(set, dataset)
+        
     def inject_noise(self, set='Train', noise_rate=0.0, noise_type='symmetric', seed=None, generator=None):
         dataset = self._get_set(set)
         
@@ -179,15 +184,12 @@ class CIFAR100:
         
         if self.remap_labels and self.class_subset:
             dataset = LabelRemapper(dataset, self.label_mapping)
-        if self.return_index:
-            dataset = DatasetWithIndex(dataset)
+        dataset = DatasetWithIndex(dataset)
         
         self._set_set(set, dataset)
         
         
     def get_clean_noisy_subsets(self, set='Train'):
-        if not self.return_index:
-            raise RuntimeError('In order to be able to get the subsets of the clean and noisy samples, the dataset class must be initialized with `return_index=True`')
         dataset = self._get_set(set)
         
         clean_indices = []
@@ -296,11 +298,11 @@ class CIFAR100:
             if heldout_set: heldout_set = LabelRemapper(heldout_set, self.label_mapping)
 
         
-        if self.return_index:
-            trainset = DatasetWithIndex(train_dataset)
-            if valset: valset = DatasetWithIndex(valset)
-            test_dataset = DatasetWithIndex(test_dataset)
-            if heldout_set: heldout_set = DatasetWithIndex(heldout_set)
+
+        trainset = DatasetWithIndex(train_dataset)
+        if valset: valset = DatasetWithIndex(valset)
+        test_dataset = DatasetWithIndex(test_dataset)
+        if heldout_set: heldout_set = DatasetWithIndex(heldout_set)
         
         self.trainset = trainset
         self.valset = valset

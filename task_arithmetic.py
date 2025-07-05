@@ -128,6 +128,10 @@ def unwrap_noise_configurations(config_dict):
 
 
 
+def prepare_batch(batch, device):
+    batch = [tens.to(device) for tens in batch]
+    return batch
+
 
 
 def evaluate_model(model, dataloader, device):
@@ -239,10 +243,6 @@ def search_optimal_coefficient(base_model, task_vector, search_range, dataset, n
 
 
 
-
-def prepare_batch(batch, device):
-    batch = [tens.to(device) for tens in batch]
-    return batch
 
 
 def apply_tv_single_expr(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str, search_range = [-1.5, 0.0]):
