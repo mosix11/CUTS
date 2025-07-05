@@ -42,7 +42,7 @@ model:
   metrics: ['ACC', 'F1']
 
 trainer:
-  max_epochs: 500
+  max_epochs: 300
   optimizer_cfg: 
     type: "adam"
     lr: 1.0e-4

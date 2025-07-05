@@ -122,7 +122,7 @@ class PreActResNet(nn.Module):
         
         super(PreActResNet, self).__init__()
         self.in_planes = init_channels # Initial number of input channels for the first layer
-
+        input_image_size = tuple(input_image_size)
         # Determine initial conv layer parameters based on input_image_size
         if input_image_size == (32, 32) or input_image_size == (64, 64):
             # For smaller images, use a smaller kernel and no aggressive downsampling

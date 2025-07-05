@@ -399,18 +399,18 @@ class BaseTrainer(ABC):
         """
         pass
         
-    def evaluate(self, set_name: str = 'Val') -> dict:
+    def evaluate(self, set: str = 'Val') -> dict:
         """
         Public-facing evaluation method.
         """
         self.model.eval()
         self.model.reset_metrics()
         
-        if set_name == 'Train':
+        if set == 'Train':
             dataloader = self.train_dataloader
-        elif set_name == 'Val':
+        elif set == 'Val':
             dataloader = self.val_dataloader
-        elif set_name == 'Test':
+        elif set == 'Test':
             dataloader = self.test_dataloader
         else:
             raise ValueError("Invalid set specified. Choose 'Train', 'Val', or 'Test'.")
@@ -418,7 +418,7 @@ class BaseTrainer(ABC):
         metrics = self._evaluate_set(dataloader)
         
         # Add the set name prefix to the metrics
-        return {f"{set_name}/{k}": v for k, v in metrics.items()}
+        return {f"{set}/{k}": v for k, v in metrics.items()}
             
             
             

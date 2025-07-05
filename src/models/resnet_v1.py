@@ -109,6 +109,7 @@ class PostActResNet(nn.Module):
         self.in_planes = init_channels # Initial number of input channels for the first layer
         self.k = init_channels # Added to match the user's original get_identifier method
 
+        input_image_size = tuple(input_image_size)
         # Determine initial conv layer parameters based on input_image_size
         if input_image_size == (32, 32) or input_image_size == (64, 64):
             # For smaller images, use a smaller kernel and no aggressive downsampling

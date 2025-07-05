@@ -1,7 +1,7 @@
 import comet_ml
 from src.datasets import dataset_factory
 from src.models import model_factory, TaskVector
-from src.trainers import ETDTrainer
+from src.trainers import ETDTrainer, StandardTrainer
 import matplotlib.pyplot as plt
 import seaborn as sns
 from src.utils import nn_utils, misc_utils
@@ -102,6 +102,7 @@ def train_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         exp_name=experiment_name,
         exp_tags=None,
     )
+    
     
     torch.save(model.state_dict(), weights_dir / Path("model_weights.pth"))
     
