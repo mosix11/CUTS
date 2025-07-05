@@ -107,10 +107,10 @@ class PostActResNet9_ETD(nn.Module):
         else:
             return loss
 
-    def validation_step(self, x, y, indices, use_amp=False, return_preds=False):
+    def validation_step(self, x, y, use_amp=False, return_preds=False):
         with torch.no_grad():
             with autocast('cuda', enabled=use_amp):
-                preds = self(x, indices)
+                preds = self(x)
                 loss = self.loss_fn(preds, y)
         if self.metrics:
             for name, metric in self.metrics.items():

@@ -212,7 +212,7 @@ class CIFAR10:
         noisy_indices = []
         for item in dataset:
             if len(item) == 4:
-                x, y, is_noisy, idx = item
+                x, y, idx, is_noisy = item
                 if is_noisy:
                     noisy_indices.append(idx)
                 else:

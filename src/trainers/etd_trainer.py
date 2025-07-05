@@ -123,7 +123,7 @@ class ETDTrainer(BaseTrainer):
             input_batch, target_batch, idxs, is_noisy = self.unpack_batch(batch)
             
             # Model-specific validation logic
-            loss = self.model.validation_step(input_batch, target_batch, idxs, self.use_amp)
+            loss = self.model.validation_step(input_batch, target_batch, self.use_amp)
             if self.model.loss_fn.reduction == 'none':
                 loss = loss.mean()
             loss_met.update(loss.detach().cpu().item(), n=input_batch.shape[0])

@@ -48,13 +48,15 @@ def evaluate_model(model, dataloader, device):
     all_targets = []
     
     model.to(device)
-    model.eval()
+    model.train()
     with torch.no_grad():
         for batch in dataloader:
             batch = prepare_batch(batch, device)
-            input_batch, target_batch = batch[:2]
+            # input_batch, target_batch = batch[:2]
+            input_batch, target_batch, indices = batch[:3]
             
-            loss = model.validation_step(input_batch, target_batch, use_amp=True)
+            # loss = model.validation_step(input_batch, target_batch, use_amp=True)
+            loss = model.training_step(input_batch, target_batch, indices, use_amp=True)
             if model.loss_fn.reduction == 'none':
                 loss = loss.mean()
             loss_met.update(loss.detach().cpu().item(), n=input_batch.shape[0])
@@ -72,6 +74,78 @@ def evaluate_model(model, dataloader, device):
     return metric_results, torch.tensor(all_preds), torch.tensor(all_targets) 
 
 
+
+
+def eval_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
+    training_seed = cfg['training_seed']
+    if training_seed:
+        random.seed(training_seed)
+        np.random.seed(training_seed)
+        torch.manual_seed(training_seed)
+        torch.cuda.manual_seed_all(training_seed)
+    torch.backends.cudnn.enabled = True
+    torch.backends.cudnn.benchmark = False
+    os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
+    torch.use_deterministic_algorithms(True) 
+    torch.set_float32_matmul_precision("high")
+    
+    cpu = nn_utils.get_cpu_device()
+    gpu = nn_utils.get_gpu_device()
+    
+    dataset, num_classes = dataset_factory.create_dataset(cfg)
+    
+    model = model_factory.create_model(cfg['model']['drop'], num_classes)
+    
+    dataset.inject_noise(**cfg['strategy']['noise'])
+    clean_set, noisy_set = dataset.get_clean_noisy_subsets(set='Train')
+    
+
+    cleanset_dataloader = dataset._build_dataloader(clean_set)
+    noisyset_dataloader = dataset._build_dataloader(noisy_set)
+
+    
+    experiment_name = f"{cfg_name}/"
+    experiment_dir = outputs_dir / Path(experiment_name)
+    weights_dir = experiment_dir / Path("weights")
+    plots_dir = experiment_dir / Path("plots")
+
+    trained_weights = torch.load(weights_dir / 'model_weights.pth', map_location=cpu)
+    model.load_state_dict(trained_weights)
+    
+    testset_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), device=gpu)
+    cleanset_results, _, _ = evaluate_model(model, cleanset_dataloader, gpu)
+    noisyset_results, _, _ = evaluate_model(model, noisyset_dataloader, gpu)
+    
+    print(testset_results)
+    print(cleanset_results)
+    print(noisyset_results)
+
+
+
+    # clean_set, noisy_set = dataset.get_clean_noisy_subsets(set='Train')
+    # print(len(clean_set), len(noisy_set))
+    # cleanset_clean = 0
+    # cleanset_noisy = 0
+    # noisyset_clean = 0
+    # noisyset_noisy = 0
+    # for item in clean_set:
+    #     x, y, idx, is_noisy = item
+    #     if is_noisy:
+    #         cleanset_noisy+=1
+    #     else: cleanset_clean +=1
+    
+    # for item in noisy_set:
+    #     x, y, idx, is_noisy = item
+    #     if is_noisy:
+    #         noisyset_noisy+=1
+    #     else: noisyset_clean +=1
+            
+    # print(cleanset_clean, cleanset_noisy)
+    # print(noisyset_noisy, noisyset_clean)
+    
+    # exit()
+    
+
 def train_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     cfg['trainer']['comet_api_key'] = os.getenv("COMET_API_KEY")
     
@@ -81,10 +155,10 @@ def train_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     ]
     
     dataset, num_classes = dataset_factory.create_dataset(cfg, augmentations)
-    model = model_factory.create_model(cfg['model'], num_classes)
+    model = model_factory.create_model(cfg['model']['standard'], num_classes)
     
     dataset.inject_noise(**cfg['strategy']['noise'])
-    clean_set, noisy_set = dataset.get_clean_noisy_subsets(set='Train')
+
     
     experiment_name = f"{cfg_name}/"
     experiment_dir = outputs_dir / Path(experiment_name)
@@ -127,12 +201,31 @@ if __name__ == "__main__":
         help="Configuration to used for model.",
         type=str,
     )
+    
+    parser.add_argument(
+        "-t",
+        "--train",
+        help="Train the model.",
+        action="store_true",
+    )
+    
+    
     parser.add_argument(
         "-r",
         "--resume",
         help="Resume training from the last checkpoint.",
         action="store_true",
     )
+    
+
+    parser.add_argument(
+        "-e",
+        "--evaluate",
+        help="Evaluate the model.",
+        action="store_true",
+    )
+    
+    
     
     args = parser.parse_args()
 
@@ -149,4 +242,7 @@ if __name__ == "__main__":
     results_dir = Path("results/single_experiment/edt").absolute()
     results_dir.mkdir(exist_ok=True, parents=True)
 
-    train_model(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)
+    if args.train:
+        train_model(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)
+    elif args.evaluate:
+        eval_model(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)

@@ -30,16 +30,30 @@ dataset:
 
 
 model:
-  type: 'resnet9v1_etd'
-  init_channels: 64
-  img_size: [32, 32]
-  num_classes: *num_classes
-  dropout:
-    p_gen: 0.2
-    p_mem: 0.1
-    num_training_samples: 50000
-  loss_fn: 'CE'
-  metrics: ['ACC', 'F1']
+  standard:
+    type: 'resnet9v1_etd'
+    init_channels: 64
+    img_size: [32, 32]
+    num_classes: *num_classes
+    dropout:
+      p_fixed: 0.2
+      p_mem: 0.1
+      num_training_samples: 50000
+      eval_mode: 'standard'
+    loss_fn: 'CE'
+    metrics: ['ACC', 'F1']
+  drop:
+    type: 'resnet9v1_etd'
+    init_channels: 64
+    img_size: [32, 32]
+    num_classes: *num_classes
+    dropout:
+      p_fixed: 0.2
+      p_mem: 0.1
+      num_training_samples: 50000
+      eval_mode: 'drop'
+    loss_fn: 'CE'
+    metrics: ['ACC', 'F1']
 
 trainer:
   max_epochs: 300
