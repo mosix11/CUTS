@@ -34,7 +34,6 @@ class CNN5_ETD(nn.Module):
             nn.BatchNorm2d(num_channels),
             nn.ReLU(),
         )
-        self.dropout1 = ExampleTiedDropout(**dropout) if dropout else None
         
         self.layer2 = nn.Sequential(
             nn.Conv2d(num_channels, num_channels*2, kernel_size=3,
@@ -42,7 +41,6 @@ class CNN5_ETD(nn.Module):
             nn.BatchNorm2d(num_channels*2),
             nn.ReLU(),
         )
-        self.dropout2 = ExampleTiedDropout(**dropout) if dropout else None
         
         
         self.layer3 = nn.Sequential(
@@ -51,7 +49,6 @@ class CNN5_ETD(nn.Module):
             nn.BatchNorm2d(num_channels*4),
             nn.ReLU(),
         )
-        self.dropout3 = ExampleTiedDropout(**dropout) if dropout else None
         
         
         self.layer4 = nn.Sequential(
@@ -60,10 +57,17 @@ class CNN5_ETD(nn.Module):
             nn.BatchNorm2d(num_channels*8),
             nn.ReLU(),
         )
-        self.dropout4 = ExampleTiedDropout(**dropout) if dropout else None
         
         self.flatten = Flatten()
         self.fc = nn.Linear(num_channels*8, num_classes, bias=True)
+        
+        if dropout:
+            self.dropout1 = ExampleTiedDropout(**dropout, num_channels=num_channels)
+            self.dropout2 = ExampleTiedDropout(**dropout, num_channels=num_channels*2)
+            self.dropout3 = ExampleTiedDropout(**dropout, num_channels=num_channels*4)
+            self.dropout4 = ExampleTiedDropout(**dropout, num_channels=num_channels*8)
+        else:
+            self.dropout1 = self.dropout2 = self.dropout3 = self.dropout4 = None
 
 
         if weight_init:

@@ -116,6 +116,8 @@ class ETDTrainer(BaseTrainer):
         """
         Implementation of the evaluation loop for a given dataset.
         """
+        
+        
         loss_met = misc_utils.AverageMeter()
         
         for batch in dataloader:

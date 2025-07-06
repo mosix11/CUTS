@@ -30,7 +30,7 @@ def prepare_batch(batch, device):
     batch = [tens.to(device) for tens in batch]
     return batch
 
-def evaluate_model(model, dataloader, device):
+def evaluate_model(model, dataloader, device, state='eval'):
     """
     Evaluates the given model on the provided dataloader.
 
@@ -48,15 +48,20 @@ def evaluate_model(model, dataloader, device):
     all_targets = []
     
     model.to(device)
-    model.eval()
+    if state == 'eval':
+        model.eval()
+    elif state == 'train':
+        model.train()
     with torch.no_grad():
         for batch in dataloader:
             batch = prepare_batch(batch, device)
             # input_batch, target_batch = batch[:2]
             input_batch, target_batch, indices = batch[:3]
             
-            # loss = model.validation_step(input_batch, target_batch, use_amp=True)
-            loss = model.training_step(input_batch, target_batch, indices, use_amp=True)
+            if state == 'eval':
+                loss = model.validation_step(input_batch, target_batch, use_amp=True)
+            elif state == 'train':
+                loss = model.training_step(input_batch, target_batch, indices, use_amp=True)
             if model.loss_fn.reduction == 'none':
                 loss = loss.mean()
             loss_met.update(loss.detach().cpu().item(), n=input_batch.shape[0])
@@ -94,7 +99,7 @@ def eval_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     dataset, num_classes = dataset_factory.create_dataset(cfg)
     
-    model = model_factory.create_model(cfg['model']['standard'], num_classes)
+    model = model_factory.create_model(cfg['model']['drop'], num_classes)
     
     dataset.inject_noise(**cfg['strategy']['noise'])
     clean_set, noisy_set = dataset.get_clean_noisy_subsets(set='Train')
@@ -114,7 +119,7 @@ def eval_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # trained_weights = torch.load(experiment_dir / 'checkpoint/final_ckp.pth', map_location=cpu)['model_state']
     # print(trained_weights.keys())
     
-    trained_weights = {key: value for key, value in trained_weights.items() if not key.startswith('dropout')}
+    # trained_weights = {key: value for key, value in trained_weights.items() if not key.startswith('dropout')}
 
     
     model.load_state_dict(trained_weights)
