@@ -124,7 +124,7 @@ class CNN5_ETD(nn.Module):
             preds = self(x)
         return preds
     
-    def forward(self, X, indices):
+    def forward(self, X, indices=None):
         X = self.layer1(X)
         X = self.dropout1(X, indices)
         X = self.layer2(X)
