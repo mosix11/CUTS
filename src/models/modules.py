@@ -216,8 +216,7 @@ class ExampleTiedDropout(nn.Module):
             self.generator = torch.Generator(device=X.device)
 
         if self.training:
-            # The rest of the logic remains largely the same, just without the lazy
-            # initialization block for the buffers.
+
             if self.p_fixed == 1.0:
                 return X
 

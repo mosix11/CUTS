@@ -28,21 +28,26 @@ class PostActResNet9_ETD(nn.Module):
         dims = [3, 64, 128, 128, 128, 256, 256, 256, 128]
         dims = [int(d * (init_channels / 64)) for d in dims]
 
-        
-        
-
         self.conv1 = conv_bn(dims[0], dims[1], kernel_size=3, stride=1, padding=1)
-        self.dropout1 = ExampleTiedDropout(**dropout) if dropout else None
+        self.dropout1 = ExampleTiedDropout(**dropout, num_channels=dims[1]) if dropout else None
+
         self.conv2 = conv_bn(dims[1], dims[2], kernel_size=5, stride=2, padding=2)
-        self.dropout2 = ExampleTiedDropout(**dropout) if dropout else None
+        self.dropout2 = ExampleTiedDropout(**dropout, num_channels=dims[2]) if dropout else None
+
         self.res1 = Residual(nn.Sequential(conv_bn(dims[2], dims[3]), conv_bn(dims[3], dims[4])))
-        self.dropout3 = ExampleTiedDropout(**dropout) if dropout else None
+        # The output of res1 has dims[4] channels
+        self.dropout3 = ExampleTiedDropout(**dropout, num_channels=dims[4]) if dropout else None
+
         self.conv3 = conv_bn(dims[4], dims[5], kernel_size=3, stride=1, padding=1)
-        self.dropout4 = ExampleTiedDropout(**dropout) if dropout else None
+        self.dropout4 = ExampleTiedDropout(**dropout, num_channels=dims[5]) if dropout else None
+
         self.res2 = Residual(nn.Sequential(conv_bn(dims[5], dims[6]), conv_bn(dims[6], dims[7])))
-        self.dropout5 = ExampleTiedDropout(**dropout) if dropout else None
+        # The output of res2 has dims[7] channels
+        self.dropout5 = ExampleTiedDropout(**dropout, num_channels=dims[7]) if dropout else None
+
         self.conv4 = conv_bn(dims[7], dims[8], kernel_size=3, stride=1, padding=0)
-        self.dropout6 = ExampleTiedDropout(**dropout) if dropout else None
+        self.dropout6 = ExampleTiedDropout(**dropout, num_channels=dims[8]) if dropout else None
+        
         self.pool = nn.AdaptiveAvgPool2d((1, 1))
         self.flatten = nn.Flatten()
         self.fc = nn.Linear(dims[8], num_classes, bias=False)
