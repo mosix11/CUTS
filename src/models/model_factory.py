@@ -4,6 +4,7 @@ from . import FC1, FCN, CNN5, CNN5_NoNorm, CNN5_GN
 from . import PreActResNet9, PreActResNet18, PreActResNet34, PreActResNet50, PreActResNet101, PreActResNet152
 from . import PostActResNet9, PostActResNet18, PostActResNet34, PostActResNet50, PostActResNet101, PostActResNet152
 from . import PostActResNet9_ETD
+from . import CNN5_ETD
 from . import TorchvisionModels, TimmModels
 
 def create_model(cfg, num_classes):
@@ -83,6 +84,9 @@ def create_model(cfg, num_classes):
     
     elif model_type == 'resnet9v1_etd':
         model = PostActResNet9_ETD(**cfg)
+        
+    elif model_type == 'cnn5_etd':
+        model = CNN5_ETD(**cfg)
         
     elif model_type.startswith('torchvision'): 
         model_type = model_type.removeprefix('torchvision_')

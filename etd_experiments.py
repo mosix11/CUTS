@@ -94,7 +94,7 @@ def eval_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     dataset, num_classes = dataset_factory.create_dataset(cfg)
     
-    model = model_factory.create_model(cfg['model']['drop'], num_classes)
+    model = model_factory.create_model(cfg['model']['standard'], num_classes)
     
     dataset.inject_noise(**cfg['strategy']['noise'])
     clean_set, noisy_set = dataset.get_clean_noisy_subsets(set='Train')
@@ -113,6 +113,9 @@ def eval_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # print(trained_weights.keys())
     # trained_weights = torch.load(experiment_dir / 'checkpoint/final_ckp.pth', map_location=cpu)['model_state']
     # print(trained_weights.keys())
+    
+    trained_weights = {key: value for key, value in trained_weights.items() if not key.startswith('dropout')}
+
     
     model.load_state_dict(trained_weights)
     
