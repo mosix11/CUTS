@@ -102,12 +102,8 @@ class ExampleTiedDropout(nn.Module):
         self.p_mem = p_mem
         self.eval_mode = eval_mode
 
-        # We use register_buffer for the mask tensor. This makes it part of the model's
-        # state_dict, so it's saved and loaded with the model, but it's not a parameter
-        # that receives gradients. It will be initialized lazily on the first forward pass.
-        self.register_buffer("masks", None)
-        # A separate buffer to track which masks have been initialized for each sample index.
-        self.register_buffer("masks_initialized", None)
+        self.masks = None
+        self.masks_initialized = None
         
         self.generator = None
 
@@ -187,8 +183,83 @@ class ExampleTiedDropout(nn.Module):
                 output = torch.zeros_like(X)
                 if num_fixed > 0:
                     # Scale to preserve the expected activation sum. If p_fixed is 0, this is NaN.
-                    scale = (self.p_fixed + self.p_mem) / self.p_fixed if self.p_fixed > 0 else 0
+                    scale = (self.p_fixed + self.p_mem) / self.p_fixed
                     output[:, :num_fixed] = X[:, :num_fixed] * scale
                 return output
                 
-        return X
+        
+    
+    
+    
+    
+# class ExampleTiedDropout(torch.nn.Module):
+#     # this class is similar to batch tied dropout, 
+#     # but instead of tying neurons in a batch, we tie neurons in a set of examples
+
+#     def __init__(self, p_fixed = 0.2, p_mem = 0.1, eval_mode = "standard"):
+#         super(ExampleTiedDropout, self).__init__()
+#         self.seed = 101010
+#         self.max_id = 50000
+#         self.p_mem = p_mem
+#         self.p_fixed = p_fixed
+#         self.eval_mode = eval_mode
+#         self.mask_tensor = None
+
+#     def forward(self, X, idx):
+#         if self.p_fixed == 1:
+#             return X
+
+#         if self.training:
+#             # create a mask based on the index (idx)
+
+#             mask = torch.zeros_like(X).cpu()
+#             shape = X.shape[1]
+
+#             if epoch > 0:
+#                 #get mask from self.mask_tensor
+#                 mask = self.mask_tensor[idx]
+
+#             elif epoch == 0:
+#                 #keep all neurons with index less than self.p_fixed*shape
+#                 mask[:, :int(self.p_fixed*shape)] = 1
+
+#                 # Fraction of elements to keep
+#                 p_mem = self.p_mem
+
+#                 # Generate a random mask for each row in the input tensor
+#                 shape_of_mask = shape - int(self.p_fixed*shape)
+#                 for i in range(X.shape[0]):
+#                     torch.manual_seed(idx[i].item())
+#                     curr_mask = torch.bernoulli(torch.full((1, shape_of_mask), p_mem))
+#                     #repeat curr_mask along dimension 2 and 3 to have the same shape as X
+#                     curr_mask = curr_mask.unsqueeze(-1).unsqueeze(-1)
+#                     mask[i][int(self.p_fixed*shape):] = curr_mask
+#                     # In an initial implementation, rather than repeating the same mask along all dimensions,
+#                     # the following was done. This meant that we will randomly have 0s and 1s along different dimensions
+#                     # removed this so that it preserves image pixel semantics.
+
+#                     # mask[i][int(self.p_fixed*shape):] = torch.bernoulli(torch.full((1, shape_of_mask, X.shape[2], X.shape[3]), p_mem))
+                    
+
+#                 if self.mask_tensor is None:
+#                     self.mask_tensor = torch.zeros(self.max_id, X.shape[1], X.shape[2], X.shape[3])
+#                 #assign mask at positions given by idx
+#                 self.mask_tensor[idx] = mask
+            
+#             # Apply the mask to the input tensor
+#             X = X * mask.cuda()
+
+
+#         elif self.eval_mode == "standard":
+#             #At test time we will renormalize outputs from the non-fixed neurons based on the number of neuron sets
+#             #we will keep the fixed neurons unmodified
+#             shape = X.shape[1]
+#             X[:, :int(self.p_fixed*shape)] = X[:, :int(self.p_fixed*shape)]
+#             X[:, int(self.p_fixed*shape):] = X[:, int(self.p_fixed*shape):]*self.p_mem
+
+#         elif self.eval_mode == "drop":
+#             shape = X.shape[1]
+#             X[:, int(self.p_fixed*shape):] = 0
+#             X[:, :int(self.p_fixed*shape)] = X[:, :int(self.p_fixed*shape)]*(self.p_fixed + self.p_mem)/self.p_fixed
+        
+#         return X
