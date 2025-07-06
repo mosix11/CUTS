@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from src.utils import nn_utils, misc_utils
 import torch
+import torchvision
 import torchmetrics
 import torchvision.transforms.v2 as transformsv2
 from torch.utils.data import Dataset, Subset, ConcatDataset
@@ -59,15 +60,15 @@ def evaluate_model(model, dataloader, device, state='eval'):
             input_batch, target_batch, indices = batch[:3]
             
             if state == 'eval':
-                loss = model.validation_step(input_batch, target_batch, use_amp=True)
+                loss, preds = model.validation_step(input_batch, target_batch, use_amp=True, return_preds=True)
             elif state == 'train':
-                loss = model.training_step(input_batch, target_batch, indices, use_amp=True)
+                loss, preds = model.training_step(input_batch, target_batch, indices, use_amp=True, return_preds=True)
             if model.loss_fn.reduction == 'none':
                 loss = loss.mean()
             loss_met.update(loss.detach().cpu().item(), n=input_batch.shape[0])
             
-            model_output = model.predict(input_batch)
-            predictions = torch.argmax(model_output, dim=-1) 
+            
+            predictions = torch.argmax(preds, dim=-1) 
             
             all_preds.extend(predictions.cpu())
             all_targets.extend(target_batch.cpu())
@@ -99,7 +100,9 @@ def eval_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     dataset, num_classes = dataset_factory.create_dataset(cfg)
     
-    model = model_factory.create_model(cfg['model']['drop'], num_classes)
+    cfg_cpy = copy.deepcopy(cfg)
+    model_standard = model_factory.create_model(cfg['model']['standard'], num_classes)
+    model_drop = model_factory.create_model(cfg_cpy['model']['drop'], num_classes)
     
     dataset.inject_noise(**cfg['strategy']['noise'])
     clean_set, noisy_set = dataset.get_clean_noisy_subsets(set='Train')
@@ -122,15 +125,26 @@ def eval_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # trained_weights = {key: value for key, value in trained_weights.items() if not key.startswith('dropout')}
 
     
-    model.load_state_dict(trained_weights)
+    model_standard.load_state_dict(trained_weights)
+    model_drop.load_state_dict(trained_weights)
     
-    testset_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), device=gpu)
-    cleanset_results, _, _ = evaluate_model(model, cleanset_dataloader, gpu)
-    noisyset_results, _, _ = evaluate_model(model, noisyset_dataloader, gpu)
+    testset_results_standard, _, _ = evaluate_model(model_standard, dataset.get_test_dataloader(), device=gpu, state='eval')
+    testset_results_drop, _, _ = evaluate_model(model_drop, dataset.get_test_dataloader(), device=gpu, state='eval')
+    cleanset_results_s_train, _, _ = evaluate_model(model_standard, cleanset_dataloader, gpu, state='train')
+    cleanset_results_s_eval_standard, _, _ = evaluate_model(model_standard, cleanset_dataloader, gpu, state='eval')
+    cleanset_results_s_eval_drop, _, _ = evaluate_model(model_drop, cleanset_dataloader, gpu, state='eval')
+    noisyset_results_s_train, _, _ = evaluate_model(model_standard, noisyset_dataloader, gpu, state='train')
+    noisyset_results_s_eval_standard, _, _ = evaluate_model(model_standard, noisyset_dataloader, gpu, state= 'eval')
+    noisyset_results_s_eval_drop, _, _ = evaluate_model(model_drop, noisyset_dataloader, gpu, state= 'eval')
     
-    print(testset_results)
-    print(cleanset_results)
-    print(noisyset_results)
+    print(f"ACC Test Standard {testset_results_standard['ACC']*100:.2f}%")
+    print(f"ACC Test Drop {testset_results_drop['ACC']*100:.2f}%")
+    print(f"ACC Clean Train Mode {cleanset_results_s_train['ACC']*100:.2f}%")
+    print(f"ACC Noisy Train Mode {noisyset_results_s_train['ACC']*100:.2f}%")
+    print(f"ACC Clean Standard {cleanset_results_s_eval_standard['ACC']*100:.2f}%")
+    print(f"ACC Noisy Standard {noisyset_results_s_eval_standard['ACC']*100:.2f}%")
+    print(f"ACC Clean Drop {cleanset_results_s_eval_drop['ACC']*100:.2f}%")
+    print(f"ACC Noisy Drop {noisyset_results_s_eval_drop['ACC']*100:.2f}%")
 
 
 
@@ -161,49 +175,182 @@ def eval_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
 def train_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     cfg['trainer']['comet_api_key'] = os.getenv("COMET_API_KEY")
     
+    policy = None
+    if cfg['dataset']['name'] == 'cifar10':
+        policy = torchvision.transforms.AutoAugmentPolicy.CIFAR10
     augmentations = [
         transformsv2.RandomCrop(32, padding=4),
         transformsv2.RandomHorizontalFlip(),
     ]
+    if policy: augmentations.append(transformsv2.AutoAugment(policy=policy))
     
-    dataset, num_classes = dataset_factory.create_dataset(cfg, augmentations)
-    model = model_factory.create_model(cfg['model']['standard'], num_classes)
     
-    dataset.inject_noise(**cfg['strategy']['noise'])
+    if not outputs_dir.joinpath(f"{cfg_name}/clean_no_etd/weights/model_weights.pth").exists():
+        cfg_cpy = copy.deepcopy(cfg)
 
-    
-    experiment_name = f"{cfg_name}/"
-    experiment_dir = outputs_dir / Path(experiment_name)
+        dataset, num_classes = dataset_factory.create_dataset(cfg_cpy, augmentations)
+        cfg_cpy['model']['standard']['dropout'] = None
+        model = model_factory.create_model(cfg_cpy['model']['standard'], num_classes)
+        
+        
+        dataset.inject_noise(**cfg_cpy['strategy']['noise'])
+        clean_set, noisy_set = dataset.get_clean_noisy_subsets(set='Train')
+        dataset.set_trainset(clean_set, shuffle=True)
+        
+        experiment_name = f"{cfg_name}/clean_no_etd"
+        experiment_dir = outputs_dir / Path(experiment_name)
 
-    weights_dir = experiment_dir / Path("weights")
-    weights_dir.mkdir(exist_ok=True, parents=True)
+        weights_dir = experiment_dir / Path("weights")
+        weights_dir.mkdir(exist_ok=True, parents=True)
 
-    plots_dir = experiment_dir / Path("plots")
-    plots_dir.mkdir(exist_ok=True, parents=True)
-    
-    
-    trainer = ETDTrainer(
-        outputs_dir=outputs_dir,
-        **cfg['trainer'],
-        exp_name=experiment_name,
-        exp_tags=None,
-    )
-    
-    
-    
-    
-    results = trainer.fit(model, dataset, resume=False)
-    
-    torch.save(model.state_dict(), weights_dir / Path("model_weights.pth"))
+        plots_dir = experiment_dir / Path("plots")
+        plots_dir.mkdir(exist_ok=True, parents=True)
+        
+        
+        trainer = ETDTrainer(
+            outputs_dir=outputs_dir,
+            **cfg_cpy['trainer'],
+            exp_name=experiment_name,
+            exp_tags=None,
+        )
+        
+        results = trainer.fit(model, dataset, resume=False)
+        
+        torch.save(model.state_dict(), weights_dir / Path("model_weights.pth"))
 
-    class_names = [f"Class {i}" for i in range(num_classes)]
-    confmat = trainer.confmat("Test")
-    misc_utils.plot_confusion_matrix(
-        cm=confmat,
-        class_names=class_names,
-        filepath=str(plots_dir / Path("confmat.png")),
-        show=False,
-    )
+        class_names = [f"Class {i}" for i in range(num_classes)]
+        confmat = trainer.confmat("Test")
+        misc_utils.plot_confusion_matrix(
+            cm=confmat,
+            class_names=class_names,
+            filepath=str(plots_dir / Path("confmat.png")),
+            show=False,
+        )
+        
+    if not outputs_dir.joinpath(f"{cfg_name}/clean_etd/weights/model_weights.pth").exists():
+        cfg_cpy = copy.deepcopy(cfg)
+
+        dataset, num_classes = dataset_factory.create_dataset(cfg_cpy, augmentations)
+        model = model_factory.create_model(cfg_cpy['model']['standard'], num_classes)
+        
+        
+        dataset.inject_noise(**cfg_cpy['strategy']['noise'])
+        clean_set, noisy_set = dataset.get_clean_noisy_subsets(set='Train')
+        dataset.set_trainset(clean_set, shuffle=True)
+        
+        experiment_name = f"{cfg_name}/clean_etd"
+        experiment_dir = outputs_dir / Path(experiment_name)
+
+        weights_dir = experiment_dir / Path("weights")
+        weights_dir.mkdir(exist_ok=True, parents=True)
+
+        plots_dir = experiment_dir / Path("plots")
+        plots_dir.mkdir(exist_ok=True, parents=True)
+        
+        
+        trainer = ETDTrainer(
+            outputs_dir=outputs_dir,
+            **cfg_cpy['trainer'],
+            exp_name=experiment_name,
+            exp_tags=None,
+        )
+        
+        results = trainer.fit(model, dataset, resume=False)
+        
+        torch.save(model.state_dict(), weights_dir / Path("model_weights.pth"))
+
+        class_names = [f"Class {i}" for i in range(num_classes)]
+        confmat = trainer.confmat("Test")
+        misc_utils.plot_confusion_matrix(
+            cm=confmat,
+            class_names=class_names,
+            filepath=str(plots_dir / Path("confmat.png")),
+            show=False,
+        )
+        
+        
+    if not outputs_dir.joinpath(f"{cfg_name}/train_no_etd/weights/model_weights.pth").exists():
+        cfg_cpy = copy.deepcopy(cfg)
+
+        dataset, num_classes = dataset_factory.create_dataset(cfg_cpy, augmentations)
+        cfg_cpy['model']['standard']['dropout'] = None
+        model = model_factory.create_model(cfg_cpy['model']['standard'], num_classes)
+        
+        
+        dataset.inject_noise(**cfg_cpy['strategy']['noise'])
+        
+        experiment_name = f"{cfg_name}/train_no_etd"
+        experiment_dir = outputs_dir / Path(experiment_name)
+
+        weights_dir = experiment_dir / Path("weights")
+        weights_dir.mkdir(exist_ok=True, parents=True)
+
+        plots_dir = experiment_dir / Path("plots")
+        plots_dir.mkdir(exist_ok=True, parents=True)
+        
+        
+        trainer = ETDTrainer(
+            outputs_dir=outputs_dir,
+            **cfg_cpy['trainer'],
+            exp_name=experiment_name,
+            exp_tags=None,
+        )
+        
+        results = trainer.fit(model, dataset, resume=False)
+        
+        torch.save(model.state_dict(), weights_dir / Path("model_weights.pth"))
+
+        class_names = [f"Class {i}" for i in range(num_classes)]
+        confmat = trainer.confmat("Test")
+        misc_utils.plot_confusion_matrix(
+            cm=confmat,
+            class_names=class_names,
+            filepath=str(plots_dir / Path("confmat.png")),
+            show=False,
+        )
+    
+    if not outputs_dir.joinpath(f"{cfg_name}/train_etd/weights/model_weights.pth").exists():
+        cfg_cpy = copy.deepcopy(cfg)
+
+        dataset, num_classes = dataset_factory.create_dataset(cfg_cpy, augmentations)
+        model = model_factory.create_model(cfg_cpy['model']['standard'], num_classes)
+        
+        
+        dataset.inject_noise(**cfg_cpy['strategy']['noise'])
+        
+        experiment_name = f"{cfg_name}/train_etd"
+        experiment_dir = outputs_dir / Path(experiment_name)
+
+        weights_dir = experiment_dir / Path("weights")
+        weights_dir.mkdir(exist_ok=True, parents=True)
+
+        plots_dir = experiment_dir / Path("plots")
+        plots_dir.mkdir(exist_ok=True, parents=True)
+        
+        
+        trainer = ETDTrainer(
+            outputs_dir=outputs_dir,
+            **cfg_cpy['trainer'],
+            exp_name=experiment_name,
+            exp_tags=None,
+        )
+        
+        results = trainer.fit(model, dataset, resume=False)
+        
+        torch.save(model.state_dict(), weights_dir / Path("model_weights.pth"))
+
+        class_names = [f"Class {i}" for i in range(num_classes)]
+        confmat = trainer.confmat("Test")
+        misc_utils.plot_confusion_matrix(
+            cm=confmat,
+            class_names=class_names,
+            filepath=str(plots_dir / Path("confmat.png")),
+            show=False,
+        )
+        
+        
+    
+
 
 
 if __name__ == "__main__":

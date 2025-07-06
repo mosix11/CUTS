@@ -58,13 +58,12 @@ def evaluate_model(model, dataloader, device):
             batch = prepare_batch(batch, device)
             input_batch, target_batch = batch[:2]
             
-            loss = model.validation_step(input_batch, target_batch, use_amp=True)
+            loss, preds = model.validation_step(input_batch, target_batch, use_amp=True, return_preds=True)
             if model.loss_fn.reduction == 'none':
                 loss = loss.mean()
             loss_met.update(loss.detach().cpu().item(), n=input_batch.shape[0])
             
-            model_output = model.predict(input_batch)
-            predictions = torch.argmax(model_output, dim=-1) 
+            predictions = torch.argmax(preds, dim=-1) 
             
             all_preds.extend(predictions.cpu())
             all_targets.extend(target_batch.cpu())

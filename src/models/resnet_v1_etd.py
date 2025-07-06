@@ -77,8 +77,8 @@ class PostActResNet9_ETD(nn.Module):
             x = self.dropout2(x, idx)
 
         x = self.res1(x)
-        if self.dropout3:
-            x = self.dropout3(x, idx)
+        # if self.dropout3:
+        #     x = self.dropout3(x, idx)
 
         x = self.conv3(x)
         if self.dropout4:
@@ -86,8 +86,8 @@ class PostActResNet9_ETD(nn.Module):
 
         x = F.max_pool2d(x, 2)
         x = self.res2(x)
-        if self.dropout5:
-            x = self.dropout5(x, idx)
+        # if self.dropout5:
+        #     x = self.dropout5(x, idx)
 
         x = self.conv4(x)
         if self.dropout6:
@@ -134,7 +134,7 @@ class PostActResNet9_ETD(nn.Module):
         results = {}
         if self.metrics:
             for name, metric in self.metrics.items():
-                results[name] = metric.compute()
+                results[name] = metric.compute().cpu().item()
         return results
 
     def reset_metrics(self):

@@ -97,11 +97,14 @@ class StandardTrainer(BaseTrainer):
                 loss.backward()
                 self.optim.step()
                 
+            if self.lr_scheduler and self.lr_sch_step_on_batch:
+                self.lr_scheduler.step()
+                
             epoch_train_loss.update(loss.detach().cpu().item(), n=input_batch.shape[0])
             
         
             
-        if self.lr_scheduler:
+        if self.lr_scheduler and not self.lr_sch_step_on_batch:
             self.lr_scheduler.step()
 
         metrics_results = self.model.compute_metrics()

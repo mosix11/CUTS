@@ -260,6 +260,7 @@ class ExampleTiedDropout(nn.Module):
                 if self.p_fixed > 0:
                     scale = (self.p_fixed + self.p_mem) / self.p_fixed
                     output[:, :num_fixed] = X[:, :num_fixed] * scale
+                    # output[:, :num_fixed] = X[:, :num_fixed]
                 return output
                 
         return X

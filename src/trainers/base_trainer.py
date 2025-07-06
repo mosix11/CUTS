@@ -4,7 +4,7 @@ from torch.optim import AdamW, Adam, SGD
 from torch.amp import GradScaler
 from torch.amp import autocast
 
-from torch.optim.lr_scheduler import MultiStepLR, ReduceLROnPlateau, CosineAnnealingLR
+from torch.optim.lr_scheduler import MultiStepLR, ReduceLROnPlateau, CosineAnnealingLR, OneCycleLR
 from .custom_lr_schedulers import InverseSquareRootLR
 
 
@@ -187,6 +187,7 @@ class BaseTrainer(ABC):
         if self.lr_schedule_cfg:
             lr_sch_cfg = copy.deepcopy(self.lr_schedule_cfg)
             del lr_sch_cfg['type']
+            self.lr_sch_step_on_batch = False
             if self.lr_schedule_cfg['type'] == 'step':
                 self.lr_scheduler = MultiStepLR(
                     optim,
@@ -200,17 +201,26 @@ class BaseTrainer(ABC):
                     **lr_sch_cfg,
                     last_epoch=last_gradient_step
                 )
+                self.lr_sch_step_on_batch = True
             elif self.lr_schedule_cfg['type'] == 'plat':
                 self.lr_scheduler = ReduceLROnPlateau(
                     optim,
                     **lr_sch_cfg,
                 )
             elif self.lr_schedule_cfg['type'] == 'cosann':
-                self.lr_schedule_cfg = CosineAnnealingLR(
+                self.lr_scheduler = CosineAnnealingLR(
                     optim,
                     **lr_sch_cfg,
                     last_epoch=last_epoch
                 )
+            elif self.lr_schedule_cfg['type'] == 'onecycle':
+                self.lr_scheduler = OneCycleLR(
+                    optim,
+                    total_steps=self.max_epochs*len(self.train_dataloader),
+                    **lr_sch_cfg,
+                    last_epoch=last_epoch
+                )
+                self.lr_sch_step_on_batch = True
         else: self.lr_scheduler = None
 
         # if self.early_stopping:
