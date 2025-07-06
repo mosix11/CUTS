@@ -36,7 +36,7 @@ model:
     img_size: [32, 32]
     num_classes: *num_classes
     dropout:
-      p_fixed: 0.3
+      p_fixed: 0.4
       p_mem: 0.2
       num_training_samples: 50000
       eval_mode: 'standard'
@@ -48,7 +48,7 @@ model:
     img_size: [32, 32]
     num_classes: *num_classes
     dropout:
-      p_fixed: 0.3
+      p_fixed: 0.4
       p_mem: 0.2
       num_training_samples: 50000
       eval_mode: 'drop'
@@ -56,7 +56,7 @@ model:
     metrics: ['ACC', 'F1']
 
 trainer:
-  max_epochs: 300
+  max_epochs: 200
   optimizer_cfg: 
     type: "adam"
     lr: 1.0e-4

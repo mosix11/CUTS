@@ -193,7 +193,6 @@ import torch.nn as nn
                 
 
 class ExampleTiedDropout(nn.Module):
-    # ... (docstring remains the same)
     def __init__(self, num_training_samples: int, num_channels: int, p_fixed: float = 0.2, p_mem: float = 0.1, eval_mode: str = "standard"):
         super().__init__()
 
