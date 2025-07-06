@@ -240,15 +240,15 @@ if __name__ == "__main__":
 
     dotenv.load_dotenv(".env")
     
-    cfg_path = Path('configs/single_experiment/edt') / f"{args.config}.yaml"
+    cfg_path = Path('configs/single_experiment/etd') / f"{args.config}.yaml"
 
     if not cfg_path.exists(): raise RuntimeError('The specified config file does not exist.')
     with open(cfg_path, 'r') as file:
         cfg = yaml.full_load(file)
 
-    outputs_dir = Path("outputs/single_experiment/edt").absolute()
+    outputs_dir = Path("outputs/single_experiment/etd").absolute()
     outputs_dir.mkdir(exist_ok=True, parents=True)
-    results_dir = Path("results/single_experiment/edt").absolute()
+    results_dir = Path("results/single_experiment/etd").absolute()
     results_dir.mkdir(exist_ok=True, parents=True)
 
     if args.train:
