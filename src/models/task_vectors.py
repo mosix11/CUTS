@@ -83,6 +83,10 @@ class TaskVector:
                     continue
                 new_vector[key] = self.vector[key] + other.vector[key]
         return TaskVector(vector=new_vector)
+    
+    def __sub__(self, other):
+        """Subtract two task vectors."""
+        return self.__add__(-other)
 
     def __radd__(self, other):
         return self if other in (None, 0) else self.__add__(other)
@@ -92,6 +96,40 @@ class TaskVector:
         with torch.no_grad():
             neg_vector = {key: -val for key, val in self.vector.items()}
         return TaskVector(vector=neg_vector)
+    
+    def __pow__(self, power):
+        """Power of a task vector."""
+        with torch.no_grad():
+            new_vector = {}
+            for key in self.vector:
+                new_vector[key] = self.vector[key] ** power
+        return TaskVector(vector=new_vector)
+    
+    
+    def __mul__(self, other):
+        """Multiply a task vector by a scalar."""
+        with torch.no_grad():
+            new_vector = {}
+            for key in self.vector:
+                new_vector[key] = other * self.vector[key]
+        return TaskVector(vector=new_vector)
+    
+    
+    def dot(self, other):
+        """Dot product of two task vectors."""
+        with torch.no_grad():
+            dot_product = 0.0
+            for key in self.vector:
+                if key not in other.vector:
+                    print(f"Warning, key {key} is not present in both task vectors.")
+                    continue
+                dot_product += torch.sum(self.vector[key] * other.vector[key])
+        return dot_product
+    
+    def norm(self):
+        """Norm of a task vector."""
+        return torch.sqrt(self.dot(self))
+    
 
     def apply_to(self, model, scaling_coef=1.0, strict=False):
         """
@@ -116,21 +154,8 @@ class TaskVector:
         return model
     
     
-    def dot(self, other):
-        """Dot product of two task vectors."""
-        with torch.no_grad():
-            dot_product = 0.0
-            for key in self.vector:
-                if key not in other.vector:
-                    print(f"Warning, key {key} is not present in both task vectors.")
-                    continue
-                dot_product += torch.sum(self.vector[key] * other.vector[key])
-        return dot_product
+
     
-    
-    def norm(self):
-        """Norm of a task vector."""
-        return torch.sqrt(self.dot(self))
     
     
     def flatten_vector(self):
