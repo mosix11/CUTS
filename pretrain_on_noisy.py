@@ -1,7 +1,7 @@
 import comet_ml
 from src.datasets import dataset_factory
 from src.models import model_factory, TaskVector
-from src.trainers import TrainerEp, TrainerGS
+from src.trainers import StandardTrainer
 import matplotlib.pyplot as plt
 import seaborn as sns
 from src.utils import nn_utils, misc_utils
@@ -174,7 +174,7 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         
         
 
-        trainer = TrainerEp(
+        trainer = StandardTrainer(
             outputs_dir=outputs_dir,
             **cfg_cpy['trainer']['pretraining'],
             exp_name=experiment_name,
@@ -215,7 +215,7 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         plots_dir = experiment_dir / Path("plots")
         plots_dir.mkdir(exist_ok=True, parents=True)
         
-        trainer = TrainerEp(
+        trainer = StandardTrainer(
             outputs_dir=outputs_dir,
             **cfg['trainer']['pretraining'],
             exp_name=experiment_name,
@@ -271,7 +271,7 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         
         
 
-        trainer = TrainerEp(
+        trainer = StandardTrainer(
             outputs_dir=outputs_dir,
             **cfg_cpy['trainer']['pretraining'],
             exp_name=experiment_name,
@@ -340,7 +340,7 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
                 dataset.inject_noise(**noise_tv)
                 
             
-            trainer = TrainerEp(
+            trainer = StandardTrainer(
                 outputs_dir=outputs_dir,
                 **cfg['trainer']['finetuning'],
                 exp_name=experiment_name,
