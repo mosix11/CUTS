@@ -61,16 +61,11 @@ model:
 
 trainer:
   pretraining:
-    max_epochs: 100
+    max_epochs: 300
     optimizer_cfg: 
-      type: "sgd"
-      lr: 1.0e-2
-      momentum: 0.9
-      weight_decay: 5.0e-4
-    lr_schedule_cfg:
-      type: 'onecycle'
-      max_lr: 0.1
-      pct_start: 0.2
+      type: "adamw"
+      lr: 1.0e-4
+      betas: [0.9, 0.999]
     early_stopping: False
     validation_freq: -1
     save_best_model: False
@@ -82,12 +77,11 @@ trainer:
     seed: *training_seed
 
   finetuning:
-    max_epochs: 100
+    max_epochs: 250
     optimizer_cfg: 
-      type: "sgd"
-      lr: 1.0e-4
-      # momentum: 0.9
-      weight_decay: 5.0e-4
+      type: "adamw"
+      lr: 5.0e-5
+      # betas: [0.9, 0.999]
     lr_schedule_cfg: null
     early_stopping: False
     validation_freq: -1
