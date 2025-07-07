@@ -206,7 +206,6 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         dataset.inject_noise(**strategy['noise']['pretraining'])
         
         experiment_name = f"{cfg_name}/pretrain"
-        experiment_tags = None
 
         experiment_dir = outputs_dir / Path(experiment_name)
 
@@ -220,7 +219,7 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             outputs_dir=outputs_dir,
             **cfg['trainer']['pretraining'],
             exp_name=experiment_name,
-            exp_tags=experiment_tags,
+            exp_tags=None,
         )
         
         if cfg['strategy']['finetuning_set'] == 'LowLoss':
@@ -381,7 +380,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     dataset, num_classes = dataset_factory.create_dataset(cfg)
     
-    model_base = model_factory.create_model(cfg['model'], num_classes)
+    base_model = model_factory.create_model(cfg['model'], num_classes)
     
     base_expr_dir = outputs_dir / cfg_name
     gold_dir = base_expr_dir / 'gold'
@@ -397,7 +396,8 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     for ft_expr, ft_dir in finetune_dirs.items():
         finetune_weights[ft_expr] = torch.load(ft_dir / 'weights/model_weights.pth', map_location=cpu)
     
-    model_base
+    base_model.load_state_dict(pretrain_weights)
+    
     
     finetune_tvs = OrderedDict()
     for ft_expr, ft_weight in finetune_weights.items():
@@ -439,10 +439,22 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     shrd_tvs_sim = np.array(shrd_tvs_sim)
     
     
-    class_names = list(finetune_tvs.keys())
-    misc_utils.plot_confusion_matrix(cm=task_sim, class_names=class_names, filepath=None, show=True)
-    misc_utils.plot_confusion_matrix(cm=orth_task_sim, class_names=class_names, filepath=None, show=True)
-    misc_utils.plot_confusion_matrix(cm=shrd_tvs_sim, class_names=class_names, filepath=None, show=True)
+    for ft_name, ft_tv in finetune_tvs.items():
+        best_coef, best_results, best_cm = search_optimal_coefficient(
+            base_model=base_model,
+            task_vector=ft_tv,
+            search_range=(-1.5, 0.0),
+            dataset=dataset,
+            num_classes=num_classes,
+            device=gpu
+        )
+        print(f"Best scaling coefficient for {ft_name} = {best_coef}")
+        print(f"Metrics of the negated model is {best_results}")
+            
+    # class_names = list(finetune_tvs.keys())
+    # misc_utils.plot_confusion_matrix(cm=task_sim, class_names=class_names, filepath=None, show=True)
+    # misc_utils.plot_confusion_matrix(cm=orth_task_sim, class_names=class_names, filepath=None, show=True)
+    # misc_utils.plot_confusion_matrix(cm=shrd_tvs_sim, class_names=class_names, filepath=None, show=True)
     
     
 
