@@ -59,9 +59,9 @@ trainer:
   pretraining:
     max_epochs: 700
     optimizer_cfg: 
-      type: "adam"
+      type: "adamw"
       lr: 1.0e-4
-      betas: [0.9, 0.999]
+      # betas: [0.9, 0.999]
     lr_schedule_cfg: null
     early_stopping: False
     validation_freq: -1
@@ -76,9 +76,9 @@ trainer:
   finetuning:
     max_epochs: 500
     optimizer_cfg: 
-      type: "adam"
+      type: "adamw"
       lr: 5.0e-5
-      betas: [0.9, 0.999]
+      # betas: [0.9, 0.999]
     lr_schedule_cfg: null
     early_stopping: False
     validation_freq: -1
