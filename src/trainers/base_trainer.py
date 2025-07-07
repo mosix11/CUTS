@@ -5,7 +5,7 @@ from torch.amp import GradScaler
 from torch.amp import autocast
 
 from torch.optim.lr_scheduler import MultiStepLR, ReduceLROnPlateau, CosineAnnealingLR, OneCycleLR
-from .custom_lr_schedulers import InverseSquareRootLR
+from .custom_lr_schedulers import InverseSquareRootLR, CosineAnnealingWithWarmup
 
 
 
@@ -209,6 +209,12 @@ class BaseTrainer(ABC):
                 )
             elif self.lr_schedule_cfg['type'] == 'cosann':
                 self.lr_scheduler = CosineAnnealingLR(
+                    optim,
+                    **lr_sch_cfg,
+                    last_epoch=last_epoch
+                )
+            elif self.lr_schedule_cfg['type'] == 'cosann_warmup':
+                self.lr_scheduler = CosineAnnealingWithWarmup(
                     optim,
                     **lr_sch_cfg,
                     last_epoch=last_epoch

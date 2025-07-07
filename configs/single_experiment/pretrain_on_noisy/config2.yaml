@@ -61,11 +61,16 @@ model:
 
 trainer:
   pretraining:
-    max_epochs: 300
+    max_epochs: &max_epochs 200
     optimizer_cfg: 
       type: "adamw"
       lr: 1.0e-4
       betas: [0.9, 0.999]
+    lr_schedule_cfg:
+      type: 'cosann_warmup'
+      warmup_steps: 50
+      T_max: *max_epochs
+      eta_min: 1.0e-6
     early_stopping: False
     validation_freq: -1
     save_best_model: False
@@ -77,12 +82,16 @@ trainer:
     seed: *training_seed
 
   finetuning:
-    max_epochs: 250
+    max_epochs: 200
     optimizer_cfg: 
       type: "adamw"
       lr: 5.0e-5
       # betas: [0.9, 0.999]
-    lr_schedule_cfg: null
+    lr_schedule_cfg:
+      type: 'cosann_warmup'
+      warmup_steps: 50
+      T_max: *max_epochs
+      eta_min: 1.0e-6
     early_stopping: False
     validation_freq: -1
     save_best_model: False
