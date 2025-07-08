@@ -69,7 +69,7 @@ trainer:
     lr_schedule_cfg:
       type: 'cosann'
       T_max: *max_epochs
-      eta_min: 1.0e-6
+      eta_min: 5.0e-6
     early_stopping: False
     validation_freq: -1
     save_best_model: False
@@ -89,7 +89,7 @@ trainer:
     lr_schedule_cfg:
       type: 'cosann'
       T_max: *max_epochs
-      eta_min: 1.0e-6
+      eta_min: 5.0e-6
     early_stopping: False
     validation_freq: -1
     save_best_model: False

@@ -1,5 +1,5 @@
 import torch
-from typing import List
+from typing import List, Dict
 
 class TaskVector:
     def __init__(self, pretrained_state_dict=None, finetuned_state_dict=None, vector=None):
@@ -21,9 +21,6 @@ class TaskVector:
                         continue
                     if pretrained_state_dict[key].dtype not in [torch.float32, torch.float16, torch.bfloat16]:
                         continue  # Skip non-float entries
-                    # # TODO maybe remove the BN exclusion?
-                    # if 'running_mean' in key or 'running_var' in key:
-                    #     continue
                     self.vector[key] = finetuned_state_dict[key] - pretrained_state_dict[key]
     
     
@@ -234,6 +231,53 @@ class TaskVector:
             return cosine_sim
 
 
+
+    def compute_tall_mask(self, multi_task_vector: "TaskVector", lambda_t: float = 1.0) -> Dict[str, torch.Tensor]:
+        """
+        Compute a binary TALL mask for the task vectore give a multi-task vector (sum of other task vectors with this task vector.)
+        
+        Args:
+            multi_task_vector (TaskVector): τ_MTL = sum(τ_t's)
+            lambda_t (float): scaling factor λ for thresholding.
+        
+        Returns:
+            mask (Dict[str, Tensor]): binary mask for each parameter.
+        """
+        mask = {}
+        with torch.no_grad():
+            for key in self.vector:
+                τt = self.vector[key]
+                τ_MTL = multi_task_vector.vector[key]
+                diff = (τ_MTL - τt).abs()
+                mask[key] = (τt.abs() >= lambda_t * diff).to(dtype=torch.bool)
+        return mask
+    
+    
+    @staticmethod
+    def compute_all_tall_masks(task_vectors: List["TaskVector"], lambda_t: float = 1.0) -> List[Dict[str, torch.Tensor]]:
+        multi_task_vector = sum(task_vectors)
+        return [tv.compute_tall_mask(multi_task_vector, lambda_t) for tv in task_vectors]
+    
+    
+    def masked(self, mask: Dict[str, torch.Tensor]) -> "TaskVector":
+        """
+        Apply a binary mask to this TaskVector.
+        
+        Args:
+            mask: Dict[str, torch.Tensor], same keys as self.vector.
+        
+        Returns:
+            TaskVector: masked task vector.
+        """
+        masked_vector = {
+            key: self.vector[key] * mask[key].to(self.vector[key].dtype)
+            for key in self.vector if key in mask
+        }
+        return TaskVector(vector=masked_vector)
+    
+    
+
+
     @staticmethod
     def orthogonalize_task_vectors_GSP(task_vectors: List["TaskVector"]):
         """
@@ -319,3 +363,5 @@ class TaskVector:
             residual_components.append(residual_tv)
 
         return residual_components, shared_components 
+    
+    
