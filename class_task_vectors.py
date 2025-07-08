@@ -50,13 +50,12 @@ def evaluate_model(model, dataloader, device):
             batch = prepare_batch(batch, device)
             input_batch, target_batch = batch[:2]
             
-            loss = model.validation_step(input_batch, target_batch, use_amp=True)
+            loss, preds = model.validation_step(input_batch, target_batch, use_amp=True, return_preds=True)
             if model.loss_fn.reduction == 'none':
                 loss = loss.mean()
             loss_met.update(loss.detach().cpu().item(), n=input_batch.shape[0])
             
-            model_output = model.predict(input_batch)
-            predictions = torch.argmax(model_output, dim=-1) 
+            predictions = torch.argmax(preds, dim=-1) 
             
             all_preds.extend(predictions.cpu())
             all_targets.extend(target_batch.cpu())
@@ -153,7 +152,7 @@ def finetune_model(outputs_dir: Path, cfg: dict, cfg_name:str):
         transformsv2.RandomHorizontalFlip(),
     ]
     
-    dataset, num_classes = dataset_factory.create_dataset(cfg, augmentations, phase='finetuning')
+    dataset, num_classes = dataset_factory.create_dataset(cfg, augmentations)
     
     pt_model = model_factory.create_model(cfg['model'], num_classes)
     
@@ -250,7 +249,7 @@ def finetune_gold_model(outputs_dir: Path, cfg: dict, cfg_name:str):
         transformsv2.RandomHorizontalFlip(),
     ]
     
-    dataset, num_classes = dataset_factory.create_dataset(cfg, augmentations, phase='finetuning')
+    dataset, num_classes = dataset_factory.create_dataset(cfg, augmentations)
     
     pt_model = model_factory.create_model(cfg['model'], num_classes)
     
@@ -334,7 +333,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str, sear
     pretrain_dir = outputs_dir/ Path(f"{cfg_name}_pretrain")
     finetune_dir = outputs_dir/ Path(f"{cfg_name}_finetune")
     
-    dataset, num_classes = dataset_factory.create_dataset(cfg, phase='finetuning')
+    dataset, num_classes = dataset_factory.create_dataset(cfg)
     
     pt_model = model_factory.create_model(cfg['model'], num_classes)
     
@@ -347,25 +346,16 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str, sear
 
     
     task_vectors = []
-    
     for class_idx in range(num_classes):
-        
         cfg_copy = copy.deepcopy(cfg)
-        
         experiment_name = f"class{class_idx}"
-        experiment_tags = experiment_name.split("_")
-        
-
         experiment_dir = finetune_dir / Path(experiment_name)
-
         weights_dir = experiment_dir / Path("weights")
         weights_dir.mkdir(exist_ok=True, parents=True)
 
         plots_dir = experiment_dir / Path("plots")
         plots_dir.mkdir(exist_ok=True, parents=True)
-        
         ft_state_dict = torch.load(weights_dir / 'model_weights.pth', map_location=cpu)
-        
         tv = TaskVector(pt_weights, ft_state_dict)
         
         task_vectors.append(tv)
@@ -435,8 +425,8 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str, sear
         # pt_model = recompute_BN_layers(pt_model, dataset.get_train_dataloader(), device=gpu)
         # pt_model.to(cpu)
         
-    for key in task_vectors[0].vector:
-        print(key)
+    # for key in task_vectors[0].vector:
+    #     print(key)
     
 
     
@@ -452,8 +442,8 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str, sear
     # otrh_tvs[0].apply_to(pt_model, scaling_coef=-1.0, strict=True)
     # task_vectors[1].apply_to(pt_model, scaling_coef=1.0, strict=True)
 
-    for class_idx in range(num_classes):
-        task_vectors[class_idx].apply_to(pt_model, scaling_coef=0.05, strict=True)
+    # for class_idx in range(num_classes):
+    #     task_vectors[class_idx].apply_to(pt_model, scaling_coef=0.1, strict=True)
     
     # for class_idx in range(num_classes):
     #     task_vectors[class_idx].apply_to(pt_model, scaling_coef=0.142, strict=True)
@@ -464,6 +454,8 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str, sear
     # for class_idx in range(num_classes):
     #     otrh_tvs[class_idx].apply_to(pt_model, scaling_coef=0.2, strict=True)
     
+    
+    task_vectors[0].compute_TSV()
     
     
     metrics, all_preds, all_targets = evaluate_model(pt_model, dataset.get_test_dataloader(), device=gpu)

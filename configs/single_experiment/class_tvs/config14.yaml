@@ -4,9 +4,9 @@ dataset_seed: &dataset_seed 11
 
 
 strategy:
-  methodology: 'ClassTVFreezeHead'
+  methodology: 'ClassTVFullWeight'
   finetuning_set: &finetuning_set 'Heldout+Train'
-  
+
   # noise:
   #   pretraining:
   #     set: 'Train'
@@ -25,19 +25,20 @@ dataset:
   num_classes: &num_classes 10
   img_size: [32, 32]
   subsample_size: [-1, -1]
+  batch_size: 1024
   class_subset: []
   remap_labels: False
   heldout_conf: 
-    0: 0.85
-    1: 0.85
-    2: 0.85
-    3: 0.85
-    4: 0.85
-    5: 0.85
-    6: 0.85
-    7: 0.85
-    8: 0.85
-    9: 0.85
+    0: 0.75
+    1: 0.75
+    2: 0.75
+    3: 0.75
+    4: 0.75
+    5: 0.75
+    6: 0.75
+    7: 0.75
+    8: 0.75
+    9: 0.75
   grayscale: False
   normalize_imgs: True
   flatten: False
@@ -57,7 +58,6 @@ model:
 trainer:
   pretraining:
     max_epochs: 600
-    batch_size: 1024
     optimizer_cfg: 
       type: "adam"
       lr: 1.0e-4
@@ -75,7 +75,6 @@ trainer:
 
   finetuning:
     max_epochs: 400
-    batch_size: 1024
     optimizer_cfg: 
       type: "adam"
       lr: 1.0e-5

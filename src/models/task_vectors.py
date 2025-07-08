@@ -2,34 +2,11 @@ import torch
 from typing import List, Dict
 
 class TaskVector:
-    # def __init__(self, pretrained_state_dict=None, finetuned_state_dict=None, vector=None):
-    #     """
-    #     Initialize a TaskVector using either:
-    #     - pretrained_state_dict and finetuned_state_dict, OR
-    #     - an existing vector (dictionary of parameter deltas).
-    #     """
-    #     if vector is not None:
-    #         self.vector = vector
-    #     else:
-    #         assert pretrained_state_dict is not None and finetuned_state_dict is not None, \
-    #             "Provide either vector or both state_dicts."
-    #         self.vector = {}
-    #         with torch.no_grad():
-    #             for key in pretrained_state_dict:
-    #                 if key not in finetuned_state_dict:
-    #                     print(f"Warning: key {key} missing in finetuned_state_dict.")
-    #                     continue
-    #                 if pretrained_state_dict[key].dtype not in [torch.float32, torch.float16, torch.bfloat16]:
-    #                     continue  # Skip non-float entries
-    #                 self.vector[key] = finetuned_state_dict[key] - pretrained_state_dict[key]
-    
-    
     def __init__(self, pretrained_state_dict=None, finetuned_state_dict=None, vector=None):
         """
         Initialize a TaskVector using either:
         - pretrained_state_dict and finetuned_state_dict, OR
         - an existing vector (dictionary of parameter deltas).
-        Skips ALL Batch Normalization layer parameters (weight, bias, running_mean, running_var).
         """
         if vector is not None:
             self.vector = vector
@@ -38,36 +15,59 @@ class TaskVector:
                 "Provide either vector or both state_dicts."
             self.vector = {}
             with torch.no_grad():
-                # Identify all module prefixes that belong to BatchNorm layers
-                # We can do this by looking for 'running_mean' or 'running_var'
-                bn_module_prefixes = set()
-                for key in pretrained_state_dict:
-                    if '.running_mean' in key or '.running_var' in key:
-                        # Extract the module prefix, e.g., 'net.1', 'net.4'
-                        # This assumes the pattern 'module_prefix.parameter_name'
-                        parts = key.rsplit('.', 1) # Split from the right, at most once
-                        if len(parts) > 1:
-                            bn_module_prefixes.add(parts[0])
-
                 for key in pretrained_state_dict:
                     if key not in finetuned_state_dict:
                         print(f"Warning: key {key} missing in finetuned_state_dict.")
                         continue
                     if pretrained_state_dict[key].dtype not in [torch.float32, torch.float16, torch.bfloat16]:
                         continue  # Skip non-float entries
-
-                    # Check if the current key belongs to a identified BN module
-                    # by checking if its prefix is in our set of bn_module_prefixes
-                    is_bn_parameter = False
-                    for prefix in bn_module_prefixes:
-                        if key.startswith(prefix + '.'):
-                            is_bn_parameter = True
-                            break
-
-                    if is_bn_parameter:
-                        continue # Skip all parameters of the identified BN module
-
                     self.vector[key] = finetuned_state_dict[key] - pretrained_state_dict[key]
+    
+    
+    # def __init__(self, pretrained_state_dict=None, finetuned_state_dict=None, vector=None):
+    #     """
+    #     Initialize a TaskVector using either:
+    #     - pretrained_state_dict and finetuned_state_dict, OR
+    #     - an existing vector (dictionary of parameter deltas).
+    #     Skips ALL Batch Normalization layer parameters (weight, bias, running_mean, running_var).
+    #     """
+    #     if vector is not None:
+    #         self.vector = vector
+    #     else:
+    #         assert pretrained_state_dict is not None and finetuned_state_dict is not None, \
+    #             "Provide either vector or both state_dicts."
+    #         self.vector = {}
+    #         with torch.no_grad():
+    #             # Identify all module prefixes that belong to BatchNorm layers
+    #             # We can do this by looking for 'running_mean' or 'running_var'
+    #             bn_module_prefixes = set()
+    #             for key in pretrained_state_dict:
+    #                 if '.running_mean' in key or '.running_var' in key:
+    #                     # Extract the module prefix, e.g., 'net.1', 'net.4'
+    #                     # This assumes the pattern 'module_prefix.parameter_name'
+    #                     parts = key.rsplit('.', 1) # Split from the right, at most once
+    #                     if len(parts) > 1:
+    #                         bn_module_prefixes.add(parts[0])
+
+    #             for key in pretrained_state_dict:
+    #                 if key not in finetuned_state_dict:
+    #                     print(f"Warning: key {key} missing in finetuned_state_dict.")
+    #                     continue
+    #                 if pretrained_state_dict[key].dtype not in [torch.float32, torch.float16, torch.bfloat16]:
+    #                     continue  # Skip non-float entries
+
+    #                 # Check if the current key belongs to a identified BN module
+    #                 # by checking if its prefix is in our set of bn_module_prefixes
+    #                 is_bn_parameter = False
+    #                 for prefix in bn_module_prefixes:
+    #                     if key.startswith(prefix + '.'):
+    #                         is_bn_parameter = True
+    #                         break
+
+    #                 if is_bn_parameter:
+    #                     continue # Skip all parameters of the identified BN module
+
+    #                 self.vector[key] = finetuned_state_dict[key] - pretrained_state_dict[key]
 
 
     def __add__(self, other):
@@ -251,6 +251,12 @@ class TaskVector:
                 diff = (τ_MTL - τt).abs()
                 mask[key] = (τt.abs() >= lambda_t * diff).to(dtype=torch.bool)
         return mask
+    
+    
+    def compute_TSV(self):
+        TSV = {}
+        for key, layer_weights in self.vector.items():
+            print(layer_weights.shape)
     
     
     @staticmethod

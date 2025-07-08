@@ -13,3 +13,4 @@ PyYaml
 seaborn
 timm
 thop
+einops

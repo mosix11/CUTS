@@ -5,6 +5,7 @@ from . import PreActResNet9, PreActResNet18, PreActResNet34, PreActResNet50, Pre
 from . import PostActResNet9, PostActResNet18, PostActResNet34, PostActResNet50, PostActResNet101, PostActResNet152
 from . import PostActResNet9_ETD
 from . import CNN5_ETD
+from . import ViT_Small
 from . import TorchvisionModels, TimmModels
 
 def create_model(cfg, num_classes):
@@ -81,7 +82,8 @@ def create_model(cfg, num_classes):
     elif model_type == 'resnet152v1':
         model = PostActResNet152(**cfg)
         
-    
+    elif model_type == 'vit_small':
+        model = ViT_Small(**cfg)
     elif model_type == 'resnet9v1_etd':
         model = PostActResNet9_ETD(**cfg)
         
