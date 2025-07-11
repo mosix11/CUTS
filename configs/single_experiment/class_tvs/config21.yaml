@@ -4,21 +4,8 @@ dataset_seed: &dataset_seed 11
 
 
 strategy:
-  methodology: 'ClassTVFreezeHead'
+  methodology: 'ClassTVFullWeight'
   finetuning_set: &finetuning_set 'Heldout+Train'
-  
-  # noise:
-  #   pretraining:
-  #     set: 'Train'
-  #     noise_rate: 0.0
-  #     noise_type: 'symmetric'
-  #     seed: 8
-  #   finetuning:
-  #     set: *finetuning_set
-  #     noise_rate: 1.0
-  #     noise_type: 'symmetric'
-  #     seed: 8
-
 
 dataset:
   name: "cifar10"
@@ -48,21 +35,24 @@ dataset:
 
 
 model:
-  type: 'cnn5'
-  num_channels: 128
+  type: 'vit_small'
   num_classes: *num_classes
+  img_size: [32, 32]
   loss_fn: 'CE'
   metrics: ['ACC', 'F1']
 
 
 trainer:
   pretraining:
-    max_epochs: 600
+    max_epochs: &max_epochs_pt 300
     optimizer_cfg: 
-      type: "adam"
-      lr: 1.0e-4
+      type: "adamw"
+      lr: 5.0e-4
       betas: [0.9, 0.999]
-    lr_schedule_cfg: null
+    lr_schedule_cfg:
+      type: 'cosann'
+      T_max: *max_epochs_pt
+      eta_min: 5.0e-6
     early_stopping: False
     validation_freq: -1
     save_best_model: False
@@ -70,16 +60,19 @@ trainer:
     run_on_gpu: True
     use_amp: True
     log_comet: True
-    comet_project_name: 'task-vectors-cifar10' # change to class-task-vectors-cifa10 for new trainings
+    comet_project_name: 'class-task-vectors-cifa10'
     seed: *training_seed
 
   finetuning:
-    max_epochs: 400
+    max_epochs: &max_epochs_ft 300
     optimizer_cfg: 
-      type: "adam"
-      lr: 1.0e-5
-      betas: [0.9, 0.999]
-    lr_schedule_cfg: null
+      type: "adamw"
+      lr: 1.0e-4
+      # betas: [0.9, 0.999]
+    lr_schedule_cfg:
+      type: 'cosann'
+      T_max: *max_epochs_ft
+      eta_min: 5.0e-6
     early_stopping: False
     validation_freq: -1
     save_best_model: False
@@ -87,6 +80,6 @@ trainer:
     run_on_gpu: True
     use_amp: True
     log_comet: True
-    comet_project_name: 'task-vectors-cifar10' # change to class-task-vectors-cifa10 for new trainings
+    comet_project_name: 'class-task-vectors-cifa10'
     seed: *training_seed
 

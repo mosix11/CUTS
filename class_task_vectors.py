@@ -1,7 +1,7 @@
 import comet_ml
 from src.datasets import dataset_factory
 from src.models import model_factory, TaskVector
-from src.trainers import TrainerEp, TrainerGS
+from src.trainers import StandardTrainer
 import matplotlib.pyplot as plt
 import seaborn as sns
 from src.utils import nn_utils, misc_utils
@@ -94,6 +94,184 @@ def recompute_BN_layers(model, dataloader, device):
 
 
 
+def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
+    cfg['trainer']['pretraining']['comet_api_key'] = os.getenv("COMET_API_KEY")
+    cfg['trainer']['finetuning']['comet_api_key'] = os.getenv("COMET_API_KEY")
+    
+    augmentations = [
+        transformsv2.RandomCrop(32, padding=4),
+        transformsv2.RandomHorizontalFlip(),
+    ]
+    
+    if not outputs_dir.joinpath(f"{cfg_name}/pretrain/weights/model_weights.pth").exists():
+        cfg_cpy = copy.deepcopy(cfg)
+        dataset, num_classes = dataset_factory.create_dataset(cfg_cpy, augmentations)
+        
+        model = model_factory.create_model(cfg_cpy['model'], num_classes)
+        
+        
+        experiment_name = f"{cfg_name}/pretrain"
+
+        experiment_dir = outputs_dir / Path(experiment_name)
+
+        weights_dir = experiment_dir / Path("weights")
+        weights_dir.mkdir(exist_ok=True, parents=True)
+
+        plots_dir = experiment_dir / Path("plots")
+        plots_dir.mkdir(exist_ok=True, parents=True)
+        
+        trainer = StandardTrainer(
+            outputs_dir=outputs_dir,
+            **cfg['trainer']['pretraining'],
+            exp_name=experiment_name,
+            exp_tags=None,
+        )
+
+        results = trainer.fit(model, dataset, resume=False)
+        
+        # print(results)
+
+        torch.save(model.state_dict(), weights_dir / Path("model_weights.pth"))
+
+        class_names = [f"Class {i}" for i in range(num_classes)]
+        confmat = trainer.confmat("Test")
+        misc_utils.plot_confusion_matrix(
+            cm=confmat,
+            class_names=class_names,
+            filepath=str(plots_dir / Path("confmat.png")),
+            show=False,
+        )
+        
+    
+    
+    if not outputs_dir.joinpath(f"{cfg_name}/finetune_gold/weights/model_weights.pth").exists():
+        cfg_cpy = copy.deepcopy(cfg)
+        dataset, num_classes = dataset_factory.create_dataset(cfg_cpy, augmentations)
+    
+        pt_model = model_factory.create_model(cfg_cpy['model'], num_classes)
+        
+        base_model_ckp_path = outputs_dir/ Path(f"{cfg_name}/pretrain") / Path('weights/model_weights.pth')
+        pt_model.load_state_dict(torch.load(base_model_ckp_path))
+        
+        strategy = cfg_cpy['strategy']
+        
+        heldout_set = dataset.get_heldoutset()
+        if strategy['finetuning_set'] == 'Heldout+Train':
+            trainset = dataset.get_trainset()
+            
+            extended_trainset = ConcatDataset([trainset, heldout_set])
+            
+            dataset.set_trainset(extended_trainset, shuffle=True)
+        elif strategy['finetuning_set'] == 'Heldout':
+            dataset.set_trainset(heldout_set, shuffle=True)
+        
+        if strategy['methodology'] == 'ClassTVFreezeHead':
+            pt_model.freeze_classification_head()
+        elif strategy['methodology'] == 'ClassTVFullWeight':
+            pass
+    
+            
+        experiment_name = f"{cfg_name}/finetune_gold"
+        experiment_dir = outputs_dir / Path(experiment_name)
+
+        weights_dir = experiment_dir / Path("weights")
+        weights_dir.mkdir(exist_ok=True, parents=True)
+
+        plots_dir = experiment_dir / Path("plots")
+        plots_dir.mkdir(exist_ok=True, parents=True)
+        
+        
+
+        trainer = StandardTrainer(
+            outputs_dir=outputs_dir,
+            **cfg_cpy['trainer']['finetuning'],
+            exp_name=experiment_name,
+            exp_tags=None,
+        )
+        
+        results = trainer.fit(pt_model, dataset, resume=False)
+
+        torch.save(pt_model.state_dict(), weights_dir / Path("model_weights.pth"))
+
+        class_names = [f"Class {i}" for i in range(num_classes)]
+        confmat = trainer.confmat("Test")
+        misc_utils.plot_confusion_matrix(
+            cm=confmat,
+            class_names=class_names,
+            filepath=str(plots_dir / Path("confmat.png")),
+            show=False,
+        )
+        
+    
+    # Fine tune on classes
+    num_classes = cfg['dataset']['num_classes']
+    for cls_idx in range(num_classes):
+        if not outputs_dir.joinpath(f"{cfg_name}/finetune/class{cls_idx}/weights/model_weights.pth").exists():
+            cfg_cpy = copy.deepcopy(cfg)
+            dataset, num_classes = dataset_factory.create_dataset(cfg_cpy, augmentations)
+            
+            pt_model = model_factory.create_model(cfg_cpy['model'], num_classes)
+    
+            base_model_ckp_path = outputs_dir/ Path(f"{cfg_name}/pretrain") / Path('weights/model_weights.pth')
+            pt_model.load_state_dict(torch.load(base_model_ckp_path))
+            
+            strategy = cfg_cpy['strategy']
+            
+            heldout_set = dataset.get_heldoutset()
+        
+            class_samples_indices = []
+            for idx, sample in enumerate(heldout_set):
+                if sample[1] == cls_idx:
+                    class_samples_indices.append(idx)
+                    
+            class_heldouts = Subset(heldout_set, class_samples_indices)
+            
+            if strategy['finetuning_set'] == 'Heldout+Train':
+                trainset = dataset.get_trainset()
+                
+                extended_trainset = ConcatDataset([trainset, class_heldouts])
+                
+                dataset.set_trainset(extended_trainset, shuffle=True)
+            elif strategy['finetuning_set'] == 'Heldout':
+                dataset.set_trainset(class_heldouts, shuffle=True)
+                
+            experiment_name = f"{cfg_name}/finetune/class{cls_idx}"
+
+            experiment_dir = outputs_dir / Path(experiment_name)
+
+            weights_dir = experiment_dir / Path("weights")
+            weights_dir.mkdir(exist_ok=True, parents=True)
+
+            plots_dir = experiment_dir / Path("plots")
+            plots_dir.mkdir(exist_ok=True, parents=True)
+            
+            
+            if strategy['methodology'] == 'ClassTVFreezeHead':
+                pt_model.freeze_classification_head()
+            elif strategy['methodology'] == 'ClassTVFullWeight':
+                pass
+            
+            
+            trainer = StandardTrainer(
+                outputs_dir=outputs_dir,
+                **cfg_cpy['trainer']['finetuning'],
+                exp_name=experiment_name,
+            )
+            
+            results = trainer.fit(pt_model, dataset, resume=False)
+
+            torch.save(pt_model.state_dict(), weights_dir / Path("model_weights.pth"))
+
+            class_names = [f"Class {i}" for i in range(num_classes)]
+            confmat = trainer.confmat("Test")
+            misc_utils.plot_confusion_matrix(
+                cm=confmat,
+                class_names=class_names,
+                filepath=str(plots_dir / Path("confmat.png")),
+                show=False
+            )
+        
+
 
 def pretrain_model(outputs_dir: Path, cfg: dict, cfg_name:str):
 
@@ -121,7 +299,7 @@ def pretrain_model(outputs_dir: Path, cfg: dict, cfg_name:str):
     plots_dir = experiment_dir / Path("plots")
     plots_dir.mkdir(exist_ok=True, parents=True)
     
-    trainer = TrainerEp(
+    trainer = StandardTrainer(
         outputs_dir=outputs_dir,
         **cfg['trainer']['pretraining'],
         exp_name=experiment_name,
@@ -220,7 +398,7 @@ def finetune_model(outputs_dir: Path, cfg: dict, cfg_name:str):
             
         
         
-        trainer = TrainerEp(
+        trainer = StandardTrainer(
             outputs_dir=outputs_dir,
             **cfg_copy['trainer']['finetuning'],
             exp_name=experiment_name,
@@ -293,7 +471,7 @@ def finetune_gold_model(outputs_dir: Path, cfg: dict, cfg_name:str):
         pass
     
     cfg['trainer']['finetuning']['max_epochs'] = 700
-    trainer = TrainerEp(
+    trainer = StandardTrainer(
         outputs_dir=outputs_dir,
         **cfg['trainer']['finetuning'],
         exp_name=experiment_name,
@@ -488,26 +666,6 @@ if __name__ == "__main__":
         action="store_true",
     )
     
-    parser.add_argument(
-        "-p",
-        "--pretrain",
-        help="Pretrain the model.",
-        action="store_true",
-    )
-    
-    parser.add_argument(
-        "-f",
-        "--finetune",
-        help="Finetune the pretrained model.",
-        action="store_true",
-    )
-    
-    parser.add_argument(
-        "-g",
-        "--gold",
-        help="Finetune the pretrained model on the heldout set",
-        action="store_true",
-    )
     
     parser.add_argument(
         "-t",
@@ -535,9 +693,5 @@ if __name__ == "__main__":
 
     if args.tv:
         apply_tv(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)
-    elif args.pretrain:
-        pretrain_model(outputs_dir, cfg, cfg_name=cfg_path.stem)
-    elif args.finetune:
-        finetune_model(outputs_dir, cfg, cfg_name=cfg_path.stem)
-    elif args.gold:
-        finetune_gold_model(outputs_dir, cfg, cfg_name=cfg_path.stem)
+    else:
+        pt_ft_model(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)

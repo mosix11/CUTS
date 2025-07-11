@@ -1,11 +1,10 @@
-# Config2 with no warmup
+# Let's see what happens if we fine tune on ground truth noisy samples only aggressively (long training low final learning rate)
 training_seed: &training_seed 11
 dataset_seed: &dataset_seed 11
 
 
 strategy:
-  finetuning_set: &finetuning_set 'LowLoss'
-  wieghts: 'FullWeights'
+  finetuning_set: &finetuning_set 'CleanNoiseSplit'
   percentage: 0.4
   noise:
     pretraining:
@@ -14,29 +13,17 @@ strategy:
       noise_type: 'symmetric'
       seed: 8
     finetuning:
-      - set: 'Train'
-        noise_rate: 0.6
+      - set: 'TrainNoise'
+        noise_rate: 0.0
         noise_type: 'symmetric'
         seed: 12
-      - set: 'Train'
-        noise_rate: 1.0
-        noise_type: 'symmetric'
-        seed: 12
-      - set: 'Train'
-        noise_rate: 0.6
-        noise_type: 'symmetric'
-        seed: 10
-      - set: 'Train'
-        noise_rate: 1.0
-        noise_type: 'symmetric'
-        seed: 10
 
 
 dataset:
   name: "cifar10"
   num_classes: &num_classes 10
   img_size: [32, 32]
-  batch_size: 1024
+  batch_size: 512
   subsample_size: [-1, -1]
   class_subset: []
   remap_labels: False
@@ -50,7 +37,8 @@ dataset:
 
 
 model:
-  type: 'vit_small'
+  type: 'resnet18v2'
+  init_channels: 64
   num_classes: *num_classes
   img_size: [32, 32]
   loss_fn: 'CE-NR'
@@ -61,14 +49,14 @@ model:
 
 trainer:
   pretraining:
-    max_epochs: &max_epochs_pt 300
+    max_epochs: &max_epochs 300
     optimizer_cfg: 
       type: "adamw"
       lr: 5.0e-4
       betas: [0.9, 0.999]
     lr_schedule_cfg:
       type: 'cosann'
-      T_max: *max_epochs_pt
+      T_max: *max_epochs
       eta_min: 5.0e-6
     early_stopping: False
     validation_freq: -1
@@ -81,15 +69,15 @@ trainer:
     seed: *training_seed
 
   finetuning:
-    max_epochs: &max_epochs_ft 300
+    max_epochs: 600
     optimizer_cfg: 
       type: "adamw"
       lr: 1.0e-4
       # betas: [0.9, 0.999]
     lr_schedule_cfg:
       type: 'cosann'
-      T_max: *max_epochs_ft
-      eta_min: 5.0e-6
+      T_max: *max_epochs
+      eta_min: 1.0e-6
     early_stopping: False
     validation_freq: -1
     save_best_model: False

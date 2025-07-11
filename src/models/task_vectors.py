@@ -253,14 +253,113 @@ class TaskVector:
         return mask
     
     
-    def compute_TSV(self):
-        TSV = {}
+    def compute_SVD_for_each_layer(self, k:float=1.0):
+        if k > 1.0 and k < 0.0:
+            raise ValueError('k should be in the range [0.0, 1.0]')
+        SVD = {}
         for key, layer_weights in self.vector.items():
-            print(layer_weights.shape)
+            print(key, '     ', layer_weights.shape)
+            if len(layer_weights.shape) == 2 and "text_projection" not in key:
+                u, s, v = torch.linalg.svd(layer_weights, full_matrices=False)
+                # Retain top K singular values and associated vectors.
+                idx = int(k*s.shape[0])
+
+                s = s[:idx]
+                u = u[:, :idx]
+                v = v[:idx, :]
+                    
+                SVD[key] = {
+                    'u': u,
+                    's': s,
+                    'v': v,
+                }
+                if k: SVD[key]['k'] = k
+                
+            elif len(layer_weights.shape) == 2 and "text_projection" in key:
+                SVD[key] = {'vec': layer_weights}
+            elif len(layer_weights.shape) == 1:
+                SVD[key] = {'vec': layer_weights}
+            elif len(layer_weights.shape) == 4 and "conv" in key:
+                pass
+                # TODO impelement conv im2col and svd here
+        
+        return SVD
+    
+    def apply_SVD_to_TV(self, SVD):
+        for key, svd_layer_weights in SVD.items():
+            if 'vec' in svd_layer_weights:
+                self.vector[key] = svd_layer_weights['vec']
+            elif isinstance(svd_layer_weights, dict) and 'u' in svd_layer_weights:
+                u, s, v, k = svd_layer_weights['u'], svd_layer_weights['s'], svd_layer_weights['v'], svd_layer_weights['k']
+                s = torch.diag_embed(s)
+                reconstructed_layer_weights = u @ s @ v
+                
+                # error = torch.linalg.norm(self.vector[key] - reconstructed_layer_weights)
+                # print("Reconstruction Error (Frobenius Norm):", error.item())
+                
+                self.vector[key] = reconstructed_layer_weights
+            else:
+                pass
+    
+    @staticmethod
+    def decompose_SVD_basis(task_vectors: Dict[str, "TaskVector"]):
+        
+        result_vec = {}
+        num_vecs = len(task_vectors)
+        for idx, (tv_expr, tv) in enumerate(task_vectors.items()):
+            tv_SVD = tv.compute_SVD_for_each_layer()
+            
+            for key, svd_layer_weights in tv_SVD.items():
+                if 'vec' in svd_layer_weights:
+                    if key not in result_vec:
+                        result_vec[key] = svd_layer_weights.clone()
+                    else:
+                        # Moving average for the weights that are not matrices
+                        result_vec[key] += (svd_layer_weights - result_vec[key]) / (idx + 1)
+                        
+                elif isinstance(svd_layer_weights, dict) and 'u' in svd_layer_weights:
+                    u, s, v, k = svd_layer_weights['u'], svd_layer_weights['s'], svd_layer_weights['v'], svd_layer_weights['k']
+                    if idx == 0:
+                        sum_u = torch.zeros(
+                            u.shape[0], u.shape[1] * num_vecs, device=u.device
+                        )
+                        sum_s = torch.zeros(
+                            s.shape[0] * num_vecs, device=s.device
+                        )
+                        sum_v = torch.zeros(
+                            v.shape[0] * num_vecs, v.shape[1], device=v.device
+                        )
+                        
+                    sum_u[:, idx * s.shape[0] : (idx + 1) * s.shape[0]] = u[
+                        :, :s.shape[0]
+                    ]
+                    sum_s[idx * s.shape[0] : (idx + 1) * s.shape[0]] = s[
+                        :s.shape[0]
+                    ]
+
+                    sum_v[idx * s.shape[0] : (idx + 1) * s.shape[0], :] = v[
+                        :s.shape[0], :
+                    ]
+                        
+                else:
+                    pass
+                    
+        
+        # sum_u = torch.zeros(
+        #     u.shape[0], u.shape[1] * config.num_tasks, device=device
+        # )
+        # sum_s = torch.zeros(
+        #     s.shape[0] * config.num_tasks, device=device
+        # )
+        # sum_v = torch.zeros(
+        #     v.shape[0] * config.num_tasks, v.shape[1], device=device
+        # )
+
     
     
     @staticmethod
-    def compute_all_tall_masks(task_vectors: List["TaskVector"], lambda_t: float = 1.0) -> List[Dict[str, torch.Tensor]]:
+    def compute_all_tall_masks(task_vectors: Dict[str, "TaskVector"], lambda_t: float = 1.0) -> List[Dict[str, torch.Tensor]]:
+        # TODO change the implementation from list to dict
         multi_task_vector = sum(task_vectors)
         return [tv.compute_tall_mask(multi_task_vector, lambda_t) for tv in task_vectors]
     

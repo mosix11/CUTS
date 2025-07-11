@@ -315,17 +315,17 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             plots_dir.mkdir(exist_ok=True, parents=True)
             
             if strategy['finetuning_set'] == 'Heldout':
-                dataset.inject_noise(**strategy['noise']['finetuning'])
+                dataset.inject_noise(**noise_tv)
                 dataset.replace_heldout_as_train_dl()
             elif strategy['finetuning_set'] == 'CleanNoiseSplit':
                 dataset.inject_noise(**strategy['noise']['pretraining'])
                 clean_set, noisy_set = dataset.get_clean_noisy_subsets(set='Train')
-                if strategy['noise']['finetuning']['set'] == 'TrainClean':
+                if noise_tv['set'] == 'TrainClean':
                     dataset.set_trainset(clean_set, shuffle=True)
-                    strategy['noise']['finetuning']['set'] = 'Train'
-                    dataset.inject_noise(**strategy['noise']['finetuning'])
+                    noise_tv['set'] = 'Train'
+                    dataset.inject_noise(**noise_tv)
                 
-                elif strategy['noise']['finetuning']['set'] == 'TrainNoise':
+                elif noise_tv['set'] == 'TrainNoise':
                     dataset.set_trainset(noisy_set, shuffle=True)
                     
             elif strategy['finetuning_set'] == 'LowLoss':
@@ -339,6 +339,8 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
                 
                 dataset.inject_noise(**noise_tv)
                 
+            elif strategy['finetuning_set'] == 'HighLoss':
+                pass
             
             trainer = StandardTrainer(
                 outputs_dir=outputs_dir,
@@ -416,41 +418,63 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     task_sim = np.array(task_sim)
     
     
-    otrh_tvs, shrd_tvs = TaskVector.decompose_task_vectors_SVD(ft_tvs_list)
-    
-    orth_task_sim = []
-    for i in range(len(ft_tvs_list)):
-        anchor_tv = otrh_tvs[i]
-        orth_task_sim.append([])
-        for j in range(len(ft_tvs_list)):
-            other_tv = otrh_tvs[j]
-            cos_sim = anchor_tv.cosine_similarity(other_tv)
-            orth_task_sim[i].append(cos_sim)
-    orth_task_sim = np.array(orth_task_sim)
-    
-    shrd_tvs_sim = []
-    for i in range(len(ft_tvs_list)):
-        anchor_tv = shrd_tvs[i]
-        shrd_tvs_sim.append([])
-        for j in range(len(ft_tvs_list)):
-            other_tv = shrd_tvs[j]
-            cos_sim = anchor_tv.cosine_similarity(other_tv)
-            shrd_tvs_sim[i].append(cos_sim)
-    shrd_tvs_sim = np.array(shrd_tvs_sim)
-    
-    
-    for ft_name, ft_tv in finetune_tvs.items():
-        best_coef, best_results, best_cm = search_optimal_coefficient(
-            base_model=base_model,
-            task_vector=ft_tv,
-            search_range=(-1.5, 0.0),
-            dataset=dataset,
-            num_classes=num_classes,
-            device=gpu
-        )
-        print(f"Best scaling coefficient for {ft_name} = {best_coef}")
-        print(f"Metrics of the negated model is {best_results}")
+    # for ft_name, ft_tv in finetune_tvs.items():
+    #     best_coef, best_results, best_cm = search_optimal_coefficient(
+    #         base_model=base_model,
+    #         task_vector=ft_tv,
+    #         search_range=(-1.5, 0.0),
+    #         dataset=dataset,
+    #         num_classes=num_classes,
+    #         device=gpu
+    #     )
+    #     print(f"Best scaling coefficient for {ft_name} = {best_coef}")
+    #     print(f"Metrics of the negated model is {best_results}")
             
+    
+    ft_tvs_list[0].compute_SVD_for_each_layer()
+    # for tv_expr, ftv in finetune_tvs.items():
+    #     ftsv = ftv.compute_SVD_for_each_layer()
+        
+        # ftv.apply_SVD_to_TV(ftsv)
+        
+    # for ft_name, ft_tv in finetune_tvs.items():
+    #     best_coef, best_results, best_cm = search_optimal_coefficient(
+    #         base_model=base_model,
+    #         task_vector=ft_tv,
+    #         search_range=(-1.5, 0.0),
+    #         dataset=dataset,
+    #         num_classes=num_classes,
+    #         device=gpu
+    #     )
+    #     print(f"Best scaling coefficient for {ft_name} = {best_coef}")
+    #     print(f"Metrics of the negated model is {best_results}")
+            
+    
+    
+    # otrh_tvs, shrd_tvs = TaskVector.decompose_task_vectors_SVD(ft_tvs_list)
+    
+    # orth_task_sim = []
+    # for i in range(len(ft_tvs_list)):
+    #     anchor_tv = otrh_tvs[i]
+    #     orth_task_sim.append([])
+    #     for j in range(len(ft_tvs_list)):
+    #         other_tv = otrh_tvs[j]
+    #         cos_sim = anchor_tv.cosine_similarity(other_tv)
+    #         orth_task_sim[i].append(cos_sim)
+    # orth_task_sim = np.array(orth_task_sim)
+    
+    # shrd_tvs_sim = []
+    # for i in range(len(ft_tvs_list)):
+    #     anchor_tv = shrd_tvs[i]
+    #     shrd_tvs_sim.append([])
+    #     for j in range(len(ft_tvs_list)):
+    #         other_tv = shrd_tvs[j]
+    #         cos_sim = anchor_tv.cosine_similarity(other_tv)
+    #         shrd_tvs_sim[i].append(cos_sim)
+    # shrd_tvs_sim = np.array(shrd_tvs_sim)
+    
+    
+    
     # class_names = list(finetune_tvs.keys())
     # misc_utils.plot_confusion_matrix(cm=task_sim, class_names=class_names, filepath=None, show=True)
     # misc_utils.plot_confusion_matrix(cm=orth_task_sim, class_names=class_names, filepath=None, show=True)

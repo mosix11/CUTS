@@ -82,7 +82,7 @@ trainer:
     run_on_gpu: True
     use_amp: True
     log_comet: True
-    comet_project_name: 'task-vectors-cifar10'
+    comet_project_name: 'task-vectors-cifar10' # change to class-task-vectors-cifa10 for new trainings
     seed: *training_seed
 
   finetuning:
@@ -100,6 +100,6 @@ trainer:
     run_on_gpu: True
     use_amp: True
     log_comet: True
-    comet_project_name: 'task-vectors-cifar10'
+    comet_project_name: 'task-vectors-cifar10' # change to class-task-vectors-cifa10 for new trainings
     seed: *training_seed
 
