@@ -16,7 +16,7 @@ dataset:
   name: "cifar10"
   num_classes: &num_classes 10
   img_size: [32, 32]
-  batch_size: 512
+  batch_size: 1024
   subsample_size: [-1, -1]
   class_subset: []
   remap_labels: False
