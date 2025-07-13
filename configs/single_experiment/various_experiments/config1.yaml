@@ -31,7 +31,7 @@ dataset:
 
 model:
   type: 'resnet18v2'
-  init_channels: 128
+  init_channels: 64
   num_classes: *num_classes
   img_size: [32, 32]
   loss_fn: 'CE-NR'
@@ -43,7 +43,7 @@ model:
 trainer:
   max_epochs: &max_epochs 500
   optimizer_cfg: 
-    type: "adamw"
+    type: "adam"
     lr: 1.0e-4
   # lr_schedule_cfg:
   #   type: 'step'
