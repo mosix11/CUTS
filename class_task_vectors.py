@@ -21,6 +21,7 @@ import copy
 import random
 import numpy as np
 from torchmetrics import ConfusionMatrix
+from collections import OrderedDict
 
 def prepare_batch(batch, device):
     batch = [tens.to(device) for tens in batch]
@@ -272,226 +273,6 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             )
         
 
-
-def pretrain_model(outputs_dir: Path, cfg: dict, cfg_name:str):
-
-    cfg['trainer']['pretraining']['comet_api_key'] = os.getenv("COMET_API_KEY")
-    
-    
-    augmentations = [
-        transformsv2.RandomCrop(32, padding=4),
-        transformsv2.RandomHorizontalFlip(),
-    ]
-    dataset, num_classes = dataset_factory.create_dataset(cfg, augmentations)
-
-    
-    model = model_factory.create_model(cfg['model'], num_classes)
-    
-    
-    experiment_name = f"{cfg_name}_pretrain"
-    experiment_tags = experiment_name.split("_")
-
-    experiment_dir = outputs_dir / Path(experiment_name)
-
-    weights_dir = experiment_dir / Path("weights")
-    weights_dir.mkdir(exist_ok=True, parents=True)
-
-    plots_dir = experiment_dir / Path("plots")
-    plots_dir.mkdir(exist_ok=True, parents=True)
-    
-    trainer = StandardTrainer(
-        outputs_dir=outputs_dir,
-        **cfg['trainer']['pretraining'],
-        exp_name=experiment_name,
-        exp_tags=experiment_tags,
-    )
-    
-
-    results = trainer.fit(model, dataset, resume=False)
-    
-    print(results)
-
-    torch.save(model.state_dict(), weights_dir / Path("model_weights.pth"))
-
-    class_names = [f"Class {i}" for i in range(num_classes)]
-    confmat = trainer.confmat("Test")
-    misc_utils.plot_confusion_matrix(
-        cm=confmat,
-        class_names=class_names,
-        filepath=str(plots_dir / Path("confmat.png")),
-        show=False
-    )
-    
-
-def finetune_model(outputs_dir: Path, cfg: dict, cfg_name:str):
-    cfg['trainer']['finetuning']['comet_api_key'] = os.getenv("COMET_API_KEY")
-    augmentations = [
-        transformsv2.RandomCrop(32, padding=4),
-        transformsv2.RandomHorizontalFlip(),
-    ]
-    
-    dataset, num_classes = dataset_factory.create_dataset(cfg, augmentations)
-    
-    pt_model = model_factory.create_model(cfg['model'], num_classes)
-    
-    base_model_ckp_path = outputs_dir/ Path(f"{cfg_name}_pretrain") / Path('weights/model_weights.pth')
-    pt_model.load_state_dict(torch.load(base_model_ckp_path))
-    
-    
-    strategy = cfg['strategy']
-    # if strategy['methodology'] == 'ClassTVFreezeHead':
-    #     pt_weights = pt_model.get_backbone_weights()
-    # elif strategy['methodology'] == 'ClassTVFullWeight':
-    #     pt_weights = pt_model.state_dict()
-        
-    for class_idx in range(num_classes):
-        
-        ft_dataset = copy.deepcopy(dataset)
-        heldout_set = ft_dataset.get_heldoutset()
-        
-        class_samples_indices = []
-        for idx, sample in enumerate(heldout_set):
-            if sample[1] == class_idx:
-                class_samples_indices.append(idx)
-                
-        class_heldouts = Subset(heldout_set, class_samples_indices)
-        
-        if strategy['finetuning_set'] == 'Heldout+Train':
-            trainset = ft_dataset.get_trainset()
-            
-            extended_trainset = ConcatDataset([trainset, class_heldouts])
-            
-            ft_dataset.set_trainset(extended_trainset, shuffle=True)
-        elif strategy['finetuning_set'] == 'Heldout':
-            ft_dataset.set_trainset(class_heldouts, shuffle=True)
-        
-        # smpls = {k:0 for k in range(10)}
-        
-        # for sample in extended_trainset:
-        #     y = sample[1]
-        #     smpls[y] += 1
-            
-        # print(smpls)
-        
-        # continue
-        
-        cfg_copy = copy.deepcopy(cfg)
-        
-        experiment_name = f"{cfg_name}_finetune/class{class_idx}"
-        experiment_tags = experiment_name.split("_")
-
-        experiment_dir = outputs_dir / Path(experiment_name)
-
-        weights_dir = experiment_dir / Path("weights")
-        weights_dir.mkdir(exist_ok=True, parents=True)
-
-        plots_dir = experiment_dir / Path("plots")
-        plots_dir.mkdir(exist_ok=True, parents=True)
-        
-        ft_model = copy.deepcopy(pt_model)
-        
-        if strategy['methodology'] == 'ClassTVFreezeHead':
-            ft_model.freeze_classification_head()
-        elif strategy['methodology'] == 'ClassTVFullWeight':
-            pass
-        
-            
-        
-        
-        trainer = StandardTrainer(
-            outputs_dir=outputs_dir,
-            **cfg_copy['trainer']['finetuning'],
-            exp_name=experiment_name,
-            exp_tags=experiment_tags,
-        )
-        
-        results = trainer.fit(ft_model, ft_dataset, resume=False)
-        print(results)
-
-        torch.save(ft_model.state_dict(), weights_dir / Path("model_weights.pth"))
-
-        class_names = [f"Class {i}" for i in range(num_classes)]
-        confmat = trainer.confmat("Test")
-        misc_utils.plot_confusion_matrix(
-            cm=confmat,
-            class_names=class_names,
-            filepath=str(plots_dir / Path("confmat.png")),
-            show=False
-        )
-
-
-def finetune_gold_model(outputs_dir: Path, cfg: dict, cfg_name:str):
-    cfg['trainer']['finetuning']['comet_api_key'] = os.getenv("COMET_API_KEY")
-    augmentations = [
-        transformsv2.RandomCrop(32, padding=4),
-        transformsv2.RandomHorizontalFlip(),
-    ]
-    
-    dataset, num_classes = dataset_factory.create_dataset(cfg, augmentations)
-    
-    pt_model = model_factory.create_model(cfg['model'], num_classes)
-    
-    base_model_ckp_path = outputs_dir/ Path(f"{cfg_name}_pretrain") / Path('weights/model_weights.pth')
-    pt_model.load_state_dict(torch.load(base_model_ckp_path))
-    
-    
-    strategy = cfg['strategy']
-    # if strategy['methodology'] == 'ClassTVFreezeHead':
-    #     pt_weights = pt_model.get_backbone_weights()
-    # elif strategy['methodology'] == 'ClassTVFullWeight':
-    #     pt_weights = pt_model.state_dict()
-    
-    heldout_set = dataset.get_heldoutset()
-    
-    if strategy['finetuning_set'] == 'Heldout+Train':
-        trainset = dataset.get_trainset()
-        
-        extended_trainset = ConcatDataset([trainset, heldout_set])
-        
-        dataset.set_trainset(extended_trainset, shuffle=True)
-    elif strategy['finetuning_set'] == 'Heldout':
-        dataset.set_trainset(heldout_set, shuffle=True)
-        
-    experiment_name = f"{cfg_name}_finetune_gold"
-    experiment_tags = experiment_name.split("_")
-
-    experiment_dir = outputs_dir / Path(experiment_name)
-
-    weights_dir = experiment_dir / Path("weights")
-    weights_dir.mkdir(exist_ok=True, parents=True)
-
-    plots_dir = experiment_dir / Path("plots")
-    plots_dir.mkdir(exist_ok=True, parents=True)
-    
-    ft_model = copy.deepcopy(pt_model)
-    
-    if strategy['methodology'] == 'ClassTVFreezeHead':
-        ft_model.freeze_classification_head()
-    elif strategy['methodology'] == 'ClassTVFullWeight':
-        pass
-    
-    cfg['trainer']['finetuning']['max_epochs'] = 700
-    trainer = StandardTrainer(
-        outputs_dir=outputs_dir,
-        **cfg['trainer']['finetuning'],
-        exp_name=experiment_name,
-        exp_tags=experiment_tags,
-    )
-    
-    results = trainer.fit(ft_model, dataset, resume=False)
-    print(results)
-
-    torch.save(ft_model.state_dict(), weights_dir / Path("model_weights.pth"))
-
-    class_names = [f"Class {i}" for i in range(num_classes)]
-    confmat = trainer.confmat("Test")
-    misc_utils.plot_confusion_matrix(
-        cm=confmat,
-        class_names=class_names,
-        filepath=str(plots_dir / Path("confmat.png")),
-        show=False
-    )
-
 def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str, search_range = [-1.5, 0.0]):
     training_seed = cfg['training_seed']
     if training_seed:
@@ -508,8 +289,8 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str, sear
     cpu = nn_utils.get_cpu_device()
     gpu = nn_utils.get_gpu_device()
     
-    pretrain_dir = outputs_dir/ Path(f"{cfg_name}_pretrain")
-    finetune_dir = outputs_dir/ Path(f"{cfg_name}_finetune")
+    pretrain_dir = outputs_dir/ Path(f"{cfg_name}/pretrain")
+    finetune_dir = outputs_dir/ Path(f"{cfg_name}/finetune")
     
     dataset, num_classes = dataset_factory.create_dataset(cfg)
     
@@ -523,7 +304,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str, sear
     
 
     
-    task_vectors = []
+    task_vectors = OrderedDict()
     for class_idx in range(num_classes):
         cfg_copy = copy.deepcopy(cfg)
         experiment_name = f"class{class_idx}"
@@ -536,43 +317,43 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str, sear
         ft_state_dict = torch.load(weights_dir / 'model_weights.pth', map_location=cpu)
         tv = TaskVector(pt_weights, ft_state_dict)
         
-        task_vectors.append(tv)
+        task_vectors[class_idx] = tv
         
     
     
     # otrh_tvs, shrd_tvs = TaskVector.orthogonalize_task_vectors_GSP(task_vectors)
     
-    otrh_tvs, shrd_tvs = TaskVector.decompose_task_vectors_SVD(task_vectors)
+    # otrh_tvs, shrd_tvs = TaskVector.decompose_task_vectors_SVD(task_vectors)
     
-    task_sim = []
-    for i in range(num_classes):
-        anchor_tv = task_vectors[i]
-        task_sim.append([])
-        for j in range(num_classes):
-            other_tv = task_vectors[j]
-            cos_sim = anchor_tv.cosine_similarity(other_tv)
-            task_sim[i].append(cos_sim)
-    task_sim = np.array(task_sim)
+    # task_sim = []
+    # for i in range(num_classes):
+    #     anchor_tv = task_vectors[i]
+    #     task_sim.append([])
+    #     for j in range(num_classes):
+    #         other_tv = task_vectors[j]
+    #         cos_sim = anchor_tv.cosine_similarity(other_tv)
+    #         task_sim[i].append(cos_sim)
+    # task_sim = np.array(task_sim)
     
-    orth_task_sim = []
-    for i in range(num_classes):
-        anchor_tv = otrh_tvs[i]
-        orth_task_sim.append([])
-        for j in range(num_classes):
-            other_tv = otrh_tvs[j]
-            cos_sim = anchor_tv.cosine_similarity(other_tv)
-            orth_task_sim[i].append(cos_sim)
-    orth_task_sim = np.array(orth_task_sim)
+    # orth_task_sim = []
+    # for i in range(num_classes):
+    #     anchor_tv = otrh_tvs[i]
+    #     orth_task_sim.append([])
+    #     for j in range(num_classes):
+    #         other_tv = otrh_tvs[j]
+    #         cos_sim = anchor_tv.cosine_similarity(other_tv)
+    #         orth_task_sim[i].append(cos_sim)
+    # orth_task_sim = np.array(orth_task_sim)
     
-    res_task_sim = []
-    for i in range(num_classes):
-        anchor_tv = shrd_tvs[i]
-        res_task_sim.append([])
-        for j in range(num_classes):
-            other_tv = shrd_tvs[j]
-            cos_sim = anchor_tv.cosine_similarity(other_tv)
-            res_task_sim[i].append(cos_sim)
-    res_task_sim = np.array(res_task_sim)
+    # res_task_sim = []
+    # for i in range(num_classes):
+    #     anchor_tv = shrd_tvs[i]
+    #     res_task_sim.append([])
+    #     for j in range(num_classes):
+    #         other_tv = shrd_tvs[j]
+    #         cos_sim = anchor_tv.cosine_similarity(other_tv)
+    #         res_task_sim[i].append(cos_sim)
+    # res_task_sim = np.array(res_task_sim)
     
     # print('Original Task Vectors Similarity:', task_sim)
     
@@ -621,7 +402,10 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str, sear
     # task_vectors[1].apply_to(pt_model, scaling_coef=1.0, strict=True)
 
     # for class_idx in range(num_classes):
-    #     task_vectors[class_idx].apply_to(pt_model, scaling_coef=0.1, strict=True)
+    #     task_vectors[class_idx].apply_to(pt_model, scaling_coef=0.12, strict=True)
+    
+    TSV = TaskVector.TSV_merge_interference_reduction(task_vectors, k=0.1)
+    TSV.apply_to(pt_model, scaling_coef=1.0)
     
     # for class_idx in range(num_classes):
     #     task_vectors[class_idx].apply_to(pt_model, scaling_coef=0.142, strict=True)
@@ -633,7 +417,6 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str, sear
     #     otrh_tvs[class_idx].apply_to(pt_model, scaling_coef=0.2, strict=True)
     
     
-    task_vectors[0].compute_TSV()
     
     
     metrics, all_preds, all_targets = evaluate_model(pt_model, dataset.get_test_dataloader(), device=gpu)
@@ -643,9 +426,9 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str, sear
     class_names = [f'Class {i}' for i in range(10)]
     misc_utils.plot_confusion_matrix(cm=confmat, class_names=class_names, filepath=results_dir / Path('confusion_matrix_tv.png'), show=True)
     
-    misc_utils.plot_confusion_matrix(cm=task_sim, class_names=class_names, filepath=None, show=False)
-    misc_utils.plot_confusion_matrix(cm=orth_task_sim, class_names=class_names, filepath=None, show=False)
-    misc_utils.plot_confusion_matrix(cm=res_task_sim, class_names=class_names, filepath=None, show=False)
+    # misc_utils.plot_confusion_matrix(cm=task_sim, class_names=class_names, filepath=None, show=False)
+    # misc_utils.plot_confusion_matrix(cm=orth_task_sim, class_names=class_names, filepath=None, show=False)
+    # misc_utils.plot_confusion_matrix(cm=res_task_sim, class_names=class_names, filepath=None, show=False)
     
     print(metrics)
         

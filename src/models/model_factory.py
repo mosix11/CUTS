@@ -1,5 +1,6 @@
 import torch
 import torchmetrics
+import torchmetrics.classification
 from . import FC1, FCN, CNN5, CNN5_NoNorm, CNN5_GN
 from . import PreActResNet9, PreActResNet18, PreActResNet34, PreActResNet50, PreActResNet101, PreActResNet152
 from . import PostActResNet9, PostActResNet18, PostActResNet34, PostActResNet50, PostActResNet101, PostActResNet152
@@ -29,14 +30,14 @@ def create_model(cfg, num_classes):
         for metric_name in cfg['metrics']:
             if metric_name == 'ACC':
                 if num_classes == 1:   
-                    metrics[metric_name] = torchmetrics.Accuracy(task="binary", num_classes=num_classes)
+                    metrics[metric_name] = torchmetrics.classification.BinaryAccuracy()
                 else:
-                    metrics[metric_name] = torchmetrics.Accuracy(task="multiclass", num_classes=num_classes)
+                    metrics[metric_name] = torchmetrics.classification.MulticlassAccuracy(num_classes=num_classes)
             elif metric_name == 'F1':
                 if num_classes == 1:
-                    metrics[metric_name] = torchmetrics.F1Score(task="binary", num_classes=num_classes)
+                    metrics[metric_name] = torchmetrics.classification.BinaryF1Score()
                 else:
-                    metrics[metric_name] = torchmetrics.F1Score(task="multiclass", num_classes=num_classes)
+                    metrics[metric_name] = torchmetrics.classification.MulticlassF1Score(num_classes=num_classes)
                     
             else: raise ValueError(f"Invalid metric {metric_name}.")
         cfg['metrics'] = metrics

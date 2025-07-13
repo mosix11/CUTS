@@ -351,7 +351,7 @@ class BaseTrainer(ABC):
             
             # 2. Call the abstract evaluation method (implemented by subclass)
             if self.validation_freq > 0 and (self.epoch + 1) % self.validation_freq == 0:
-                val_stats = self.evaluate(set_name='Val')
+                val_stats = self.evaluate(set='Val')
                 statistics.update(val_stats)
 
                 # 3. Handle saving best model (generic logic)

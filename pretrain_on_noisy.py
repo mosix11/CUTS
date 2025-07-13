@@ -387,6 +387,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     base_expr_dir = outputs_dir / cfg_name
     gold_dir = base_expr_dir / 'gold'
     pretrain_dir = base_expr_dir / 'pretrain'
+    ft_gold_dir = base_expr_dir / 'finetune_gold'
     finetune_dirs = OrderedDict()
     for idx, noise_tv in enumerate(cfg['strategy']['noise']['finetuning']):
         ft_expr_dir = base_expr_dir / f"finetune_{noise_tv['noise_rate']}_{noise_tv['seed']}"
@@ -394,6 +395,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         
     gold_weights = torch.load(gold_dir / 'weights/model_weights.pth', map_location=cpu)
     pretrain_weights = torch.load(pretrain_dir / 'weights/model_weights.pth', map_location=cpu)
+    ft_gold_wieghts = torch.load(ft_gold_dir / 'weights/model_weights.pth', map_location=cpu)
     finetune_weights = OrderedDict()
     for ft_expr, ft_dir in finetune_dirs.items():
         finetune_weights[ft_expr] = torch.load(ft_dir / 'weights/model_weights.pth', map_location=cpu)
@@ -401,11 +403,16 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     base_model.load_state_dict(pretrain_weights)
     
     
+    ft_gold_tv = TaskVector(pretrain_weights, ft_gold_wieghts)
     finetune_tvs = OrderedDict()
     for ft_expr, ft_weight in finetune_weights.items():
         finetune_tvs[ft_expr] = TaskVector(pretrain_weights, ft_weight)
         
-    ft_tvs_list = list(finetune_tvs.values())
+    ft_tvs_list = [ft_gold_tv]
+    # ft_tvs_list = []
+    ft_tvs_list.extend(list(finetune_tvs.values()))
+    print(finetune_tvs.keys())
+    # print(ft_gold_tv.layer_wise_cosine_similarity(ft_tvs_list[1]))
     
     task_sim = []
     for i in range(len(ft_tvs_list)):
@@ -413,7 +420,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         task_sim.append([])
         for j in range(len(ft_tvs_list)):
             other_tv = ft_tvs_list[j]
-            cos_sim = anchor_tv.cosine_similarity(other_tv)
+            cos_sim = anchor_tv.cosine_similarity_flatten(other_tv)
             task_sim[i].append(cos_sim)
     task_sim = np.array(task_sim)
     
@@ -431,11 +438,14 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     #     print(f"Metrics of the negated model is {best_results}")
             
     
-    ft_tvs_list[0].compute_SVD_for_each_layer()
+    
     # for tv_expr, ftv in finetune_tvs.items():
     #     ftsv = ftv.compute_SVD_for_each_layer()
         
         # ftv.apply_SVD_to_TV(ftsv)
+        
+    # TSV = TaskVector.TSV_extract_common_direction(finetune_tvs, k=0.3)
+    # TSV.apply_to(base_model, scaling_coef=1.0)
         
     # for ft_name, ft_tv in finetune_tvs.items():
     #     best_coef, best_results, best_cm = search_optimal_coefficient(
@@ -448,37 +458,49 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     #     )
     #     print(f"Best scaling coefficient for {ft_name} = {best_coef}")
     #     print(f"Metrics of the negated model is {best_results}")
+    
+    # best_coef, best_results, best_cm = search_optimal_coefficient(
+    #     base_model=base_model,
+    #     task_vector=TSV,
+    #     search_range=(-1.5, 0.0),
+    #     dataset=dataset,
+    #     num_classes=num_classes,
+    #     device=gpu
+    # )
+    # print(f"Best scaling coefficient for TSV = {best_coef}")
+    # print(f"Metrics of the negated model is {best_results}")
             
     
     
-    # otrh_tvs, shrd_tvs = TaskVector.decompose_task_vectors_SVD(ft_tvs_list)
+    otrh_tvs, shrd_tvs = TaskVector.decompose_task_vectors_SVD(ft_tvs_list)
     
-    # orth_task_sim = []
-    # for i in range(len(ft_tvs_list)):
-    #     anchor_tv = otrh_tvs[i]
-    #     orth_task_sim.append([])
-    #     for j in range(len(ft_tvs_list)):
-    #         other_tv = otrh_tvs[j]
-    #         cos_sim = anchor_tv.cosine_similarity(other_tv)
-    #         orth_task_sim[i].append(cos_sim)
-    # orth_task_sim = np.array(orth_task_sim)
+    orth_task_sim = []
+    for i in range(len(ft_tvs_list)):
+        anchor_tv = otrh_tvs[i]
+        orth_task_sim.append([])
+        for j in range(len(ft_tvs_list)):
+            other_tv = otrh_tvs[j]
+            cos_sim = anchor_tv.cosine_similarity_flatten(other_tv)
+            orth_task_sim[i].append(cos_sim)
+    orth_task_sim = np.array(orth_task_sim)
     
-    # shrd_tvs_sim = []
-    # for i in range(len(ft_tvs_list)):
-    #     anchor_tv = shrd_tvs[i]
-    #     shrd_tvs_sim.append([])
-    #     for j in range(len(ft_tvs_list)):
-    #         other_tv = shrd_tvs[j]
-    #         cos_sim = anchor_tv.cosine_similarity(other_tv)
-    #         shrd_tvs_sim[i].append(cos_sim)
-    # shrd_tvs_sim = np.array(shrd_tvs_sim)
+    shrd_tvs_sim = []
+    for i in range(len(ft_tvs_list)):
+        anchor_tv = shrd_tvs[i]
+        shrd_tvs_sim.append([])
+        for j in range(len(ft_tvs_list)):
+            other_tv = shrd_tvs[j]
+            cos_sim = anchor_tv.cosine_similarity_flatten(other_tv)
+            shrd_tvs_sim[i].append(cos_sim)
+    shrd_tvs_sim = np.array(shrd_tvs_sim)
     
     
-    
-    # class_names = list(finetune_tvs.keys())
-    # misc_utils.plot_confusion_matrix(cm=task_sim, class_names=class_names, filepath=None, show=True)
-    # misc_utils.plot_confusion_matrix(cm=orth_task_sim, class_names=class_names, filepath=None, show=True)
-    # misc_utils.plot_confusion_matrix(cm=shrd_tvs_sim, class_names=class_names, filepath=None, show=True)
+    class_names = ['ft_gold']
+    # class_names = []
+    class_names.extend(list(finetune_tvs.keys()))
+    misc_utils.plot_confusion_matrix(cm=task_sim, class_names=class_names, filepath=None, show=True)
+    misc_utils.plot_confusion_matrix(cm=orth_task_sim, class_names=class_names, filepath=None, show=True)
+    misc_utils.plot_confusion_matrix(cm=shrd_tvs_sim, class_names=class_names, filepath=None, show=True)
     
     
 

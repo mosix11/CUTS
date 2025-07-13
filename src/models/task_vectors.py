@@ -1,5 +1,7 @@
 import torch
+import torch.nn.functional as F
 from typing import List, Dict
+from collections import OrderedDict
 
 class TaskVector:
     def __init__(self, pretrained_state_dict=None, finetuned_state_dict=None, vector=None):
@@ -23,51 +25,7 @@ class TaskVector:
                         continue  # Skip non-float entries
                     self.vector[key] = finetuned_state_dict[key] - pretrained_state_dict[key]
     
-    
-    # def __init__(self, pretrained_state_dict=None, finetuned_state_dict=None, vector=None):
-    #     """
-    #     Initialize a TaskVector using either:
-    #     - pretrained_state_dict and finetuned_state_dict, OR
-    #     - an existing vector (dictionary of parameter deltas).
-    #     Skips ALL Batch Normalization layer parameters (weight, bias, running_mean, running_var).
-    #     """
-    #     if vector is not None:
-    #         self.vector = vector
-    #     else:
-    #         assert pretrained_state_dict is not None and finetuned_state_dict is not None, \
-    #             "Provide either vector or both state_dicts."
-    #         self.vector = {}
-    #         with torch.no_grad():
-    #             # Identify all module prefixes that belong to BatchNorm layers
-    #             # We can do this by looking for 'running_mean' or 'running_var'
-    #             bn_module_prefixes = set()
-    #             for key in pretrained_state_dict:
-    #                 if '.running_mean' in key or '.running_var' in key:
-    #                     # Extract the module prefix, e.g., 'net.1', 'net.4'
-    #                     # This assumes the pattern 'module_prefix.parameter_name'
-    #                     parts = key.rsplit('.', 1) # Split from the right, at most once
-    #                     if len(parts) > 1:
-    #                         bn_module_prefixes.add(parts[0])
 
-    #             for key in pretrained_state_dict:
-    #                 if key not in finetuned_state_dict:
-    #                     print(f"Warning: key {key} missing in finetuned_state_dict.")
-    #                     continue
-    #                 if pretrained_state_dict[key].dtype not in [torch.float32, torch.float16, torch.bfloat16]:
-    #                     continue  # Skip non-float entries
-
-    #                 # Check if the current key belongs to a identified BN module
-    #                 # by checking if its prefix is in our set of bn_module_prefixes
-    #                 is_bn_parameter = False
-    #                 for prefix in bn_module_prefixes:
-    #                     if key.startswith(prefix + '.'):
-    #                         is_bn_parameter = True
-    #                         break
-
-    #                 if is_bn_parameter:
-    #                     continue # Skip all parameters of the identified BN module
-
-    #                 self.vector[key] = finetuned_state_dict[key] - pretrained_state_dict[key]
 
 
     def __add__(self, other):
@@ -127,6 +85,12 @@ class TaskVector:
         """Norm of a task vector."""
         return torch.sqrt(self.dot(self))
     
+    
+    def cosine_similarity(self, A, B):
+        A_flat = A.flatten()
+        B_flat = B.flatten()
+        return F.cosine_similarity(A_flat.unsqueeze(0), B_flat.unsqueeze(0)).item()
+    
 
     def apply_to(self, model, scaling_coef=1.0, strict=False):
         """
@@ -153,8 +117,6 @@ class TaskVector:
     
 
     
-    
-    
     def flatten_vector(self):
         """
         Flatten a task vector dictionary into a single 1D vector.
@@ -173,7 +135,9 @@ class TaskVector:
             pointer += numel
         return TaskVector(vector=new_dict)
     
-    def cosine_similarity(self, other_task_vector):
+    
+    
+    def cosine_similarity_flatten(self, other_task_vector):
         """
         Computes the cosine similarity between the current task vector and another.
 
@@ -231,6 +195,18 @@ class TaskVector:
             return cosine_sim
 
 
+    def layer_wise_cosine_similarity(self, other_task_vector):
+        keys = self.vector.keys()
+        
+        similarities = OrderedDict()
+        for key in keys:
+            tensor_self = self.vector[key]
+            tensor_other = other_task_vector.vector[key]
+            similarities[key] = self.cosine_similarity(tensor_self, tensor_other)
+        
+        return similarities
+            
+            
 
     def compute_tall_mask(self, multi_task_vector: "TaskVector", lambda_t: float = 1.0) -> Dict[str, torch.Tensor]:
         """
@@ -256,9 +232,8 @@ class TaskVector:
     def compute_SVD_for_each_layer(self, k:float=1.0):
         if k > 1.0 and k < 0.0:
             raise ValueError('k should be in the range [0.0, 1.0]')
-        SVD = {}
+        SVD = OrderedDict()
         for key, layer_weights in self.vector.items():
-            print(key, '     ', layer_weights.shape)
             if len(layer_weights.shape) == 2 and "text_projection" not in key:
                 u, s, v = torch.linalg.svd(layer_weights, full_matrices=False)
                 # Retain top K singular values and associated vectors.
@@ -273,15 +248,19 @@ class TaskVector:
                     's': s,
                     'v': v,
                 }
-                if k: SVD[key]['k'] = k
+                SVD[key]['k'] = k
                 
-            elif len(layer_weights.shape) == 2 and "text_projection" in key:
-                SVD[key] = {'vec': layer_weights}
-            elif len(layer_weights.shape) == 1:
-                SVD[key] = {'vec': layer_weights}
+            # elif len(layer_weights.shape) == 2 and "text_projection" in key:
+            #     SVD[key] = {'vec': layer_weights}
+            # elif len(layer_weights.shape) == 1:
+            #     SVD[key] = {'vec': layer_weights}
+            # elif len(layer_weights.shape) == 3:
+            #      SVD[key] = {'vec': layer_weights}
             elif len(layer_weights.shape) == 4 and "conv" in key:
                 pass
                 # TODO impelement conv im2col and svd here
+            else:
+                SVD[key] = {'vec': layer_weights}
         
         return SVD
     
@@ -289,7 +268,7 @@ class TaskVector:
         for key, svd_layer_weights in SVD.items():
             if 'vec' in svd_layer_weights:
                 self.vector[key] = svd_layer_weights['vec']
-            elif isinstance(svd_layer_weights, dict) and 'u' in svd_layer_weights:
+            elif 'u' in svd_layer_weights and 's' in svd_layer_weights and 'v' in svd_layer_weights:
                 u, s, v, k = svd_layer_weights['u'], svd_layer_weights['s'], svd_layer_weights['v'], svd_layer_weights['k']
                 s = torch.diag_embed(s)
                 reconstructed_layer_weights = u @ s @ v
@@ -302,60 +281,218 @@ class TaskVector:
                 pass
     
     @staticmethod
-    def decompose_SVD_basis(task_vectors: Dict[str, "TaskVector"]):
+    def TSV_merge(task_vectors: Dict[str, "TaskVector"], k:float = 1.0, device:torch.device = torch.device('cpu')):
         
-        result_vec = {}
+        
         num_vecs = len(task_vectors)
-        for idx, (tv_expr, tv) in enumerate(task_vectors.items()):
-            tv_SVD = tv.compute_SVD_for_each_layer()
-            
-            for key, svd_layer_weights in tv_SVD.items():
+        layer_keys = task_vectors[next(iter(task_vectors))].vector.keys()
+        
+        
+        tvs_svd = OrderedDict()
+        
+        for tv_expr, tv in task_vectors.items():
+            tvs_svd[tv_expr] = tv.compute_SVD_for_each_layer(k)
+        
+        result_vec = OrderedDict()
+        
+        for key in layer_keys:
+            u_all, s_all, v_all = None, None, None
+            for idx, (tv_expr, tv_svd) in enumerate(tvs_svd.items()):
+                
+                svd_layer_weights = tv_svd[key]
+                
                 if 'vec' in svd_layer_weights:
                     if key not in result_vec:
-                        result_vec[key] = svd_layer_weights.clone()
+                        result_vec[key] = svd_layer_weights['vec'].clone().to(device)
                     else:
                         # Moving average for the weights that are not matrices
-                        result_vec[key] += (svd_layer_weights - result_vec[key]) / (idx + 1)
-                        
-                elif isinstance(svd_layer_weights, dict) and 'u' in svd_layer_weights:
-                    u, s, v, k = svd_layer_weights['u'], svd_layer_weights['s'], svd_layer_weights['v'], svd_layer_weights['k']
+                        result_vec[key] += (svd_layer_weights['vec'].to(device) - result_vec[key]) / (idx + 1)
+                
+                elif 'u' in svd_layer_weights and 's' in svd_layer_weights and 'v' in svd_layer_weights:
+                    u, s, v, k = svd_layer_weights['u'].to(device), svd_layer_weights['s'].to(device), svd_layer_weights['v'].to(device), svd_layer_weights['k']
                     if idx == 0:
-                        sum_u = torch.zeros(
-                            u.shape[0], u.shape[1] * num_vecs, device=u.device
+                        u_all = torch.zeros(
+                            u.shape[0], u.shape[1] * num_vecs, device=device
                         )
-                        sum_s = torch.zeros(
-                            s.shape[0] * num_vecs, device=s.device
+                        s_all = torch.zeros(
+                            s.shape[0] * num_vecs, device=device
                         )
-                        sum_v = torch.zeros(
-                            v.shape[0] * num_vecs, v.shape[1], device=v.device
+                        v_all = torch.zeros(
+                            v.shape[0] * num_vecs, v.shape[1], device=device
                         )
                         
-                    sum_u[:, idx * s.shape[0] : (idx + 1) * s.shape[0]] = u[
+                    u_all[:, idx * s.shape[0] : (idx + 1) * s.shape[0]] = u[
                         :, :s.shape[0]
                     ]
-                    sum_s[idx * s.shape[0] : (idx + 1) * s.shape[0]] = s[
+                    s_all[idx * s.shape[0] : (idx + 1) * s.shape[0]] = s[
                         :s.shape[0]
                     ]
 
-                    sum_v[idx * s.shape[0] : (idx + 1) * s.shape[0], :] = v[
+                    v_all[idx * s.shape[0] : (idx + 1) * s.shape[0], :] = v[
                         :s.shape[0], :
                     ]
-                        
-                else:
-                    pass
                     
         
-        # sum_u = torch.zeros(
-        #     u.shape[0], u.shape[1] * config.num_tasks, device=device
-        # )
-        # sum_s = torch.zeros(
-        #     s.shape[0] * config.num_tasks, device=device
-        # )
-        # sum_v = torch.zeros(
-        #     v.shape[0] * config.num_tasks, v.shape[1], device=device
-        # )
+            if u_all is not None and s_all is not None and v_all is not None:
+                u_u, s_u, v_u = torch.linalg.svd(u_all, full_matrices=False)
+                u_v, s_v, v_v = torch.linalg.svd(v_all, full_matrices=False)
 
+                result_vec[key] = torch.linalg.multi_dot(
+                    (
+                        u_u,
+                        v_u,
+                        torch.diag(s_all),
+                        u_v,
+                        v_v,
+                    )
+                ) 
+        return TaskVector(vector=result_vec)
     
+    
+    @staticmethod
+    def TSV_merge_interference_reduction(task_vectors: Dict[str, "TaskVector"], k:float = 1.0, device:torch.device = torch.device('cpu')):
+        
+        
+        num_vecs = len(task_vectors)
+        layer_keys = task_vectors[next(iter(task_vectors))].vector.keys()
+        
+        
+        tvs_svd = OrderedDict()
+        
+        for tv_expr, tv in task_vectors.items():
+            tvs_svd[tv_expr] = tv.compute_SVD_for_each_layer(k)
+        
+        result_vec = OrderedDict()
+        
+        for key in layer_keys:
+            u_all, s_all, v_all = None, None, None
+            for idx, (tv_expr, tv_svd) in enumerate(tvs_svd.items()):
+                
+                svd_layer_weights = tv_svd[key]
+                
+                if 'vec' in svd_layer_weights:
+                    if key not in result_vec:
+                        result_vec[key] = svd_layer_weights['vec'].clone().to(device)
+                    else:
+                        # Moving average for the weights that are not matrices
+                        result_vec[key] += (svd_layer_weights['vec'].to(device) - result_vec[key]) / (idx + 1)
+                
+                elif 'u' in svd_layer_weights and 's' in svd_layer_weights and 'v' in svd_layer_weights:
+                    u, s, v, k = svd_layer_weights['u'].to(device), svd_layer_weights['s'].to(device), svd_layer_weights['v'].to(device), svd_layer_weights['k']
+                    if idx == 0:
+                        u_all = torch.zeros(
+                            u.shape[0], u.shape[1] * num_vecs, device=device
+                        )
+                        s_all = torch.zeros(
+                            s.shape[0] * num_vecs, device=device
+                        )
+                        v_all = torch.zeros(
+                            v.shape[0] * num_vecs, v.shape[1], device=device
+                        )
+                        
+                    u_all[:, idx * s.shape[0] : (idx + 1) * s.shape[0]] = u[
+                        :, :s.shape[0]
+                    ]
+                    s_all[idx * s.shape[0] : (idx + 1) * s.shape[0]] = s[
+                        :s.shape[0]
+                    ]
+
+                    v_all[idx * s.shape[0] : (idx + 1) * s.shape[0], :] = v[
+                        :s.shape[0], :
+                    ]
+                    
+        
+            if u_all is not None and s_all is not None and v_all is not None:
+                s_all, indices = torch.sort(s_all, stable=True)
+                
+                u_all = torch.index_select(u_all, 1, indices)
+                l_u, q_u = torch.linalg.eigh(u_all.mT @ u_all)
+                u_orth = (
+                    q_u
+                    @ torch.diag(1.0 / (torch.sqrt(torch.abs(l_u)) + 1e-12))
+                    @ q_u.mT
+                )
+
+                v_all = torch.index_select(v_all, 0, indices)
+
+                l_v, q_v = torch.linalg.eigh(v_all @ v_all.mT)
+                v_orth = (
+                    q_v
+                    @ torch.diag(1.0 / (torch.sqrt(torch.abs(l_v)) + 1e-12))
+                    @ q_v.mT
+                )
+
+                result_vec[key] = torch.linalg.multi_dot( 
+                    (
+                        u_all,
+                        u_orth,
+                        torch.diag(s_all),
+                        v_orth,
+                        v_all,
+                    )
+                )
+        return TaskVector(vector=result_vec)
+    
+    
+    
+    
+    # @staticmethod
+    # def TSV_merge_intf_red(task_vectors: Dict[str, "TaskVector"], k:float = 1.0, device:torch.device = torch.device('cpu')):
+        
+    #     # k is rank reduction factor
+        
+    #     num_vecs = len(task_vectors)
+    #     layer_keys = task_vectors[next(iter(task_vectors))].vector.keys()
+        
+    #     result_vec = OrderedDict()
+        
+    #     for key in layer_keys:
+    #         u_all, s_all, v_all = None, None, None
+    #         for idx, (tv_expr, tv) in enumerate(task_vectors.items()):
+                
+    #             layer_weights = tv.vector[key].to(device)
+                
+    #             if len(layer_weights.shape) == 2 and "text_projection" not in key:
+    #                 u, s, v = torch.linalg.svd(layer_weights, full_matrices=False)
+    #                 # Retain top K singular values and associated vectors.
+    #                 rr_idx = int(k*s.shape[0])
+                    
+    #                 if idx == 0:
+    #                     u_all = torch.zeros_like(u, device=device)
+    #                     s_all = torch.zeros_like(s, device=device)
+    #                     v_all = torch.zeros_like(v, device=device)
+
+    #                 u_all[:, idx * rr_idx : (idx + 1) * rr_idx] = u[:, :rr_idx]
+    #                 s_all[idx * rr_idx : (idx + 1) * rr_idx] = s[:rr_idx]
+    #                 v_all[idx * rr_idx : (idx + 1) * rr_idx, :] = v[:rr_idx, :]
+                    
+    #             elif len(layer_weights.shape) == 4 and "conv" in key:
+    #                 pass
+    #                 # TODO impelement conv im2col and svd here
+    #             else:
+    #                 if key not in result_vec:
+    #                     result_vec[key] = layer_weights.clone().to(device)
+    #                 else:
+    #                     # Moving average for the weights that are not matrices
+    #                     result_vec[key] += (layer_weights.to(device) - result_vec[key]) / (idx + 1)
+                
+        
+    #         if u_all is not None and s_all is not None and v_all is not None:
+    #             sum_s, indices = torch.sort(sum_s, stable=True)
+                
+    #             u_u, s_u, v_u = torch.linalg.svd(u_all, full_matrices=False)
+    #             u_v, s_v, v_v = torch.linalg.svd(v_all, full_matrices=False)
+
+    #             result_vec[key] = torch.linalg.multi_dot(
+    #                 (
+    #                     u_u,
+    #                     v_u,
+    #                     torch.diag(s_all),
+    #                     u_v,
+    #                     v_v,
+    #                 )
+    #             ) 
+    #     return TaskVector(vector=result_vec)
     
     @staticmethod
     def compute_all_tall_masks(task_vectors: Dict[str, "TaskVector"], lambda_t: float = 1.0) -> List[Dict[str, torch.Tensor]]:
@@ -470,3 +607,53 @@ class TaskVector:
         return residual_components, shared_components 
     
     
+    
+    
+    
+    
+    
+        
+    # def __init__(self, pretrained_state_dict=None, finetuned_state_dict=None, vector=None):
+    #     """
+    #     Initialize a TaskVector using either:
+    #     - pretrained_state_dict and finetuned_state_dict, OR
+    #     - an existing vector (dictionary of parameter deltas).
+    #     Skips ALL Batch Normalization layer parameters (weight, bias, running_mean, running_var).
+    #     """
+    #     if vector is not None:
+    #         self.vector = vector
+    #     else:
+    #         assert pretrained_state_dict is not None and finetuned_state_dict is not None, \
+    #             "Provide either vector or both state_dicts."
+    #         self.vector = {}
+    #         with torch.no_grad():
+    #             # Identify all module prefixes that belong to BatchNorm layers
+    #             # We can do this by looking for 'running_mean' or 'running_var'
+    #             bn_module_prefixes = set()
+    #             for key in pretrained_state_dict:
+    #                 if '.running_mean' in key or '.running_var' in key:
+    #                     # Extract the module prefix, e.g., 'net.1', 'net.4'
+    #                     # This assumes the pattern 'module_prefix.parameter_name'
+    #                     parts = key.rsplit('.', 1) # Split from the right, at most once
+    #                     if len(parts) > 1:
+    #                         bn_module_prefixes.add(parts[0])
+
+    #             for key in pretrained_state_dict:
+    #                 if key not in finetuned_state_dict:
+    #                     print(f"Warning: key {key} missing in finetuned_state_dict.")
+    #                     continue
+    #                 if pretrained_state_dict[key].dtype not in [torch.float32, torch.float16, torch.bfloat16]:
+    #                     continue  # Skip non-float entries
+
+    #                 # Check if the current key belongs to a identified BN module
+    #                 # by checking if its prefix is in our set of bn_module_prefixes
+    #                 is_bn_parameter = False
+    #                 for prefix in bn_module_prefixes:
+    #                     if key.startswith(prefix + '.'):
+    #                         is_bn_parameter = True
+    #                         break
+
+    #                 if is_bn_parameter:
+    #                     continue # Skip all parameters of the identified BN module
+
+    #                 self.vector[key] = finetuned_state_dict[key] - pretrained_state_dict[key]
