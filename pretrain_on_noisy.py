@@ -425,6 +425,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     task_sim = np.array(task_sim)
     
     
+    
     # for ft_name, ft_tv in finetune_tvs.items():
     #     best_coef, best_results, best_cm = search_optimal_coefficient(
     #         base_model=base_model,
@@ -459,48 +460,72 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     #     print(f"Best scaling coefficient for {ft_name} = {best_coef}")
     #     print(f"Metrics of the negated model is {best_results}")
     
-    # best_coef, best_results, best_cm = search_optimal_coefficient(
-    #     base_model=base_model,
-    #     task_vector=TSV,
-    #     search_range=(-1.5, 0.0),
-    #     dataset=dataset,
-    #     num_classes=num_classes,
-    #     device=gpu
-    # )
-    # print(f"Best scaling coefficient for TSV = {best_coef}")
-    # print(f"Metrics of the negated model is {best_results}")
+    best_coef, best_results, best_cm = search_optimal_coefficient(
+        base_model=base_model,
+        task_vector=ft_tvs_list[2],
+        search_range=(-1.5, 0.0),
+        dataset=dataset,
+        num_classes=num_classes,
+        device=gpu
+    )
+    
+    print(f"Best scaling coefficient for TV = {best_coef}")
+    print(f"Metrics of the negated model is {best_results}")
+    
+    strategy = cfg['strategy']
+    dataset.inject_noise(**strategy['noise']['pretraining'])
+    clean_set, noisy_set = dataset.get_clean_noisy_subsets(set='Train')
+    dataset.set_trainset(clean_set, shuffle=False)
+    metric, _, _ = evaluate_model(base_model, dataloader=dataset.get_train_dataloader(), device=gpu)
+    print("Performance on clean set before task vector:", metric)
+    dataset.set_trainset(noisy_set, shuffle=False)
+    metric, _, _ = evaluate_model(base_model, dataloader=dataset.get_train_dataloader(), device=gpu)
+    print("Performance on noisy set before task vector:", metric)
+    
+    base_model.to(cpu)
+    ft_tvs_list[2].apply_to(base_model, scaling_coef=best_coef)
+    
+    dataset.set_trainset(clean_set, shuffle=False)
+    metric, _, _ = evaluate_model(base_model, dataloader=dataset.get_train_dataloader(), device=gpu)
+    print("Performance on clean set after task vector:", metric)
+    dataset.set_trainset(noisy_set, shuffle=False)
+    metric, _, _ = evaluate_model(base_model, dataloader=dataset.get_train_dataloader(), device=gpu)
+    print("Performance on noisy set after task vector:", metric)
+
+    
+
             
     
     
-    otrh_tvs, shrd_tvs = TaskVector.decompose_task_vectors_SVD(ft_tvs_list)
+    # otrh_tvs, shrd_tvs = TaskVector.decompose_task_vectors_SVD(ft_tvs_list)
     
-    orth_task_sim = []
-    for i in range(len(ft_tvs_list)):
-        anchor_tv = otrh_tvs[i]
-        orth_task_sim.append([])
-        for j in range(len(ft_tvs_list)):
-            other_tv = otrh_tvs[j]
-            cos_sim = anchor_tv.cosine_similarity_flatten(other_tv)
-            orth_task_sim[i].append(cos_sim)
-    orth_task_sim = np.array(orth_task_sim)
+    # orth_task_sim = []
+    # for i in range(len(ft_tvs_list)):
+    #     anchor_tv = otrh_tvs[i]
+    #     orth_task_sim.append([])
+    #     for j in range(len(ft_tvs_list)):
+    #         other_tv = otrh_tvs[j]
+    #         cos_sim = anchor_tv.cosine_similarity_flatten(other_tv)
+    #         orth_task_sim[i].append(cos_sim)
+    # orth_task_sim = np.array(orth_task_sim)
     
-    shrd_tvs_sim = []
-    for i in range(len(ft_tvs_list)):
-        anchor_tv = shrd_tvs[i]
-        shrd_tvs_sim.append([])
-        for j in range(len(ft_tvs_list)):
-            other_tv = shrd_tvs[j]
-            cos_sim = anchor_tv.cosine_similarity_flatten(other_tv)
-            shrd_tvs_sim[i].append(cos_sim)
-    shrd_tvs_sim = np.array(shrd_tvs_sim)
+    # shrd_tvs_sim = []
+    # for i in range(len(ft_tvs_list)):
+    #     anchor_tv = shrd_tvs[i]
+    #     shrd_tvs_sim.append([])
+    #     for j in range(len(ft_tvs_list)):
+    #         other_tv = shrd_tvs[j]
+    #         cos_sim = anchor_tv.cosine_similarity_flatten(other_tv)
+    #         shrd_tvs_sim[i].append(cos_sim)
+    # shrd_tvs_sim = np.array(shrd_tvs_sim)
     
     
     class_names = ['ft_gold']
     # class_names = []
     class_names.extend(list(finetune_tvs.keys()))
-    misc_utils.plot_confusion_matrix(cm=task_sim, class_names=class_names, filepath=None, show=True)
-    misc_utils.plot_confusion_matrix(cm=orth_task_sim, class_names=class_names, filepath=None, show=True)
-    misc_utils.plot_confusion_matrix(cm=shrd_tvs_sim, class_names=class_names, filepath=None, show=True)
+    # misc_utils.plot_confusion_matrix(cm=task_sim, class_names=class_names, filepath=None, show=True)
+    # misc_utils.plot_confusion_matrix(cm=orth_task_sim, class_names=class_names, filepath=None, show=True)
+    # misc_utils.plot_confusion_matrix(cm=shrd_tvs_sim, class_names=class_names, filepath=None, show=True)
     
     
 
