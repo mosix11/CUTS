@@ -462,7 +462,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     best_coef, best_results, best_cm = search_optimal_coefficient(
         base_model=base_model,
-        task_vector=ft_tvs_list[2],
+        task_vector=ft_tvs_list[4],
         search_range=(-1.5, 0.0),
         dataset=dataset,
         num_classes=num_classes,
@@ -483,7 +483,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     print("Performance on noisy set before task vector:", metric)
     
     base_model.to(cpu)
-    ft_tvs_list[2].apply_to(base_model, scaling_coef=best_coef)
+    ft_tvs_list[4].apply_to(base_model, scaling_coef=best_coef)
     
     dataset.set_trainset(clean_set, shuffle=False)
     metric, _, _ = evaluate_model(base_model, dataloader=dataset.get_train_dataloader(), device=gpu)
@@ -523,7 +523,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     class_names = ['ft_gold']
     # class_names = []
     class_names.extend(list(finetune_tvs.keys()))
-    # misc_utils.plot_confusion_matrix(cm=task_sim, class_names=class_names, filepath=None, show=True)
+    misc_utils.plot_confusion_matrix(cm=task_sim, class_names=class_names, filepath=None, show=True)
     # misc_utils.plot_confusion_matrix(cm=orth_task_sim, class_names=class_names, filepath=None, show=True)
     # misc_utils.plot_confusion_matrix(cm=shrd_tvs_sim, class_names=class_names, filepath=None, show=True)
     
