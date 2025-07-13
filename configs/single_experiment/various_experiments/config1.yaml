@@ -16,7 +16,7 @@ dataset:
   name: "cifar10"
   num_classes: &num_classes 10
   img_size: [32, 32]
-  batch_size: 1024
+  batch_size: 512
   subsample_size: [-1, -1]
   class_subset: []
   remap_labels: False
@@ -44,7 +44,7 @@ trainer:
   max_epochs: &max_epochs 400
   optimizer_cfg: 
     type: "adamw"
-    lr: 5.0e-4
+    lr: 1.0e-2
     betas: [0.9, 0.999]
   lr_schedule_cfg:
     type: 'cosann'
