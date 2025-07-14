@@ -146,11 +146,12 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     cfg['trainer']['pretraining']['comet_api_key'] = os.getenv("COMET_API_KEY")
     cfg['trainer']['finetuning']['comet_api_key'] = os.getenv("COMET_API_KEY")
 
-    if cfg['dataset']['name'] == 'cifar10':   
-        augmentations = [
-            transformsv2.RandomCrop(32, padding=4),
-            transformsv2.RandomHorizontalFlip(),
-        ]
+    if cfg['dataset']['name'] == 'cifar10':
+        augmentations = None
+        # augmentations = [
+        #     transformsv2.RandomCrop(32, padding=4),
+        #     transformsv2.RandomHorizontalFlip(),
+        # ]
     elif cfg['dataset']['name'] == 'cifar100':
         augmentations = [
             transformsv2.RandomCrop(32, padding=4),
