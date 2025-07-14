@@ -80,14 +80,14 @@ def evaluate_model(model, dataloader, device):
 def train_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     cfg['trainer']['comet_api_key'] = os.getenv("COMET_API_KEY")
 
-    policy = None
-    if cfg['dataset']['name'] == 'cifar10':
-        policy = torchvision.transforms.AutoAugmentPolicy.CIFAR10
+    # policy = None
+    # if cfg['dataset']['name'] == 'cifar10':
+    #     policy = torchvision.transforms.AutoAugmentPolicy.CIFAR10
     augmentations = [
         transformsv2.RandomCrop(32, padding=4),
         transformsv2.RandomHorizontalFlip(),
     ]
-    if policy: augmentations.append(transformsv2.AutoAugment(policy=policy))
+    # if policy: augmentations.append(transformsv2.AutoAugment(policy=policy))
 
         
 
