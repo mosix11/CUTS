@@ -1,4 +1,4 @@
-# config 8 with 40 percent noise
+# Config 8 with low loss percentage being 20
 training_seed: &training_seed 11
 dataset_seed: &dataset_seed 11
 

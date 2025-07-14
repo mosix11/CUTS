@@ -461,6 +461,11 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     print(finetune_tvs.keys())
     # print(ft_gold_tv.layer_wise_cosine_similarity(ft_tvs_list[1]))
     
+    
+    class_names = ['ft_gold']
+    # class_names = []
+    class_names.extend(list(finetune_tvs.keys()))
+    
     task_sim = []
     for i in range(len(ft_tvs_list)):
         anchor_tv = ft_tvs_list[i]
@@ -471,7 +476,31 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             task_sim[i].append(cos_sim)
     task_sim = np.array(task_sim)
     
+    misc_utils.plot_confusion_matrix(cm=task_sim, class_names=class_names, filepath=None, show=True)
     
+    
+    
+    # for i in range(len(ft_tvs_list)):
+    #     if i == 0:
+    #         print('passing ft gold from low rank approximation')
+    #         continue
+    #     else:
+    #         ftsv = ft_tvs_list[i].compute_SVD_for_each_layer(k=0.1)
+        
+    #         ft_tvs_list[i].apply_SVD_to_TV(ftsv)
+    
+    
+    # task_sim = []
+    # for i in range(len(ft_tvs_list)):
+    #     anchor_tv = ft_tvs_list[i]
+    #     task_sim.append([])
+    #     for j in range(len(ft_tvs_list)):
+    #         other_tv = ft_tvs_list[j]
+    #         cos_sim = anchor_tv.cosine_similarity_flatten(other_tv)
+    #         task_sim[i].append(cos_sim)
+    # task_sim = np.array(task_sim)
+    
+    # misc_utils.plot_confusion_matrix(cm=task_sim, class_names=class_names, filepath=None, show=True)
     
     # for ft_name, ft_tv in finetune_tvs.items():
     #     best_coef, best_results, best_cm = search_optimal_coefficient(
@@ -487,10 +516,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             
     
     
-    # for tv_expr, ftv in finetune_tvs.items():
-    #     ftsv = ftv.compute_SVD_for_each_layer()
-        
-        # ftv.apply_SVD_to_TV(ftsv)
+
         
     # TSV = TaskVector.TSV_extract_common_direction(finetune_tvs, k=0.3)
     # TSV.apply_to(base_model, scaling_coef=1.0)
@@ -509,8 +535,8 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     best_coef, best_results, best_cm = search_optimal_coefficient(
         base_model=base_model,
-        task_vector=ft_tvs_list[4],
-        search_range=(-1.5, 0.0),
+        task_vector=ft_tvs_list[1],
+        search_range=(-2.0, 0.0),
         dataset=dataset,
         num_classes=num_classes,
         device=gpu
@@ -530,7 +556,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     print("Performance on noisy set before task vector:", metric)
     
     base_model.to(cpu)
-    ft_tvs_list[4].apply_to(base_model, scaling_coef=best_coef)
+    ft_tvs_list[1].apply_to(base_model, scaling_coef=best_coef)
     
     dataset.set_trainset(clean_set, shuffle=False)
     metric, _, _ = evaluate_model(base_model, dataloader=dataset.get_train_dataloader(), device=gpu)
@@ -567,10 +593,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # shrd_tvs_sim = np.array(shrd_tvs_sim)
     
     
-    class_names = ['ft_gold']
-    # class_names = []
-    class_names.extend(list(finetune_tvs.keys()))
-    misc_utils.plot_confusion_matrix(cm=task_sim, class_names=class_names, filepath=None, show=True)
+    
     # misc_utils.plot_confusion_matrix(cm=orth_task_sim, class_names=class_names, filepath=None, show=True)
     # misc_utils.plot_confusion_matrix(cm=shrd_tvs_sim, class_names=class_names, filepath=None, show=True)
     

@@ -160,6 +160,10 @@ class TaskVector:
                 return 0.0
 
             for key in common_keys:
+                # TODO maybe ommit this exclusion of BN Layers.
+                # Exclude the Batch Normalization Layers
+                if 'bn' in key:
+                    continue
                 tensor_self = self.vector[key]
                 tensor_other = other_task_vector.vector[key]
 
