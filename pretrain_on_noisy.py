@@ -435,6 +435,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     gold_dir = base_expr_dir / 'gold'
     pretrain_dir = base_expr_dir / 'pretrain'
     ft_gold_dir = base_expr_dir / 'finetune_gold'
+    ft_gt_noise_dir = base_expr_dir / 'finetune_gt_noise'
     finetune_dirs = OrderedDict()
     for idx, noise_tv in enumerate(cfg['strategy']['noise']['finetuning']):
         ft_expr_dir = base_expr_dir / f"finetune_{noise_tv['noise_rate']}_{noise_tv['seed']}"
@@ -443,6 +444,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     gold_weights = torch.load(gold_dir / 'weights/model_weights.pth', map_location=cpu)
     pretrain_weights = torch.load(pretrain_dir / 'weights/model_weights.pth', map_location=cpu)
     ft_gold_wieghts = torch.load(ft_gold_dir / 'weights/model_weights.pth', map_location=cpu)
+    ft_gt_noise_weights = torch.load(ft_gt_noise_dir / 'weights/model_weights.pth', map_location=cpu)
     finetune_weights = OrderedDict()
     for ft_expr, ft_dir in finetune_dirs.items():
         finetune_weights[ft_expr] = torch.load(ft_dir / 'weights/model_weights.pth', map_location=cpu)
@@ -451,18 +453,19 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     
     ft_gold_tv = TaskVector(pretrain_weights, ft_gold_wieghts)
+    ft_gt_noise_tv = TaskVector(pretrain_weights, ft_gt_noise_weights)
     finetune_tvs = OrderedDict()
     for ft_expr, ft_weight in finetune_weights.items():
         finetune_tvs[ft_expr] = TaskVector(pretrain_weights, ft_weight)
         
-    ft_tvs_list = [ft_gold_tv]
+    ft_tvs_list = [ft_gold_tv, ft_gt_noise_tv]
     # ft_tvs_list = []
     ft_tvs_list.extend(list(finetune_tvs.values()))
     print(finetune_tvs.keys())
     # print(ft_gold_tv.layer_wise_cosine_similarity(ft_tvs_list[1]))
     
     
-    class_names = ['ft_gold']
+    class_names = ['ft_gold', 'ft_gt_noise']
     # class_names = []
     class_names.extend(list(finetune_tvs.keys()))
     
