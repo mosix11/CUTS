@@ -5,7 +5,7 @@ dataset_seed: &dataset_seed 11
 
 strategy:
   finetuning_set: &finetuning_set 'LowLoss'
-  percentage: 0.4
+  percentage: 0.2
   noise:
     pretraining:
       set: 'Train'
