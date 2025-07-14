@@ -1,5 +1,4 @@
-# Config 4 with 20% noise
-# Finetuning from config 7
+# config 8 with 40 percent noise
 training_seed: &training_seed 11
 dataset_seed: &dataset_seed 11
 

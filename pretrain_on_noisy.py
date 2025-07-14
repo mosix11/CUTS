@@ -290,6 +290,53 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             filepath=str(plots_dir / Path("confmat.png")),
             show=False,
         )
+        
+        
+    if not outputs_dir.joinpath(f"{cfg_name}/finetune_gt_noise/weights/model_weights.pth").exists():
+        cfg_cpy = copy.deepcopy(cfg)
+        dataset, num_classes = dataset_factory.create_dataset(cfg_cpy, augmentations)
+        
+        model = model_factory.create_model(cfg_cpy['model'], num_classes)
+        
+        base_model_ckp_path = outputs_dir/ Path(f"{cfg_name}/pretrain") / Path('weights/model_weights.pth')
+        checkpoint = torch.load(base_model_ckp_path)
+        model.load_state_dict(checkpoint)
+        
+        strategy = cfg_cpy['strategy']
+        dataset.inject_noise(**strategy['noise']['pretraining'])
+        clean_set, noisy_set = dataset.get_clean_noisy_subsets(set='Train')
+        dataset.set_trainset(noisy_set, shuffle=True)
+            
+        experiment_name = f"{cfg_name}/finetune_gt_noise"
+        experiment_dir = outputs_dir / Path(experiment_name)
+
+        weights_dir = experiment_dir / Path("weights")
+        weights_dir.mkdir(exist_ok=True, parents=True)
+
+        plots_dir = experiment_dir / Path("plots")
+        plots_dir.mkdir(exist_ok=True, parents=True)
+        
+        
+
+        trainer = StandardTrainer(
+            outputs_dir=outputs_dir,
+            **cfg_cpy['trainer']['finetuning'],
+            exp_name=experiment_name,
+            exp_tags=None,
+        )
+        
+        results = trainer.fit(model, dataset, resume=False)
+
+        torch.save(model.state_dict(), weights_dir / Path("model_weights.pth"))
+
+        class_names = [f"Class {i}" for i in range(num_classes)]
+        confmat = trainer.confmat("Test")
+        misc_utils.plot_confusion_matrix(
+            cm=confmat,
+            class_names=class_names,
+            filepath=str(plots_dir / Path("confmat.png")),
+            show=False,
+        )
 
     
     for idx, noise_tv in enumerate(cfg['strategy']['noise']['finetuning']):
