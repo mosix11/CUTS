@@ -21,11 +21,11 @@ def conv_bn(channels_in, channels_out, kernel_size=3, stride=1, padding=1, group
     )
 
 class PostActResNet9_ETD(nn.Module):
-    def __init__(self, init_channels=64, num_classes=10, img_size=(32, 32),
+    def __init__(self, init_channels=64, num_classes=10, img_size=(32, 32), grayscale:bool=False,
                  weight_init=None, loss_fn=nn.CrossEntropyLoss(), metrics: dict = None, dropout: dict = None):
         super(PostActResNet9_ETD, self).__init__()
         self.k = init_channels
-        dims = [3, 64, 128, 128, 128, 256, 256, 256, 128]
+        dims = [1 if grayscale else 3, 64, 128, 128, 128, 256, 256, 256, 128]
         dims = [int(d * (init_channels / 64)) for d in dims]
 
         self.conv1 = conv_bn(dims[0], dims[1], kernel_size=3, stride=1, padding=1)

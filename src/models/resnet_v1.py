@@ -101,6 +101,7 @@ class PostActResNet(nn.Module):
         init_channels=64,
         num_classes=10,
         input_image_size=(32, 32),
+        grayscale:bool=False,
         weight_init=None,
         loss_fn=nn.CrossEntropyLoss(),
         metrics:dict=None,
@@ -140,7 +141,7 @@ class PostActResNet(nn.Module):
                              "Supported sizes are (32,32), (64,64), (128,128), (224,224), (256,256).")
 
         # Initial convolutional layer
-        self.conv1 = nn.Conv2d(3, init_channels, kernel_size=conv1_kernel_size, stride=conv1_stride, padding=conv1_padding, bias=False)
+        self.conv1 = nn.Conv2d(1 if grayscale else 3, init_channels, kernel_size=conv1_kernel_size, stride=conv1_stride, padding=conv1_padding, bias=False)
         self.bn1 = nn.BatchNorm2d(init_channels)
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=maxpool_kernel_size, stride=maxpool_stride, padding=maxpool_padding)
@@ -268,7 +269,7 @@ class PostActResNet(nn.Module):
 
 
 def PostActResNet9(
-    init_channels=64, num_classes=10, img_size=(32, 32), weight_init=None, loss_fn=nn.CrossEntropyLoss(), metrics=None
+    init_channels=64, num_classes=10, img_size=(32, 32), grayscale:bool=False, weight_init=None, loss_fn=nn.CrossEntropyLoss(), metrics=None
 ) -> PostActResNet:
     """ResNet-18 model using BasicBlock (Post-Activation)."""
     return PostActResNet(
@@ -277,13 +278,14 @@ def PostActResNet9(
         init_channels=init_channels,
         num_classes=num_classes,
         input_image_size=img_size,
+        grayscale=grayscale,
         weight_init=weight_init,
         loss_fn=loss_fn,
         metrics=metrics
     )
 
 def PostActResNet18(
-    init_channels=64, num_classes=10, img_size=(32, 32), weight_init=None, loss_fn=nn.CrossEntropyLoss(), metrics=None
+    init_channels=64, num_classes=10, img_size=(32, 32), grayscale:bool=False, weight_init=None, loss_fn=nn.CrossEntropyLoss(), metrics=None
 ) -> PostActResNet:
     """ResNet-18 model using BasicBlock (Post-Activation)."""
     return PostActResNet(
@@ -292,13 +294,14 @@ def PostActResNet18(
         init_channels=init_channels,
         num_classes=num_classes,
         input_image_size=img_size,
+        grayscale=grayscale,
         weight_init=weight_init,
         loss_fn=loss_fn,
         metrics=metrics
     )
 
 def PostActResNet34(
-    init_channels=64, num_classes=10, img_size=(32, 32), weight_init=None, loss_fn=nn.CrossEntropyLoss(), metrics=None
+    init_channels=64, num_classes=10, img_size=(32, 32), grayscale:bool=False, weight_init=None, loss_fn=nn.CrossEntropyLoss(), metrics=None
 ) -> PostActResNet:
     """ResNet-34 model using BasicBlock (Post-Activation)."""
     return PostActResNet(
@@ -307,13 +310,14 @@ def PostActResNet34(
         init_channels=init_channels,
         num_classes=num_classes,
         input_image_size=img_size,
+        grayscale=grayscale,
         weight_init=weight_init,
         loss_fn=loss_fn,
         metrics=metrics
     )
 
 def PostActResNet50(
-    init_channels=64, num_classes=1000, img_size=(224, 224), weight_init=None, loss_fn=nn.CrossEntropyLoss(), metrics=None
+    init_channels=64, num_classes=1000, img_size=(224, 224), grayscale:bool=False, weight_init=None, loss_fn=nn.CrossEntropyLoss(), metrics=None
 ) -> PostActResNet:
     """ResNet-50 model using Bottleneck block (Post-Activation)."""
     return PostActResNet(
@@ -322,13 +326,14 @@ def PostActResNet50(
         init_channels=init_channels,
         num_classes=num_classes,
         input_image_size=img_size,
+        grayscale=grayscale,
         weight_init=weight_init,
         loss_fn=loss_fn,
         metrics=metrics
     )
 
 def PostActResNet101(
-    init_channels=64, num_classes=1000, img_size=(224, 224), weight_init=None, loss_fn=nn.CrossEntropyLoss(), metrics=None
+    init_channels=64, num_classes=1000, img_size=(224, 224), grayscale:bool=False, weight_init=None, loss_fn=nn.CrossEntropyLoss(), metrics=None
 ) -> PostActResNet:
     """ResNet-101 model using Bottleneck block (Post-Activation)."""
     return PostActResNet(
@@ -337,13 +342,14 @@ def PostActResNet101(
         init_channels=init_channels,
         num_classes=num_classes,
         input_image_size=img_size,
+        grayscale=grayscale,
         weight_init=weight_init,
         loss_fn=loss_fn,
         metrics=metrics
     )
 
 def PostActResNet152(
-    init_channels=64, num_classes=1000, img_size=(224, 224), weight_init=None, loss_fn=nn.CrossEntropyLoss(), metrics=None
+    init_channels=64, num_classes=1000, img_size=(224, 224), grayscale:bool=False, weight_init=None, loss_fn=nn.CrossEntropyLoss(), metrics=None
 ) -> PostActResNet:
     """ResNet-152 model using Bottleneck block (Post-Activation)."""
     return PostActResNet(
@@ -352,6 +358,7 @@ def PostActResNet152(
         init_channels=init_channels,
         num_classes=num_classes,
         input_image_size=img_size,
+        grayscale=grayscale,
         weight_init=weight_init,
         loss_fn=loss_fn,
         metrics=metrics

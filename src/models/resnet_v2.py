@@ -115,6 +115,7 @@ class PreActResNet(nn.Module):
         init_channels=64,
         num_classes=10,
         input_image_size=(32, 32),
+        grayscale:bool=False,
         weight_init=None,
         loss_fn=nn.CrossEntropyLoss(),
         metrics:dict=None,
@@ -153,7 +154,7 @@ class PreActResNet(nn.Module):
                              "Supported sizes are (32,32), (64,64), (128,128), (224,224), (256,256).")
 
         # Initial convolutional layer
-        self.conv1 = nn.Conv2d(3, init_channels, kernel_size=conv1_kernel_size, stride=conv1_stride, padding=conv1_padding, bias=False)
+        self.conv1 = nn.Conv2d(1 if grayscale else 3, init_channels, kernel_size=conv1_kernel_size, stride=conv1_stride, padding=conv1_padding, bias=False)
         self.bn1 = nn.BatchNorm2d(init_channels) # BN after conv1, before first residual block's pre-activation
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=maxpool_kernel_size, stride=maxpool_stride, padding=maxpool_padding)
@@ -290,7 +291,7 @@ class PreActResNet(nn.Module):
 
 
 def PreActResNet9(
-    init_channels=64, num_classes=10, img_size=(32, 32), weight_init=None, loss_fn=nn.CrossEntropyLoss(), metrics=None
+    init_channels=64, num_classes=10, img_size=(32, 32), grayscale:bool=False, weight_init=None, loss_fn=nn.CrossEntropyLoss(), metrics=None
 ) -> PreActResNet:
     return PreActResNet(
         block=PreActBasicBlock,
@@ -298,6 +299,7 @@ def PreActResNet9(
         init_channels=init_channels,
         num_classes=num_classes,
         input_image_size=img_size,
+        grayscale=grayscale,
         weight_init=weight_init,
         loss_fn=loss_fn,
         metrics=metrics
@@ -305,7 +307,7 @@ def PreActResNet9(
 
 
 def PreActResNet18(
-    init_channels=64, num_classes=10, img_size=(32, 32), weight_init=None, loss_fn=nn.CrossEntropyLoss(), metrics=None
+    init_channels=64, num_classes=10, img_size=(32, 32), grayscale:bool=False, weight_init=None, loss_fn=nn.CrossEntropyLoss(), metrics=None
 ) -> PreActResNet:
     return PreActResNet(
         block=PreActBasicBlock,
@@ -313,13 +315,14 @@ def PreActResNet18(
         init_channels=init_channels,
         num_classes=num_classes,
         input_image_size=img_size,
+        grayscale=grayscale,
         weight_init=weight_init,
         loss_fn=loss_fn,
         metrics=metrics
     )
     
 def PreActResNet34(
-    init_channels=64, num_classes=10, img_size=(32, 32), weight_init=None, loss_fn=nn.CrossEntropyLoss(), metrics=None
+    init_channels=64, num_classes=10, img_size=(32, 32), grayscale:bool=False, weight_init=None, loss_fn=nn.CrossEntropyLoss(), metrics=None
 ) -> PreActResNet:
     return PreActResNet(
         block=PreActBasicBlock,
@@ -327,13 +330,14 @@ def PreActResNet34(
         init_channels=init_channels,
         num_classes=num_classes,
         input_image_size=img_size,
+        grayscale=grayscale,
         weight_init=weight_init,
         loss_fn=loss_fn,
         metrics=metrics
     )
     
 def PreActResNet50(
-    init_channels=64, num_classes=10, img_size=(32, 32), weight_init=None, loss_fn=nn.CrossEntropyLoss(), metrics=None
+    init_channels=64, num_classes=10, img_size=(32, 32), grayscale:bool=False, weight_init=None, loss_fn=nn.CrossEntropyLoss(), metrics=None
 ) -> PreActResNet:
     return PreActResNet(
         block=PreActBottleneck,
@@ -341,13 +345,14 @@ def PreActResNet50(
         init_channels=init_channels,
         num_classes=num_classes,
         input_image_size=img_size,
+        grayscale=grayscale,
         weight_init=weight_init,
         loss_fn=loss_fn,
         metrics=metrics
     )
     
 def PreActResNet101(
-    init_channels=64, num_classes=10, img_size=(32, 32), weight_init=None, loss_fn=nn.CrossEntropyLoss(), metrics=None
+    init_channels=64, num_classes=10, img_size=(32, 32), grayscale:bool=False, weight_init=None, loss_fn=nn.CrossEntropyLoss(), metrics=None
 ) -> PreActResNet:
     return PreActResNet(
         block=PreActBottleneck,
@@ -355,13 +360,14 @@ def PreActResNet101(
         init_channels=init_channels,
         num_classes=num_classes,
         input_image_size=img_size,
+        grayscale=grayscale,
         weight_init=weight_init,
         loss_fn=loss_fn,
         metrics=metrics
     )
     
 def PreActResNet152(
-    init_channels=64, num_classes=10, img_size=(32, 32), weight_init=None, loss_fn=nn.CrossEntropyLoss(), metrics=None
+    init_channels=64, num_classes=10, img_size=(32, 32), grayscale:bool=False, weight_init=None, loss_fn=nn.CrossEntropyLoss(), metrics=None
 ) -> PreActResNet:
     return PreActResNet(
         block=PreActBottleneck,
@@ -369,6 +375,7 @@ def PreActResNet152(
         init_channels=init_channels,
         num_classes=num_classes,
         input_image_size=img_size,
+        grayscale=grayscale,
         weight_init=weight_init,
         loss_fn=loss_fn,
         metrics=metrics
