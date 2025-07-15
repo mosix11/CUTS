@@ -5,7 +5,7 @@ dataset_seed: &dataset_seed 11
 
 strategy:
   finetuning_set: &finetuning_set 'LowLoss'
-  percentage: 0.4
+  percentage: 0.2
   noise:
     pretraining:
       set: 'Train'
@@ -14,17 +14,9 @@ strategy:
       seed: 8
     finetuning:
       - set: 'Train'
-        noise_rate: 0.6
-        noise_type: 'symmetric'
-        seed: 12
-      - set: 'Train'
         noise_rate: 1.0
         noise_type: 'symmetric'
         seed: 12
-      - set: 'Train'
-        noise_rate: 0.6
-        noise_type: 'symmetric'
-        seed: 10
       - set: 'Train'
         noise_rate: 1.0
         noise_type: 'symmetric'

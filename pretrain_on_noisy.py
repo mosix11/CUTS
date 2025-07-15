@@ -147,22 +147,22 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     cfg['trainer']['finetuning']['comet_api_key'] = os.getenv("COMET_API_KEY")
 
     if cfg['dataset']['name'] == 'cifar10':
-        augmentations = None
-        # augmentations = [
-        #     transformsv2.RandomCrop(32, padding=4),
-        #     transformsv2.RandomHorizontalFlip(),
-        # ]
+        # augmentations = None
+        augmentations = [
+            transformsv2.RandomCrop(32, padding=4),
+            transformsv2.RandomHorizontalFlip(),
+        ]
     elif cfg['dataset']['name'] == 'cifar100':
         augmentations = [
             transformsv2.RandomCrop(32, padding=4),
             transformsv2.RandomHorizontalFlip(),
         ]
     elif cfg['dataset']['name'] == 'mnist':
-        augmentations = None
-        # augmentations = [
-        #     transformsv2.RandomCrop(28, padding=4),
-        #     transformsv2.RandomHorizontalFlip(),
-        # ]
+        # augmentations = None
+        augmentations = [
+            transformsv2.RandomCrop(32, padding=4),
+            transformsv2.RandomHorizontalFlip(),
+        ]
 
     
     if not outputs_dir.joinpath(f"{cfg_name}/gold/weights/model_weights.pth").exists():
@@ -551,7 +551,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     best_coef, best_results, best_cm = search_optimal_coefficient(
         base_model=base_model,
-        task_vector=ft_tvs_list[2],
+        task_vector=ft_tvs_list[5],
         search_range=(-2.0, 0.0),
         dataset=dataset,
         num_classes=num_classes,
@@ -572,7 +572,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     print("Performance on noisy set before task vector:", metric)
     
     base_model.to(cpu)
-    ft_tvs_list[2].apply_to(base_model, scaling_coef=best_coef)
+    ft_tvs_list[5].apply_to(base_model, scaling_coef=best_coef)
     
     dataset.set_trainset(clean_set, shuffle=False)
     metric, _, _ = evaluate_model(base_model, dataloader=dataset.get_train_dataloader(), device=gpu)
