@@ -81,6 +81,9 @@ def train_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     cfg['trainer']['comet_api_key'] = os.getenv("COMET_API_KEY")
 
     model_init = model_factory.create_model(cfg['model'], 10)
+    init_weights = model_init.state_dict()
+    if not outputs_dir.joinpath(f"{cfg_name}/init_model_weights.pth").exists():
+        torch.save(init_weights, outputs_dir.joinpath(f"{cfg_name}/init_model_weights.pth"))
 
     if not outputs_dir.joinpath(f"{cfg_name}/mix/weights/model_weights.pth").exists():
         cfg_cpy = copy.deepcopy(cfg)
@@ -216,7 +219,25 @@ def train_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         ) 
         
 def compare_task_vectors(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
-    pass
+    training_seed = cfg['training_seed']
+    if training_seed:
+        random.seed(training_seed)
+        np.random.seed(training_seed)
+        torch.manual_seed(training_seed)
+        torch.cuda.manual_seed_all(training_seed)
+    torch.backends.cudnn.enabled = True
+    torch.backends.cudnn.benchmark = False
+    os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
+    torch.use_deterministic_algorithms(True) 
+    torch.set_float32_matmul_precision("high")
+    
+    cpu = nn_utils.get_cpu_device()
+    gpu = nn_utils.get_gpu_device()
+    
+    dataset, num_classes = dataset_factory.create_dataset(cfg)
+    
+    base_model = model_factory.create_model(cfg['model'], num_classes)
+    
 
 if __name__ == "__main__":
 
