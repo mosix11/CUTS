@@ -551,7 +551,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     best_coef, best_results, best_cm = search_optimal_coefficient(
         base_model=base_model,
-        task_vector=ft_tvs_list[5],
+        task_vector=ft_tvs_list[1],
         search_range=(-2.0, 0.0),
         dataset=dataset,
         num_classes=num_classes,
@@ -572,7 +572,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     print("Performance on noisy set before task vector:", metric)
     
     base_model.to(cpu)
-    ft_tvs_list[5].apply_to(base_model, scaling_coef=best_coef)
+    ft_tvs_list[1].apply_to(base_model, scaling_coef=best_coef)
     
     dataset.set_trainset(clean_set, shuffle=False)
     metric, _, _ = evaluate_model(base_model, dataloader=dataset.get_train_dataloader(), device=gpu)
