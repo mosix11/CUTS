@@ -83,6 +83,7 @@ def train_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     model_init = model_factory.create_model(cfg['model'], 10)
     init_weights = model_init.state_dict()
     if not outputs_dir.joinpath(f"{cfg_name}/init_model_weights.pth").exists():
+        outputs_dir.joinpath(f"{cfg_name}").mkdir(parents=True, exist_ok=True)
         torch.save(init_weights, outputs_dir.joinpath(f"{cfg_name}/init_model_weights.pth"))
 
     if not outputs_dir.joinpath(f"{cfg_name}/mix/weights/model_weights.pth").exists():
