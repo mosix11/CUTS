@@ -39,7 +39,7 @@ model:
 
 
 trainer:
-  max_epochs: 10
+  max_epochs: 300
   optimizer_cfg: 
     type: "adamw"
     lr: 5.0e-4
