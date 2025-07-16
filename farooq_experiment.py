@@ -28,7 +28,6 @@ from collections import OrderedDict
 
 
 
-
 def prepare_batch(batch, device):
     batch = [tens.to(device) for tens in batch]
     return batch
@@ -75,6 +74,71 @@ def evaluate_model(model, dataloader, device):
     
     return metric_results, torch.tensor(all_preds), torch.tensor(all_targets) 
 
+
+def search_optimal_coefficient(base_model, task_vector, search_range, dataset, num_classes, device):
+    """
+    Performs a search to find the optimal task vector scaling coefficient.
+
+    Args:
+        base_model (torch.nn.Module): The pre-trained model. A deepcopy is made for each evaluation.
+        task_vector (TaskVector): The task vector object.
+        dataset: The dataset object to get the test dataloader from.
+        search_range (list or tuple): A list/tuple [min_val, max_val] for the search.
+        device (torch.device): The device to run evaluation on.
+        num_classes (int): The number of classes for the confusion matrix.
+
+    Returns:
+        tuple: (best_coefficient, best_performance_metrics, confusion_matrix_tensor)
+    """
+    test_dataloader = dataset.get_test_dataloader()
+    
+    best_coef = 0.0
+    best_acc = -1.0
+    best_results = {}
+    
+    print("--- Starting Coarse Search ---")
+    coarse_search_grid = np.arange(search_range[0], search_range[1] + 0.1, 0.1)
+    
+    for scale_coef in tqdm(coarse_search_grid, desc="Coarse Search"):
+        search_model = copy.deepcopy(base_model)
+        task_vector.apply_to(search_model, scaling_coef=scale_coef)
+        
+        metric_results, _, _ = evaluate_model(search_model, test_dataloader, device)
+        
+        if metric_results['ACC'] > best_acc:
+            best_acc = metric_results['ACC']
+            best_coef = scale_coef
+            best_results = metric_results
+    
+    # print(f"\nCoarse search best coefficient: {best_coef:.2f} with Accuracy: {best_acc:.4f}")
+
+    print("\n--- Starting Fine Search ---")
+    fine_search_start = max(search_range[0], best_coef - 0.1)
+    fine_search_end = min(search_range[1], best_coef + 0.1)
+    fine_search_grid = np.linspace(fine_search_start, fine_search_end, num=21)
+
+    for scale_coef in tqdm(fine_search_grid, desc="Fine Search"):
+        search_model = copy.deepcopy(base_model)
+        task_vector.apply_to(search_model, scaling_coef=scale_coef)
+        
+        metric_results, _, _ = evaluate_model(search_model, test_dataloader, device)
+        
+        if metric_results['ACC'] > best_acc:
+            best_acc = metric_results['ACC']
+            best_coef = scale_coef
+            best_results = metric_results
+
+    # print(f"\nRecalculating metrics and confusion matrix for best coefficient: {best_coef:.2f}")
+    final_model = copy.deepcopy(base_model)
+    task_vector.apply_to(final_model, scaling_coef=best_coef)
+    final_model.to(device)
+
+    best_results, all_preds, all_targets = evaluate_model(final_model, test_dataloader, device)
+    
+    confmat_metric = ConfusionMatrix(task="multiclass", num_classes=num_classes)
+    best_cm_tensor = confmat_metric(all_preds, all_targets)
+
+    return best_coef, best_results, best_cm_tensor
 
 
 def train_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
@@ -238,6 +302,67 @@ def compare_task_vectors(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_na
     dataset, num_classes = dataset_factory.create_dataset(cfg)
     
     base_model = model_factory.create_model(cfg['model'], num_classes)
+    
+    base_expr_dir = outputs_dir / cfg_name
+    
+    init_weights = torch.load(base_expr_dir / "init_model_weights.pth", map_location=cpu)
+    clean_weights = torch.load(base_expr_dir / "clean/weights/model_weights.pth", map_location=cpu)  
+    mix_weights = torch.load(base_expr_dir / "mix/weights/model_weights.pth", map_location=cpu)
+    noisy_wieghts = torch.load(base_expr_dir / "noisy/weights/model_weights.pth", map_location=cpu)  
+    
+    clean_tv = TaskVector(init_weights, clean_weights)
+    mix_tv = TaskVector(init_weights, mix_weights)
+    noisy_tv = TaskVector(init_weights, noisy_wieghts)
+    
+    tv_list = [clean_tv, mix_tv, noisy_tv]
+    tv_names = ['clean', 'mix', 'noise']
+    
+    tv_sim = []
+    for i in range(len(tv_list)):
+        anchor_tv = tv_list[i]
+        tv_sim.append([])
+        for j in range(len(tv_list)):
+            other_tv = tv_list[j]
+            cos_sim = anchor_tv.cosine_similarity_flatten(other_tv)
+            tv_sim[i].append(cos_sim)
+    tv_sim = np.array(tv_sim)
+    
+    
+    misc_utils.plot_confusion_matrix(cm=tv_sim, class_names=tv_names, filepath=None, show=True)
+    
+    base_model.load_state_dict(mix_weights)
+    
+    best_coef, best_results, best_cm = search_optimal_coefficient(
+        base_model=base_model,
+        task_vector=tv_list[2],
+        search_range=(-2.0, 0.0),
+        dataset=dataset,
+        num_classes=num_classes,
+        device=gpu
+    )
+    
+    print(f"Best scaling coefficient for TV = {best_coef}")
+    print(f"Metrics of the negated model is {best_results}")
+    
+    strategy = cfg['strategy']
+    dataset.inject_noise(**strategy['noise'])
+    clean_set, noisy_set = dataset.get_clean_noisy_subsets(set='Train')
+    dataset.set_trainset(clean_set, shuffle=False)
+    metric, _, _ = evaluate_model(base_model, dataloader=dataset.get_train_dataloader(), device=gpu)
+    print("Performance on clean set before task vector:", metric)
+    dataset.set_trainset(noisy_set, shuffle=False)
+    metric, _, _ = evaluate_model(base_model, dataloader=dataset.get_train_dataloader(), device=gpu)
+    print("Performance on noisy set before task vector:", metric)
+    
+    base_model.to(cpu)
+    tv_list[2].apply_to(base_model, scaling_coef=best_coef)
+    
+    dataset.set_trainset(clean_set, shuffle=False)
+    metric, _, _ = evaluate_model(base_model, dataloader=dataset.get_train_dataloader(), device=gpu)
+    print("Performance on clean set after task vector:", metric)
+    dataset.set_trainset(noisy_set, shuffle=False)
+    metric, _, _ = evaluate_model(base_model, dataloader=dataset.get_train_dataloader(), device=gpu)
+    print("Performance on noisy set after task vector:", metric)
     
 
 if __name__ == "__main__":
