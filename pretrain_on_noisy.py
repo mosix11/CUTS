@@ -554,7 +554,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     best_coef, best_results, best_cm = search_optimal_coefficient(
         base_model=base_model,
         # task_vector=test_tv,
-        task_vector=ft_tvs_list[3],
+        task_vector=ft_tvs_list[1],
         search_range=(-3.0, 0.0),
         dataset=dataset,
         num_classes=num_classes,
@@ -576,7 +576,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     base_model.to(cpu)
     # test_tv.apply_to(base_model, scaling_coef=best_coef)
-    ft_tvs_list[3].apply_to(base_model, scaling_coef=best_coef)
+    ft_tvs_list[1].apply_to(base_model, scaling_coef=best_coef)
     
     dataset.set_trainset(clean_set, shuffle=False)
     metric, _, _ = evaluate_model(base_model, dataloader=dataset.get_train_dataloader(), device=gpu)
