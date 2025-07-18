@@ -577,7 +577,10 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # print(ft_gold_tv.layer_wise_cosine_similarity(ft_tvs_list[1]))
 
     
-    
+    # for key, weight_tensor in ft_gt_noise_tv.vector.items():
+    #     if 'bn' in key:
+    #         print(key, weight_tensor.sum())
+    # exit()
     
     tv_names = ['ft_gold', 'ft_gt_noise']
     # class_names = []
