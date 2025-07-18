@@ -167,37 +167,35 @@ def eval_model_on_clean_noise_splits(model, cfg, dataset, device):
     }
     
     
-def eval_model_on_tvs(model, taskvectors, cfg, dataset, num_classes, device):
+def eval_model_on_tvs(model, taskvectors, results_dict, cfg, dataset, num_classes, device):
     
-    results = OrderedDict()
-    for tv_name, tv in taskvectors.items():
-        results[tv_name] = OrderedDict()
-        base_model = copy.deepcopy(model)
+    results = results_dict
+    
+    
+    
+    # for tv_name, tv in taskvectors.items():
+    #     results[tv_name] = OrderedDict()
+    #     base_model = copy.deepcopy(model)
 
-        best_coef, best_results, best_cm = search_optimal_coefficient(
-            base_model=base_model,
-            task_vector=tv,
-            search_range=(-3.0, 0.0),
-            dataset=dataset,
-            num_classes=num_classes,
-            device=device
-        )
+    #     best_coef, best_results, best_cm = search_optimal_coefficient(
+    #         base_model=base_model,
+    #         task_vector=tv,
+    #         search_range=(-3.0, 0.0),
+    #         dataset=dataset,
+    #         num_classes=num_classes,
+    #         device=device
+    #     )
         
-        results[tv_name]['best_alpha'] = best_coef
-        results[tv_name]['test_results'] = best_results
+    #     results[tv_name]['best_alpha'] = best_coef
+    #     results[tv_name]['test_results'] = best_results
         
-        # train_results, _, _ = evaluate_model(model, dataset.get_train_dataloader(), device)
-        # results[tv_name]['train_results'] = train_results
+    #     # train_results, _, _ = evaluate_model(model, dataset.get_train_dataloader(), device)
+    #     # results[tv_name]['train_results'] = train_results
+    #     base_model = copy.deepcopy(model)
+    #     tv.apply_to(base_model, scaling_coef=best_coef)
         
-        before_tv_metrics = eval_model_on_clean_noise_splits(base_model, cfg, dataset, device)
-        results[tv_name]['train_before_tv_reults'] = before_tv_metrics
-        
-        
-        base_model = copy.deepcopy(model)
-        tv.apply_to(base_model, scaling_coef=best_coef)
-        
-        after_tv_metrics = eval_model_on_clean_noise_splits(base_model, cfg, dataset, device)
-        results[tv_name]['train_after_tv_reults'] = after_tv_metrics
+    #     after_tv_metrics = eval_model_on_clean_noise_splits(base_model, cfg, dataset, device)
+    #     results[tv_name]['train_reults'] = after_tv_metrics
         
         
     avg_tv = None
@@ -226,18 +224,43 @@ def eval_model_on_tvs(model, taskvectors, cfg, dataset, num_classes, device):
     results['avg_noise']['best_alpha'] = best_coef
     results['avg_noise']['test_results'] = best_results
     
+    
     # train_results, _, _ = evaluate_model(model, dataset.get_train_dataloader(), device)
     # results[tv_name]['train_results'] = train_results
     
-    before_tv_metrics = eval_model_on_clean_noise_splits(base_model, cfg, dataset, device)
-    results['avg_noise']['train_clean_reults'] = before_tv_metrics
     
     
     base_model = copy.deepcopy(model)
     avg_tv.apply_to(base_model, scaling_coef=best_coef)
     
     after_tv_metrics = eval_model_on_clean_noise_splits(base_model, cfg, dataset, device)
-    results['avg_noise']['train_noisy_reults'] = after_tv_metrics
+    results['avg_noise']['train_results'] = after_tv_metrics
+    
+    
+    random_vec = avg_tv.generate_random_vector_with_same_layer_norms(seed=11)
+    results['rnd_vec'] = OrderedDict()
+    
+    base_model = copy.deepcopy(model)
+
+    best_coef, best_results, best_cm = search_optimal_coefficient(
+        base_model=base_model,
+        task_vector=random_vec,
+        search_range=(-3.0, 0.0),
+        dataset=dataset,
+        num_classes=num_classes,
+        device=device
+    )
+    
+    results['rnd_vec']['best_alpha'] = best_coef
+    results['rnd_vec']['test_results'] = best_results
+    
+
+    base_model = copy.deepcopy(model)
+    random_vec.apply_to(base_model, scaling_coef=best_coef)
+    
+    after_tv_metrics = eval_model_on_clean_noise_splits(base_model, cfg, dataset, device)
+    results['rnd_vec']['train_reults'] = after_tv_metrics
+    
     
     return results
 
@@ -680,25 +703,34 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # print('Performance after TV:', after_tv_metrics)
     
     base_model.load_state_dict(pretrain_weights)
-    pt_results, _, _ = evaluate_model(base_model, dataset.get_test_dataloader(), gpu)
+    pt_test_results, _, _ = evaluate_model(base_model, dataset.get_test_dataloader(), gpu)
+    pt_train_results = eval_model_on_clean_noise_splits(base_model, cfg, dataset, gpu)
+    
     base_model.load_state_dict(gold_weights)
-    gold_results, _, _ = evaluate_model(base_model, dataset.get_test_dataloader(), gpu)
+    gold_test_results, _, _ = evaluate_model(base_model, dataset.get_test_dataloader(), gpu)
+    gold_train_results = eval_model_on_clean_noise_splits(base_model, cfg, dataset, gpu)
+    
     base_model.load_state_dict(ft_gold_wieghts)
-    ft_gold_results, _, _ = evaluate_model(base_model, dataset.get_test_dataloader(), gpu)
+    ft_gold_test_results, _, _ = evaluate_model(base_model, dataset.get_test_dataloader(), gpu)
+    ft_gold_train_results = eval_model_on_clean_noise_splits(base_model, cfg, dataset, gpu)
     
     base_model.load_state_dict(pretrain_weights)
     base_model.to(cpu)
-    results = eval_model_on_tvs(base_model, OrderedDict(zip(tv_names[1:], ft_tvs_list[1:])), cfg, dataset, num_classes, gpu)
     
-    results['pretrain'] = pt_results
-    results['gold'] = gold_results
-    results['ft_gold'] = ft_gold_results
-    print(results)
+    results_dict = OrderedDict()
+    
+    results_dict['pretrain'] = {'test_results': pt_test_results, 'train_results': pt_train_results}
+    results_dict['gold'] = {'test_results': gold_test_results, 'train_results': gold_train_results}
+    results_dict['ft_gold'] = {'test_results': ft_gold_test_results, 'train_results': ft_gold_train_results}
+    results_dict = eval_model_on_tvs(base_model, OrderedDict(zip(tv_names[1:], ft_tvs_list[1:])), results_dict, cfg, dataset, num_classes, gpu)
+    
+    
+    print(results_dict)
     
     results_dir = results_dir / cfg_name
     results_dir.mkdir(exist_ok=True, parents=True)
     with open(results_dir / 'metrics.json' , 'w') as json_file:
-        json.dump(results, json_file, indent=4)
+        json.dump(results_dict, json_file, indent=4)
     
     
     # otrh_tvs, shrd_tvs = TaskVector.decompose_task_vectors_SVD(ft_tvs_list)

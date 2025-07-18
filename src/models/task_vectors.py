@@ -135,7 +135,41 @@ class TaskVector:
             pointer += numel
         return TaskVector(vector=new_dict)
     
-    
+    def generate_random_vector_with_same_layer_norms(self, seed: int = None):
+        """
+        Generate a random task vector with the same per-layer norm as self.vector.
+
+        Parameters:
+        - seed: Optional integer seed for reproducibility.
+
+        Returns:
+        - TaskVector instance with random direction and same per-layer norm.
+        """
+        random_vector = {}
+        generator = torch.Generator()
+        if seed is not None:
+            generator.manual_seed(seed)
+
+        with torch.no_grad():
+            for key, delta in self.vector.items():
+                rand_tensor = torch.randn(
+                    delta.shape,
+                    dtype=delta.dtype,
+                    device='cpu',  # generate on CPU for generator compatibility
+                    generator=generator
+                ).to(delta.device)  # move back to delta's device
+
+                rand_norm = torch.norm(rand_tensor)
+                delta_norm = torch.norm(delta)
+
+                if rand_norm == 0:
+                    scaled_rand = torch.zeros_like(rand_tensor)
+                else:
+                    scaled_rand = rand_tensor * (delta_norm / rand_norm)
+
+                random_vector[key] = scaled_rand
+
+        return TaskVector(vector=random_vector)
     
     def cosine_similarity_flatten(self, other_task_vector):
         """
