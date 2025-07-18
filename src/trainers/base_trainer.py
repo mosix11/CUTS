@@ -52,6 +52,7 @@ class BaseTrainer(ABC):
         early_stopping: bool = False,
         run_on_gpu: bool = True,
         use_amp: bool = True,
+        train_in_eval_mode:bool = False,
         batch_prog: bool = False,
         log_comet: bool = False,
         comet_api_key: str = "",
@@ -91,7 +92,7 @@ class BaseTrainer(ABC):
         self.run_on_gpu = run_on_gpu
         self.use_amp = use_amp
 
-        
+        self.train_in_eval_mode = train_in_eval_mode
 
         self.max_epochs = max_epochs
         self.optimizer_cfg = optimizer_cfg
@@ -337,7 +338,10 @@ class BaseTrainer(ABC):
             if self.early_stopping and self.early_stop: break
 
             # 1. Call the abstract training method (implemented by subclass)
-            self.model.train()
+            if self.train_in_eval_mode:
+                self.model.eval()
+            else:
+                self.model.train()
             statistics = self._fit_epoch()
             
             if self.accumulate_low_loss:

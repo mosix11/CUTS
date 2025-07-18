@@ -1,5 +1,5 @@
 import comet_ml
-from src.datasets import dataset_factory
+from src.datasets import dataset_factory, data_utils
 from src.models import model_factory, TaskVector
 from src.trainers import StandardTrainer
 import matplotlib.pyplot as plt
@@ -141,6 +141,105 @@ def search_optimal_coefficient(base_model, task_vector, search_range, dataset, n
     return best_coef, best_results, best_cm_tensor
 
 
+def eval_model_on_clean_noise_splits(model, cfg, dataset, device):
+    dataset_cpy = copy.deepcopy(dataset)
+    strategy = cfg['strategy']
+    dataset_cpy.inject_noise(**strategy['noise']['pretraining'])
+    clean_set, noisy_set = dataset_cpy.get_clean_noisy_subsets(set='Train')
+    dataset_cpy.set_trainset(clean_set, shuffle=False)
+    clean_metric, _, _ = evaluate_model(model, dataloader=dataset_cpy.get_train_dataloader(), device=device)
+    dataset_cpy.set_trainset(noisy_set, shuffle=False)
+    noisy_metric, _, _ = evaluate_model(model, dataloader=dataset_cpy.get_train_dataloader(), device=device)
+    
+    dummy_instance = noisy_set
+    while not isinstance(dummy_instance, data_utils.NoisyClassificationDataset):
+        dummy_instance = dummy_instance.dataset
+    dummy_instance.switch_to_clean_lables()
+    
+    dataset_cpy.set_trainset(noisy_set, shuffle=False)
+    healing_metric, _, _ = evaluate_model(model, dataloader=dataset_cpy.get_train_dataloader(), device=device)
+
+    
+    return {
+        'clean_set': clean_metric,
+        'noisy_set': noisy_metric,
+        'healing_noise': healing_metric,
+    }
+    
+    
+def eval_model_on_tvs(model, taskvectors, cfg, dataset, num_classes, device):
+    
+    results = OrderedDict()
+    for tv_name, tv in taskvectors.items():
+        results[tv_name] = OrderedDict()
+        base_model = copy.deepcopy(model)
+
+        best_coef, best_results, best_cm = search_optimal_coefficient(
+            base_model=base_model,
+            task_vector=tv,
+            search_range=(-3.0, 0.0),
+            dataset=dataset,
+            num_classes=num_classes,
+            device=device
+        )
+        
+        results[tv_name]['best_alpha'] = best_coef
+        results[tv_name]['test_results'] = best_results
+        
+        # train_results, _, _ = evaluate_model(model, dataset.get_train_dataloader(), device)
+        # results[tv_name]['train_results'] = train_results
+        
+        before_tv_metrics = eval_model_on_clean_noise_splits(base_model, cfg, dataset, device)
+        results[tv_name]['train_before_tv_reults'] = before_tv_metrics
+        
+        
+        base_model = copy.deepcopy(model)
+        tv.apply_to(base_model, scaling_coef=best_coef)
+        
+        after_tv_metrics = eval_model_on_clean_noise_splits(base_model, cfg, dataset, device)
+        results[tv_name]['train_after_tv_reults'] = after_tv_metrics
+        
+        
+    avg_tv = None
+    count = 0  
+    for tv_name, tv in taskvectors.items():
+        if tv_name != "ft_gt_noise":
+            count += 1
+            if avg_tv is not None:  
+                avg_tv += (tv - avg_tv) * (1/count)
+            else:
+                avg_tv = tv
+                
+    results['avg_noise'] = OrderedDict()
+    
+    base_model = copy.deepcopy(model)
+
+    best_coef, best_results, best_cm = search_optimal_coefficient(
+        base_model=base_model,
+        task_vector=avg_tv,
+        search_range=(-3.0, 0.0),
+        dataset=dataset,
+        num_classes=num_classes,
+        device=device
+    )
+    
+    results['avg_noise']['best_alpha'] = best_coef
+    results['avg_noise']['test_results'] = best_results
+    
+    # train_results, _, _ = evaluate_model(model, dataset.get_train_dataloader(), device)
+    # results[tv_name]['train_results'] = train_results
+    
+    before_tv_metrics = eval_model_on_clean_noise_splits(base_model, cfg, dataset, device)
+    results['avg_noise']['train_clean_reults'] = before_tv_metrics
+    
+    
+    base_model = copy.deepcopy(model)
+    avg_tv.apply_to(base_model, scaling_coef=best_coef)
+    
+    after_tv_metrics = eval_model_on_clean_noise_splits(base_model, cfg, dataset, device)
+    results['avg_noise']['train_noisy_reults'] = after_tv_metrics
+    
+    return results
 
 def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     cfg['trainer']['pretraining']['comet_api_key'] = os.getenv("COMET_API_KEY")
@@ -462,7 +561,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     for ft_expr, ft_dir in finetune_dirs.items():
         finetune_weights[ft_expr] = torch.load(ft_dir / 'weights/model_weights.pth', map_location=cpu)
     
-    base_model.load_state_dict(pretrain_weights)
+    
     
     
     ft_gold_tv = TaskVector(pretrain_weights, ft_gold_wieghts)
@@ -476,11 +575,13 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     ft_tvs_list.extend(list(finetune_tvs.values()))
     print(finetune_tvs.keys())
     # print(ft_gold_tv.layer_wise_cosine_similarity(ft_tvs_list[1]))
+
     
     
-    class_names = ['ft_gold', 'ft_gt_noise']
+    
+    tv_names = ['ft_gold', 'ft_gt_noise']
     # class_names = []
-    class_names.extend(list(finetune_tvs.keys()))
+    tv_names.extend(list(finetune_tvs.keys()))
     
     task_sim = []
     for i in range(len(ft_tvs_list)):
@@ -492,7 +593,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             task_sim[i].append(cos_sim)
     task_sim = np.array(task_sim)
     
-    misc_utils.plot_confusion_matrix(cm=task_sim, class_names=class_names, filepath=None, show=True)
+    misc_utils.plot_confusion_matrix(cm=task_sim, class_names=tv_names, filepath=None, show=True)
     
     
     
@@ -551,43 +652,50 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     # test_tv = (ft_tvs_list[2] + ft_tvs_list[3]) * 0.5
     
-    best_coef, best_results, best_cm = search_optimal_coefficient(
-        base_model=base_model,
-        # task_vector=test_tv,
-        task_vector=ft_tvs_list[1],
-        search_range=(-3.0, 0.0),
-        dataset=dataset,
-        num_classes=num_classes,
-        device=gpu
-    )
+    # ordered_dict = OrderedDict(zip(tv_names[1:], ft_tvs_list[1:]))
     
-    print(f"Best scaling coefficient for TV = {best_coef}")
-    print(f"Metrics of the negated model is {best_results}")
+    # best_coef, best_results, best_cm = search_optimal_coefficient(
+    #     base_model=base_model,
+    #     # task_vector=test_tv,
+    #     task_vector=ft_tvs_list[4],
+    #     search_range=(-3.0, 0.0),
+    #     dataset=dataset,
+    #     num_classes=num_classes,
+    #     device=gpu
+    # )
     
-    strategy = cfg['strategy']
-    dataset.inject_noise(**strategy['noise']['pretraining'])
-    clean_set, noisy_set = dataset.get_clean_noisy_subsets(set='Train')
-    dataset.set_trainset(clean_set, shuffle=False)
-    metric, _, _ = evaluate_model(base_model, dataloader=dataset.get_train_dataloader(), device=gpu)
-    print("Performance on clean set before task vector:", metric)
-    dataset.set_trainset(noisy_set, shuffle=False)
-    metric, _, _ = evaluate_model(base_model, dataloader=dataset.get_train_dataloader(), device=gpu)
-    print("Performance on noisy set before task vector:", metric)
+    # print(f"Best scaling coefficient for TV = {best_coef}")
+    # print(f"Metrics of the negated model is {best_results}")
     
+    # before_tv_metrics = eval_model_on_clean_noise_splits(base_model, cfg, dataset, gpu)
+    # print('Performance before TV:', before_tv_metrics)
+    # base_model.to(cpu)
+    # # test_tv.apply_to(base_model, scaling_coef=best_coef)
+    # ft_tvs_list[4].apply_to(base_model, scaling_coef=best_coef)
+    
+    # after_tv_metrics = eval_model_on_clean_noise_splits(base_model, cfg, dataset, gpu)
+    # print('Performance after TV:', after_tv_metrics)
+    
+    base_model.load_state_dict(pretrain_weights)
+    pt_results, _, _ = evaluate_model(base_model, dataset.get_test_dataloader(), gpu)
+    base_model.load_state_dict(gold_weights)
+    gold_results, _, _ = evaluate_model(base_model, dataset.get_test_dataloader(), gpu)
+    base_model.load_state_dict(ft_gold_wieghts)
+    ft_gold_results, _, _ = evaluate_model(base_model, dataset.get_test_dataloader(), gpu)
+    
+    base_model.load_state_dict(pretrain_weights)
     base_model.to(cpu)
-    # test_tv.apply_to(base_model, scaling_coef=best_coef)
-    ft_tvs_list[1].apply_to(base_model, scaling_coef=best_coef)
+    results = eval_model_on_tvs(base_model, OrderedDict(zip(tv_names[1:], ft_tvs_list[1:])), cfg, dataset, num_classes, gpu)
     
-    dataset.set_trainset(clean_set, shuffle=False)
-    metric, _, _ = evaluate_model(base_model, dataloader=dataset.get_train_dataloader(), device=gpu)
-    print("Performance on clean set after task vector:", metric)
-    dataset.set_trainset(noisy_set, shuffle=False)
-    metric, _, _ = evaluate_model(base_model, dataloader=dataset.get_train_dataloader(), device=gpu)
-    print("Performance on noisy set after task vector:", metric)
-
+    results['pretrain'] = pt_results
+    results['gold'] = gold_results
+    results['ft_gold'] = ft_gold_results
+    print(results)
     
-
-            
+    results_dir = results_dir / cfg_name
+    results_dir.mkdir(exist_ok=True, parents=True)
+    with open(results_dir / 'metrics.json' , 'w') as json_file:
+        json.dump(results, json_file, indent=4)
     
     
     # otrh_tvs, shrd_tvs = TaskVector.decompose_task_vectors_SVD(ft_tvs_list)

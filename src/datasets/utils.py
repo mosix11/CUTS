@@ -77,9 +77,18 @@ class NoisyClassificationDataset(Dataset):
             
         self.noisy_labels = None
         self.is_noisy_flags = None
+        
+        self.return_clean_labels = False
 
         if noise_rate > 0.0:
             self._add_noise_to_labels()
+            
+            
+    def switch_to_clean_lables(self):
+        self.return_clean_labels = True
+    
+    def switch_to_noisy_lables(self):
+        self.return_clean_labels = False
             
     def __len__(self):
         return len(self.dataset)
@@ -119,6 +128,7 @@ class NoisyClassificationDataset(Dataset):
 
     def _add_noise_to_labels(self):
         original_labels = self._get_original_labels()
+        self.original_labels = original_labels
         noisy_labels = original_labels.clone()
         self.is_noisy_flags = torch.zeros(len(original_labels))
 
@@ -178,9 +188,14 @@ class NoisyClassificationDataset(Dataset):
             _, original_label = self.dataset[idx]
             return data, original_label, torch.tensor(False, dtype=torch.bool)
         
-        noisy_label = self.noisy_labels[idx]
-        is_noisy = self.is_noisy_flags[idx] 
-        return data, noisy_label, is_noisy
+        
+        if self.return_clean_labels:
+            original_label = self.original_labels[idx]
+            return data, original_label, torch.tensor(False, dtype=torch.bool)
+        else:
+            noisy_label = self.noisy_labels[idx]
+            is_noisy = self.is_noisy_flags[idx] 
+            return data, noisy_label, is_noisy
 
 
 

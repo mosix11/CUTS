@@ -314,8 +314,11 @@ def compare_task_vectors(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_na
     mix_tv = TaskVector(init_weights, mix_weights)
     noisy_tv = TaskVector(init_weights, noisy_wieghts)
     
-    tv_list = [clean_tv, mix_tv, noisy_tv]
-    tv_names = ['clean', 'mix', 'noise']
+    temp = TaskVector(mix_weights, noisy_wieghts)
+    
+    tv_list = [clean_tv, mix_tv, noisy_tv, temp]
+    tv_names = ['clean', 'mix', 'noise', 'temp']
+    
     
     tv_sim = []
     for i in range(len(tv_list)):
@@ -328,13 +331,14 @@ def compare_task_vectors(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_na
     tv_sim = np.array(tv_sim)
     
     
+    
     misc_utils.plot_confusion_matrix(cm=tv_sim, class_names=tv_names, filepath=None, show=True)
     
     base_model.load_state_dict(mix_weights)
     
     best_coef, best_results, best_cm = search_optimal_coefficient(
         base_model=base_model,
-        task_vector=tv_list[2],
+        task_vector=tv_list[3],
         search_range=(-2.0, 0.0),
         dataset=dataset,
         num_classes=num_classes,
@@ -355,7 +359,7 @@ def compare_task_vectors(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_na
     print("Performance on noisy set before task vector:", metric)
     
     base_model.to(cpu)
-    tv_list[2].apply_to(base_model, scaling_coef=best_coef)
+    tv_list[3].apply_to(base_model, scaling_coef=best_coef)
     
     dataset.set_trainset(clean_set, shuffle=False)
     metric, _, _ = evaluate_model(base_model, dataloader=dataset.get_train_dataloader(), device=gpu)
