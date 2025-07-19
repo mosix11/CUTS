@@ -15,7 +15,7 @@ class TaskVector:
         else:
             assert pretrained_state_dict is not None and finetuned_state_dict is not None, \
                 "Provide either vector or both state_dicts."
-            self.vector = {}
+            self.vector = OrderedDict()
             with torch.no_grad():
                 for key in pretrained_state_dict:
                     if key not in finetuned_state_dict:
@@ -23,14 +23,14 @@ class TaskVector:
                         continue
                     if pretrained_state_dict[key].dtype not in [torch.float32, torch.float16, torch.bfloat16]:
                         continue  # Skip non-float entries
-                    self.vector[key] = finetuned_state_dict[key] - pretrained_state_dict[key]
+                    self.vector[key] = finetuned_state_dict[key].to('cpu') - pretrained_state_dict[key].to('cpu')
     
 
 
 
     def __add__(self, other):
         """Add two task vectors."""
-        new_vector = {}
+        new_vector = OrderedDict()
         with torch.no_grad():
             for key in self.vector:
                 if key not in other.vector:
@@ -55,7 +55,7 @@ class TaskVector:
     def __pow__(self, power):
         """Power of a task vector."""
         with torch.no_grad():
-            new_vector = {}
+            new_vector = OrderedDict()
             for key in self.vector:
                 new_vector[key] = self.vector[key] ** power
         return TaskVector(vector=new_vector)
@@ -64,7 +64,7 @@ class TaskVector:
     def __mul__(self, other):
         """Multiply a task vector by a scalar."""
         with torch.no_grad():
-            new_vector = {}
+            new_vector = OrderedDict()
             for key in self.vector:
                 new_vector[key] = other * self.vector[key]
         return TaskVector(vector=new_vector)
@@ -101,6 +101,7 @@ class TaskVector:
         - scaling_coef: float multiplier for the task vector (default: 1.0)
         - strict: if True, will raise errors for missing/unmatched keys
         """
+        device = next(model.parameters()).device
         with torch.no_grad():
             updated_state_dict = model.state_dict()
             for key in self.vector:
@@ -110,7 +111,7 @@ class TaskVector:
                     else:
                         print(f"Warning: key {key} not found in model. Skipping.")
                         continue
-                updated_state_dict[key] = updated_state_dict[key] + scaling_coef * self.vector[key]
+                updated_state_dict[key] = updated_state_dict[key] + scaling_coef * self.vector[key].to(device)
             model.load_state_dict(updated_state_dict, strict=strict)
         return model
     
@@ -127,7 +128,7 @@ class TaskVector:
         """
         Unflatten a 1D tensor into a dictionary using the shapes in reference_dict.
         """
-        new_dict = {}
+        new_dict = OrderedDict()
         pointer = 0
         for k, v in sorted(self.vector.items()):
             numel = v.numel()
@@ -145,19 +146,21 @@ class TaskVector:
         Returns:
         - TaskVector instance with random direction and same per-layer norm.
         """
-        random_vector = {}
+        random_vector = OrderedDict()
         generator = torch.Generator()
         if seed is not None:
             generator.manual_seed(seed)
 
         with torch.no_grad():
             for key, delta in self.vector.items():
-                rand_tensor = torch.randn(
-                    delta.shape,
-                    dtype=delta.dtype,
-                    device='cpu',  # generate on CPU for generator compatibility
-                    generator=generator
-                ).to(delta.device)  # move back to delta's device
+                # rand_tensor = torch.randn(
+                #     delta.shape,
+                #     dtype=delta.dtype,
+                #     device='cpu',  # generate on CPU for generator compatibility
+                #     generator=generator
+                # ).to(delta.device)  # move back to delta's device
+                
+                rand_tensor = torch.rand_like(delta)
 
                 rand_norm = torch.norm(rand_tensor)
                 delta_norm = torch.norm(delta)
