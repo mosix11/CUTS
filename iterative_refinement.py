@@ -445,7 +445,7 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             cfg_cpy = copy.deepcopy(cfg)
             dataset, num_classes = dataset_factory.create_dataset(cfg_cpy, augmentations)
             
-            model = model_factory.create_model(cfg_cpy['model'], num_classes)
+            # model = model_factory.create_model(cfg_cpy['model'], num_classes)
             
             experiment_name = f"{cfg_name}/pretrain_{low_loss_percentage}"
             experiment_dir = outputs_dir / Path(experiment_name)
