@@ -129,6 +129,12 @@ class CIFAR100:
         self.heldout_loader = self._build_dataloader(self.heldout_set, shuffle=shuffle)
         
 
+    def replace_heldout_as_train_dl(self):
+        self.train_loader = self._build_dataloader(self.heldout_set, shuffle=True)
+        
+    def reset_train_dl(self):
+        self.train_loader = self._build_dataloader(self.trainset, shuffle=True)
+
     def get_generator(self):
         return self.generator
     
@@ -152,6 +158,13 @@ class CIFAR100:
         dataset = Subset(dataset, indices)
         
         self._set_set(set, dataset)
+        
+    def change_batch_size(self, batch_size:int):
+        self.batch_size = batch_size
+        self.train_loader = self._build_dataloader(self.trainset, shuffle=True)
+        self.val_loader = self._build_dataloader(self.valset) if self.valset else None
+        self.test_loader = self._build_dataloader(self.testset)
+        self.heldout_loader = self._build_dataloader(self.heldout_set) if self.heldout_set else None
         
     def binarize_set(self, set='Train', target_class=-1):
         if target_class not in self.available_classes:
@@ -196,7 +209,7 @@ class CIFAR100:
         noisy_indices = []
         for item in dataset:
             if len(item) == 4:
-                x, y, is_noisy, idx = item
+                x, y, idx, is_noisy = item
                 if is_noisy:
                     noisy_indices.append(idx)
                 else:
@@ -206,11 +219,6 @@ class CIFAR100:
         
         return Subset(dataset, clean_indices), Subset(dataset, noisy_indices)
         
-    def replace_heldout_as_train_dl(self):
-        self.train_loader = self._build_dataloader(self.heldout_set, shuffle=True)
-        
-    def reset_train_dl(self):
-        self.train_loader = self._build_dataloader(self.trainset, shuffle=True)
 
     def get_identifier(self):
         identifier = 'cifar100|'
@@ -406,21 +414,3 @@ class CIFAR100:
         else:
             raise ValueError('set argument must be one of these values `Train`, `Val`, `Test`, `Heldout`')
             
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    

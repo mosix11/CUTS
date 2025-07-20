@@ -288,7 +288,7 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
 
         trainer = StandardTrainer(
             outputs_dir=outputs_dir,
-            **cfg_cpy['trainer']['pretraining'],
+            **cfg_cpy['trainer']['finetuning'],
             exp_name=experiment_name,
             exp_tags=None,
         )
