@@ -530,6 +530,15 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             )
 
     
+    # old_trainset = base_dataset.get_trainset()
+    # new_trainset = self_learnt_dataset.get_trainset()
+    
+    # old_trgts = []
+    # new_trgts = []
+    
+    
+    
+    
     # for idx, low_loss_percentage in enumerate(cfg['strategy']['percentage']):
     #     if not outputs_dir.joinpath(f"{cfg_name}/finetune_{low_loss_percentage}/weights/model_weights.pth").exists():
     #         cfg_cpy = copy.deepcopy(cfg)
