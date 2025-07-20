@@ -71,6 +71,8 @@ num_total_samples = len(orig_trainset)
 num_clean_samples = int(num_total_samples * (1-label_noise))
 num_noisy_samples = num_total_samples - num_clean_samples
 
+trgts = []
+
 num_unmatched_lbls = 0
 
 my_trainset = dataset.get_trainset() 
@@ -80,8 +82,38 @@ for idx in range(len(orig_trainset)):
     
     if orig_lbl != my_lbl:
         num_unmatched_lbls += 1
+    trgts.append(orig_lbl)
         
 print(f"Out of {num_total_samples}, {num_noisy_samples} were noisy and {num_unmatched_lbls} were detected")
+
+trgts[-10:] = [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1]
+
+dummy_instance = my_trainset
+while not isinstance(dummy_instance, data_utils.NoisyClassificationDataset):
+    dummy_instance = dummy_instance.dataset
+dummy_instance.replace_labels(trgts)
+
+for idx in range(len(my_trainset)):
+    _, my_lbl, _, _ = my_trainset[idx]
+    if my_lbl == -1:
+        print(idx)
+# dummy_instance = my_trainset
+# while not isinstance(dummy_instance, data_utils.NoisyClassificationDataset):
+#     dummy_instance = dummy_instance.dataset
+# dummy_instance.switch_to_clean_lables()
+
+# num_unmatched_lbls = 0
+
+# # my_trainset = dataset.get_trainset() 
+# for idx in range(len(orig_trainset)):
+#     _, orig_lbl = orig_trainset[idx]
+#     _, my_lbl, _, _ = my_trainset[idx]
+    
+#     if orig_lbl != my_lbl:
+#         num_unmatched_lbls += 1
+    
+
+# print(f"Out of {num_total_samples}, {num_noisy_samples} were noisy and {num_unmatched_lbls} were detected")
 
 
 dummy_instance = my_trainset
@@ -89,18 +121,13 @@ while not isinstance(dummy_instance, data_utils.NoisyClassificationDataset):
     dummy_instance = dummy_instance.dataset
 dummy_instance.switch_to_clean_lables()
 
-num_unmatched_lbls = 0
 
-# my_trainset = dataset.get_trainset() 
-for idx in range(len(orig_trainset)):
-    _, orig_lbl = orig_trainset[idx]
-    _, my_lbl, _, _ = my_trainset[idx]
-    
-    if orig_lbl != my_lbl:
-        num_unmatched_lbls += 1
-    
 
-print(f"Out of {num_total_samples}, {num_noisy_samples} were noisy and {num_unmatched_lbls} were detected")
+
+
+
+
+
 # train_dl = dataset.get_train_dataloader()
 
 

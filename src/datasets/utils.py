@@ -89,6 +89,9 @@ class NoisyClassificationDataset(Dataset):
     
     def switch_to_noisy_lables(self):
         self.return_clean_labels = False
+        
+    def replace_labels(self, new_labels):
+        self.noisy_labels = new_labels
             
     def __len__(self):
         return len(self.dataset)

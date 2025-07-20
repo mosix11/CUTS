@@ -1,11 +1,11 @@
-# Config 10 with 60% noise and low loss percentage being 20
+
 training_seed: &training_seed 11
 dataset_seed: &dataset_seed 11
 
 
 strategy:
   finetuning_set: &finetuning_set 'LowLoss'
-  percentage: [0.5, 0.4, 0.3, 0.2, 0.1]
+  percentage: 0.25
   noise:
     pretraining:
       set: 'Train'
@@ -19,8 +19,8 @@ strategy:
       seed: 10
 
 dataset:
-  name: "cifar100"
-  num_classes: &num_classes 100
+  name: "cifar10"
+  num_classes: &num_classes 10
   img_size: [32, 32]
   batch_size: 512
   subsample_size: [-1, -1]
@@ -36,7 +36,7 @@ dataset:
 
 
 model:
-  type: 'resnet34v2'
+  type: 'resnet18v2'
   init_channels: 64
   num_classes: *num_classes
   img_size: [32, 32]
@@ -47,7 +47,7 @@ model:
 
 trainer:
   pretraining:
-    max_epochs: &max_epochs 400
+    max_epochs: &max_epochs 20
     optimizer_cfg: 
       type: "adamw"
       lr: 5.0e-4
@@ -67,14 +67,14 @@ trainer:
     seed: *training_seed
 
   finetuning:
-    max_epochs: 500
+    max_epochs: 10
     optimizer_cfg: 
       type: "adamw"
       lr: 1.0e-4
       betas: [0.9, 0.999]
     lr_schedule_cfg:
       type: 'step'
-      milestones: [50, 100, 150, 200, 250, 300, 350, 400, 450]
+      milestones: [50, 100, 150, 200, 250, 300, 350]
       gamma: 0.7
     early_stopping: False
     validation_freq: -1
