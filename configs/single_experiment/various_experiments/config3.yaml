@@ -64,7 +64,7 @@ trainer:
     run_on_gpu: True
     use_amp: True
     log_comet: True
-    comet_project_name: 'pretrain-on-noise'
+    comet_project_name: 'various-experiments'
     seed: *training_seed
 
   finetuning:
