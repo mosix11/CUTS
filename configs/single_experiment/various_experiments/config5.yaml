@@ -22,7 +22,7 @@ dataset:
   name: "cifar100"
   num_classes: &num_classes 100
   img_size: [32, 32]
-  batch_size: 1024
+  batch_size: 512
   subsample_size: [-1, -1]
   class_subset: []
   remap_labels: False
@@ -44,14 +44,18 @@ model:
   metrics: ['ACC', 'F1']
 
 
+
 trainer:
   pretraining:
-    max_epochs: 700
+    max_epochs: &max_epochs 400
     optimizer_cfg: 
-      type: "adam"
-      lr: 1.0e-4
+      type: "adamw"
+      lr: 5.0e-4
       betas: [0.9, 0.999]
-
+    lr_schedule_cfg:
+      type: 'cosann'
+      T_max: *max_epochs
+      eta_min: 5.0e-6
     early_stopping: False
     validation_freq: -1
     save_best_model: False
@@ -62,35 +66,15 @@ trainer:
     comet_project_name: 'various-experiments'
     seed: *training_seed
 
-  # pretraining:
-  #   max_epochs: &max_epochs 300
-  #   optimizer_cfg: 
-  #     type: "adamw"
-  #     lr: 5.0e-4
-  #     betas: [0.9, 0.999]
-  #   lr_schedule_cfg:
-  #     type: 'cosann'
-  #     T_max: *max_epochs
-  #     eta_min: 5.0e-6
-  #   early_stopping: False
-  #   validation_freq: -1
-  #   save_best_model: False
-  #   checkpoint_freq: -1
-  #   run_on_gpu: True
-  #   use_amp: True
-  #   log_comet: True
-  #   comet_project_name: 'various-experiments'
-  #   seed: *training_seed
-
   finetuning:
-    max_epochs: 400
+    max_epochs: 500
     optimizer_cfg: 
       type: "adamw"
       lr: 1.0e-4
       betas: [0.9, 0.999]
     lr_schedule_cfg:
       type: 'step'
-      milestones: [50, 100, 150, 200, 250, 300, 350]
+      milestones: [50, 100, 150, 200, 250, 300, 350, 400, 450]
       gamma: 0.7
     early_stopping: False
     validation_freq: -1
