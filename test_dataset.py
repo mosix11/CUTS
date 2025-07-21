@@ -11,7 +11,7 @@ img_size = (32,32)
 class_subset = []
 remap_labels = False
 balance_classes = False
-label_noise = 0.3
+label_noise = 0.4
 
 
 grayscale = False
@@ -69,6 +69,7 @@ dataset.inject_noise(
     set='Train',
     noise_rate=label_noise,
     noise_type='asymmetric',
+    seed=8
 )
 
 
@@ -79,28 +80,42 @@ num_noisy_samples = num_total_samples - num_clean_samples
 trgts = []
 
 num_unmatched_lbls = 0
-
+sum_corrupt_labels = 0
+sum_clean_labels = 0
+sum_corrupt_indices = 0
+sum_clean_indices = 0
 my_trainset = dataset.get_trainset() 
 for idx in range(len(orig_trainset)):
     _, orig_lbl = orig_trainset[idx]
-    _, my_lbl, _, _ = my_trainset[idx]
+    _, my_lbl, my_idx, is_noisy = my_trainset[idx]
     
-    if orig_lbl != my_lbl:
-        if orig_lbl == 9:
-            print(f"9:{my_lbl}")
-        elif orig_lbl == 2:
-            print(f"2:{my_lbl}")
-        elif orig_lbl == 3:
-            print(f"3:{my_lbl}")
-        elif orig_lbl == 5:
-            print(f"5:{my_lbl}")
-        elif orig_lbl == 4:
-            print(f"4:{my_lbl}")
+    # if orig_lbl != my_lbl:
+    if is_noisy:
+        # if orig_lbl == 9:
+        #     print(f"9:{my_lbl}")
+        # elif orig_lbl == 2:
+        #     print(f"2:{my_lbl}")
+        # elif orig_lbl == 3:
+        #     print(f"3:{my_lbl}")
+        # elif orig_lbl == 5:
+        #     print(f"5:{my_lbl}")
+        # elif orig_lbl == 4:
+        #     print(f"4:{my_lbl}")
+        sum_corrupt_labels += my_lbl
+        sum_corrupt_indices += my_idx
         num_unmatched_lbls += 1
+    else:
+        sum_clean_labels += my_lbl
+        sum_clean_indices += my_idx
     trgts.append(orig_lbl)
         
+print("Sum corrupt labels:", sum_corrupt_labels)
+print("Sum clean labels:", sum_clean_labels)
+print("Sum corrupt indices:", sum_corrupt_indices)
+print("Sum clean indices:", sum_clean_indices)
 print(f"Out of {num_total_samples}, {num_noisy_samples} were noisy and {num_unmatched_lbls} were detected")
 
+exit()
 # trgts[-10:] = [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1]
 
 # dummy_instance = my_trainset

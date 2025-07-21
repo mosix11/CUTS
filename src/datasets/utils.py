@@ -191,7 +191,6 @@ class NoisyClassificationDataset(Dataset):
 
                 # 2. Calculate the exact number of samples to flip
                 num_to_flip = int(self.noise_rate * len(class_indices))
-
                 if num_to_flip > 0:
                     # 3. Randomly select the indices to flip using a permutation
                     perm = torch.randperm(len(class_indices), generator=self.generator)
