@@ -188,6 +188,7 @@ class MNIST:
         
         dataset = NoisyClassificationDataset(
             dataset=dataset,
+            dataset_name=self.__class__.__name__,
             noise_rate=noise_rate,
             noise_type=noise_type,
             seed=seed,
