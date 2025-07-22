@@ -145,22 +145,20 @@ def eval_model_on_clean_noise_splits(model, cfg, dataset, device):
     dataset_cpy = copy.deepcopy(dataset)
     strategy = cfg['strategy']
     dataset_cpy.inject_noise(**strategy['noise']['pretraining'])
-    # dataset.inject_noise(**cfg['strategy']['noise']['pretraining'])
-    # pt_train_results, _, _ = evaluate_model(model, dataset.get_train_dataloader(), device)
     clean_set, noisy_set = dataset_cpy.get_clean_noisy_subsets(set='Train')
     
-    sum_corrupt_lbls = 0
-    sum_corrupt_indices = 0
-    sum_clean_lbls = 0
-    sum_clean_indices = 0
-    for sample in dataset_cpy.get_trainset():
-        _, lbl, idx, is_noisy = sample
-        if is_noisy:
-            sum_corrupt_lbls += lbl
-            sum_corrupt_indices += idx
-        else:
-            sum_clean_lbls += lbl
-            sum_clean_indices += idx
+    # sum_corrupt_lbls = 0
+    # sum_corrupt_indices = 0
+    # sum_clean_lbls = 0
+    # sum_clean_indices = 0
+    # for sample in dataset_cpy.get_trainset():
+    #     _, lbl, idx, is_noisy = sample
+    #     if is_noisy:
+    #         sum_corrupt_lbls += lbl
+    #         sum_corrupt_indices += idx
+    #     else:
+    #         sum_clean_lbls += lbl
+    #         sum_clean_indices += idx
     
     
     # print("sum corrupt lbls in whole ", sum_corrupt_lbls)
@@ -186,16 +184,16 @@ def eval_model_on_clean_noise_splits(model, cfg, dataset, device):
     # exit()
     
 
-    pt_train_results, _, _ = evaluate_model(model, dataset_cpy.get_train_dataloader(), device)
+    # pt_train_results, _, _ = evaluate_model(model, dataset_cpy.get_train_dataloader(), device)
     
     dataset_cpy.set_trainset(clean_set, shuffle=False)
     clean_metric, _, _ = evaluate_model(model, dataloader=dataset_cpy.get_train_dataloader(), device=device)
     dataset_cpy.set_trainset(noisy_set, shuffle=False)
     noisy_metric, _, _ = evaluate_model(model, dataloader=dataset_cpy.get_train_dataloader(), device=device)
-    print(pt_train_results)
-    print(clean_metric)
-    print(noisy_metric)
-    exit()
+    # print(pt_train_results)
+    # print(clean_metric)
+    # print(noisy_metric)
+    # exit()
     
     dummy_instance = noisy_set
     while not isinstance(dummy_instance, data_utils.NoisyClassificationDataset):
