@@ -1,3 +1,5 @@
+# v2.Normalize((0.2860,), (0.3530,)),
+
 import torch
 from torchvision import datasets
 from torchvision.transforms import v2

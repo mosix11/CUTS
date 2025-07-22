@@ -63,10 +63,10 @@ def evaluate_model(model, dataloader, device):
                 loss = loss.mean()
             loss_met.update(loss.detach().cpu().item(), n=input_batch.shape[0])
             
-            predictions = torch.argmax(preds, dim=-1) 
-            
+            predictions = torch.argmax(preds, dim=-1)
             all_preds.extend(predictions.cpu())
             all_targets.extend(target_batch.cpu())
+            
             
     metric_results = model.compute_metrics()
     metric_results['Loss'] = loss_met.avg
@@ -147,53 +147,11 @@ def eval_model_on_clean_noise_splits(model, cfg, dataset, device):
     dataset_cpy.inject_noise(**strategy['noise']['pretraining'])
     clean_set, noisy_set = dataset_cpy.get_clean_noisy_subsets(set='Train')
     
-    # sum_corrupt_lbls = 0
-    # sum_corrupt_indices = 0
-    # sum_clean_lbls = 0
-    # sum_clean_indices = 0
-    # for sample in dataset_cpy.get_trainset():
-    #     _, lbl, idx, is_noisy = sample
-    #     if is_noisy:
-    #         sum_corrupt_lbls += lbl
-    #         sum_corrupt_indices += idx
-    #     else:
-    #         sum_clean_lbls += lbl
-    #         sum_clean_indices += idx
-    
-    
-    # print("sum corrupt lbls in whole ", sum_corrupt_lbls)
-    # print("sum clean lbls in whole ", sum_clean_lbls)
-    # print("sum corrupt indices in whole ", sum_corrupt_indices)
-    # print("sum clean indices in whole ", sum_clean_indices)
-    
-    # sum_corrupt_lbls = 0
-    # for sample in noisy_set:
-    #     _, lbl, idx, is_noisy = sample
-    #     if is_noisy:
-    #         sum_corrupt_lbls += lbl
-            
-    # sum_clean_lbls = 0
-
-    # for sample in clean_set:
-    #     _, lbl, idx, is_noisy = sample
-    #     if not is_noisy:
-    #         sum_clean_lbls += lbl
-    
-    # print("sum corrupt lbls in noisy ", sum_corrupt_lbls)
-    # print("sum clean lbls in noisy ", sum_clean_lbls)
-    # exit()
-    
-
-    # pt_train_results, _, _ = evaluate_model(model, dataset_cpy.get_train_dataloader(), device)
-    
     dataset_cpy.set_trainset(clean_set, shuffle=False)
     clean_metric, _, _ = evaluate_model(model, dataloader=dataset_cpy.get_train_dataloader(), device=device)
+    
     dataset_cpy.set_trainset(noisy_set, shuffle=False)
     noisy_metric, _, _ = evaluate_model(model, dataloader=dataset_cpy.get_train_dataloader(), device=device)
-    # print(pt_train_results)
-    # print(clean_metric)
-    # print(noisy_metric)
-    # exit()
     
     dummy_instance = noisy_set
     while not isinstance(dummy_instance, data_utils.NoisyClassificationDataset):
@@ -209,29 +167,6 @@ def eval_model_on_clean_noise_splits(model, cfg, dataset, device):
         'noisy_set': noisy_metric,
         'healing_noise': healing_metric,
     }
-    
-        # num_clean_in_clean = 0
-    # num_noisy_in_clean = 0
-    # num_clean_in_noisy = 0
-    # num_noisy_in_noisy = 0
-    
-    # for sample in clean_set:
-    #     _, lbl, _, is_noisy = sample
-    #     if is_noisy:
-    #         num_noisy_in_clean += 1
-    #     else:
-    #         num_clean_in_clean += 1
-            
-    # for sample in noisy_set:
-    #     _, lbl, _, is_noisy = sample
-    #     if is_noisy:
-    #         num_noisy_in_noisy += 1
-    #     else:
-    #         num_clean_in_noisy += 1
-            
-    # print("Cleanset:", num_clean_in_clean, num_noisy_in_clean)
-    # print("Noisyset", num_clean_in_noisy, num_noisy_in_noisy)
-    # exit()
     
     
     

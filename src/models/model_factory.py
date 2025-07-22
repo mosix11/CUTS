@@ -32,12 +32,12 @@ def create_model(cfg, num_classes):
                 if num_classes == 1:   
                     metrics[metric_name] = torchmetrics.classification.BinaryAccuracy()
                 else:
-                    metrics[metric_name] = torchmetrics.classification.MulticlassAccuracy(num_classes=num_classes)
+                    metrics[metric_name] = torchmetrics.classification.MulticlassAccuracy(num_classes=num_classes, average='micro')
             elif metric_name == 'F1':
                 if num_classes == 1:
                     metrics[metric_name] = torchmetrics.classification.BinaryF1Score()
                 else:
-                    metrics[metric_name] = torchmetrics.classification.MulticlassF1Score(num_classes=num_classes)
+                    metrics[metric_name] = torchmetrics.classification.MulticlassF1Score(num_classes=num_classes, average='micro')
                     
             else: raise ValueError(f"Invalid metric {metric_name}.")
         cfg['metrics'] = metrics

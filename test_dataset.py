@@ -84,13 +84,29 @@ sum_corrupt_labels = 0
 sum_clean_labels = 0
 sum_corrupt_indices = 0
 sum_clean_indices = 0
-my_trainset = dataset.get_trainset() 
+my_trainset = dataset.get_trainset()
+num_corrupt_map = {
+    9:0,
+    2:0,
+    3:0,
+    5:0,
+    4:0
+}
+sum_corrupt_index_map = {
+    9:0,
+    2:0,
+    3:0,
+    5:0,
+    4:0
+}
 for idx in range(len(orig_trainset)):
     _, orig_lbl = orig_trainset[idx]
     _, my_lbl, my_idx, is_noisy = my_trainset[idx]
     
     # if orig_lbl != my_lbl:
     if is_noisy:
+        num_corrupt_map[orig_lbl] += 1
+        sum_corrupt_index_map[orig_lbl] += idx
         # if orig_lbl == 9:
         #     print(f"9:{my_lbl}")
         # elif orig_lbl == 2:
@@ -113,6 +129,8 @@ print("Sum corrupt labels:", sum_corrupt_labels)
 print("Sum clean labels:", sum_clean_labels)
 print("Sum corrupt indices:", sum_corrupt_indices)
 print("Sum clean indices:", sum_clean_indices)
+print(num_corrupt_map)
+print(sum_corrupt_index_map)
 print(f"Out of {num_total_samples}, {num_noisy_samples} were noisy and {num_unmatched_lbls} were detected")
 
 exit()

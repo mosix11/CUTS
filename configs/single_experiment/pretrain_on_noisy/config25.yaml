@@ -1,4 +1,4 @@
-# Asymmetric noise
+# config22 for cifar100
 training_seed: &training_seed 11
 dataset_seed: &dataset_seed 11
 
@@ -19,8 +19,8 @@ strategy:
         seed: 12
 
 dataset:
-  name: "cifar10"
-  num_classes: &num_classes 10
+  name: "cifar100"
+  num_classes: &num_classes 100
   img_size: [32, 32]
   batch_size: 512
   subsample_size: [-1, -1]
@@ -48,7 +48,7 @@ model:
 
 trainer:
   pretraining:
-    max_epochs: &max_epochs 400
+    max_epochs: &max_epochs 300
     optimizer_cfg: 
       type: "adamw"
       lr: 5.0e-4
