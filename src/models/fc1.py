@@ -1,10 +1,10 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.amp import autocast
+from . import BaseClassificationModel
 
 
-class FC1(nn.Module):
+class FC1(BaseClassificationModel):
     
     def __init__(
         self,
@@ -15,7 +15,7 @@ class FC1(nn.Module):
         loss_fn=None,
         metrics:dict=None,
     ):
-        super().__init__()
+        super().__init__(loss_fn=loss_fn, metrics=metrics)
         
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
@@ -26,71 +26,8 @@ class FC1(nn.Module):
         
         if weight_init:
             self.apply(weight_init)
-        
-        if not loss_fn:
-            raise RuntimeError('The loss function must be specified!')
-        self.loss_fn = loss_fn
-        
-        self.metrics = nn.ModuleDict()
-        if metrics:
-            for name, metric_instance in metrics.items():
-                self.metrics[name] = metric_instance
-            
-            
-            
-    def training_step(self, x, y, use_amp=False, return_preds=False):        
-        with autocast('cuda', enabled=use_amp):
-            preds = self(x)
-            if isinstance(self.loss_fn, torch.nn.MSELoss):
-                y_onehot = F.one_hot(y, num_classes=self.output_dim).float()
-                loss = self.loss_fn(preds, y_onehot)
-            else:
-                loss = self.loss_fn(preds, y)
-        if self.metrics:
-            for name, metric in self.metrics.items():
-                metric.update(preds, y)
-                
-        if return_preds:
-            return loss, preds
-        else:
-            return loss
-        
-    def validation_step(self, x, y, use_amp=False, return_preds=False):
-        with torch.no_grad():
-            with autocast('cuda', enabled=use_amp):
-                preds = self(x)
-                if isinstance(self.loss_fn, torch.nn.MSELoss):
-                    y_onehot = F.one_hot(y, num_classes=self.output_dim).float()
-                    loss = self.loss_fn(preds, y_onehot)
-                else:
-                    loss = self.loss_fn(preds, y)
-        if self.metrics:
-            for name, metric in self.metrics.items():
-                metric.update(preds, y)
-                
-        if return_preds:
-            return loss, preds
-        else:
-            return loss
+           
 
-
-    def compute_metrics(self):
-        results = {}
-        if self.metrics: 
-            for name, metric in self.metrics.items():
-                results[name] = metric.compute().cpu().item()
-        return results
-    
-    def reset_metrics(self):
-        if self.metrics:
-            for name, metric in self.metrics.items():
-                metric.reset()
-    
-    def predict(self, x):
-        with torch.no_grad():
-            preds = self(x)
-        return preds
-    
     def forward(self, x: torch.Tensor):
         x = F.relu(self.h1(x))
         x = self.out(x)
@@ -317,14 +254,3 @@ class FC1(nn.Module):
 
         return stats
 
-
-
-    
-
-    
-    def _count_trainable_parameters(self):
-        """
-        Counts and returns the total number of trainable parameters in the model.
-        These are the parameters whose gradients are computed and are updated during backpropagation.
-        """
-        return sum(p.numel() for p in self.parameters() if p.requires_grad)

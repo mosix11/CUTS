@@ -4,7 +4,7 @@
 import torch
 import torch.nn.functional as F
 from torch import nn
-from torch.amp import autocast
+from . import BaseClassificationModel
 
 from einops import rearrange, repeat
 from einops.layers.torch import Rearrange
@@ -100,7 +100,7 @@ class SPT(nn.Module):
         x_with_shifts = torch.cat((x, *shifted_x), dim = 1)
         return self.to_patch_tokens(x_with_shifts)
 
-class ViT_Small(nn.Module):
+class ViT_Small(BaseClassificationModel):
     def __init__(
         self,
         *,
@@ -119,7 +119,7 @@ class ViT_Small(nn.Module):
         loss_fn=nn.CrossEntropyLoss(),
         metrics:dict=None,
     ):
-        super().__init__()
+        super().__init__(loss_fn=loss_fn, metrics=metrics)
         image_height, image_width = pair(img_size)
         patch_height, patch_width = pair(patch_size)
 
@@ -174,59 +174,6 @@ class ViT_Small(nn.Module):
         return self.mlp_head(x)
     
     
-    
-    
-    def training_step(self, x, y, use_amp=False, return_preds=False):
-        with autocast('cuda', enabled=use_amp):
-            preds = self(x)
-            loss = self.loss_fn(preds, y)
-        if self.metrics:
-            for name, metric in self.metrics.items():
-                metric.update(preds, y)
-        if return_preds:
-            return loss, preds
-        else:
-            return loss
-    
-    def validation_step(self, x, y, use_amp=False, return_preds=False):
-        with torch.no_grad():
-            with autocast('cuda', enabled=use_amp):
-                preds = self(x)
-                loss = self.loss_fn(preds, y)
-        if self.metrics:
-            for name, metric in self.metrics.items():
-                metric.update(preds, y)
-        if return_preds:
-            return loss, preds
-        else:
-            return loss
-
-    def predict(self, x):
-        with torch.no_grad():
-            preds = self(x)
-        return preds
-
-    def compute_metrics(self):
-        results = {}
-        if self.metrics: 
-            for name, metric in self.metrics.items():
-                results[name] = metric.compute()
-        return results
-    
-    def reset_metrics(self):
-        if self.metrics:
-            for name, metric in self.metrics.items():
-                metric.reset()
-
     def get_identifier(self):
         return f"vit_small"
     
-    
-
-    def _count_trainable_parameters(self):
-        """
-        Counts and returns the total number of trainable parameters in the model.
-        These are the parameters whose gradients are computed and are updated during backpropagation.
-        """
-        return sum(p.numel() for p in self.parameters() if p.requires_grad)
-

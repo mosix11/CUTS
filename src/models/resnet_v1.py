@@ -2,7 +2,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.amp import autocast
+from . import BaseClassificationModel
 
 def conv3x3(in_planes, out_planes, stride=1):
     """3x3 convolution with padding"""
@@ -88,7 +88,7 @@ class Bottleneck(nn.Module):
         return out
 
 # General Post-Activation ResNet Class (ResNet V1)
-class PostActResNet(nn.Module):
+class PostActResNet(BaseClassificationModel):
     """
     General Post-Activation ResNet model implementation (ResNet V1).
     It takes a 'block' type (BasicBlock or Bottleneck) and a list of 'num_blocks'
@@ -106,7 +106,7 @@ class PostActResNet(nn.Module):
         loss_fn=nn.CrossEntropyLoss(),
         metrics:dict=None,
     ):
-        super(PostActResNet, self).__init__()
+        super().__init__(loss_fn=loss_fn, metrics=metrics)
         self.in_planes = init_channels # Initial number of input channels for the first layer
         self.k = init_channels # Added to match the user's original get_identifier method
 
@@ -168,14 +168,7 @@ class PostActResNet(nn.Module):
                     nn.init.constant_(m.weight, 1)
                     nn.init.constant_(m.bias, 0)
 
-        if not loss_fn:
-            raise RuntimeError('The loss function must be specified!')
-        self.loss_fn = loss_fn
 
-        self.metrics = nn.ModuleDict()
-        if metrics:
-            for name, metric_instance in metrics.items():
-                self.metrics[name] = metric_instance
 
     def _make_layer(self, block, planes, num_blocks, stride):
         """
@@ -211,58 +204,10 @@ class PostActResNet(nn.Module):
         out = self.fc(out)
         return out
 
-    def training_step(self, x, y, use_amp=False, return_preds=False):
-        with autocast('cuda', enabled=use_amp):
-            preds = self(x)
-            loss = self.loss_fn(preds, y)
-        if self.metrics:
-            for name, metric in self.metrics.items():
-                metric.update(preds, y)
-        if return_preds:
-            return loss, preds
-        else:
-            return loss
-
-    def validation_step(self, x, y, use_amp=False, return_preds=False):
-        with torch.no_grad():
-            with autocast('cuda', enabled=use_amp):
-                preds = self(x)
-                loss = self.loss_fn(preds, y)
-        if self.metrics:
-            for name, metric in self.metrics.items():
-                metric.update(preds, y)
-        if return_preds:
-            return loss, preds
-        else:
-            return loss
-
-    def predict(self, x):
-        with torch.no_grad():
-            preds = self(x)
-        return preds
-
-    def compute_metrics(self):
-        results = {}
-        if self.metrics:
-            for name, metric in self.metrics.items():
-                results[name] = metric.compute()
-        return results
-
-    def reset_metrics(self):
-        if self.metrics:
-            for name, metric in self.metrics.items():
-                metric.reset()
 
     def get_identifier(self):
         # Using self.k which is set to init_channels
         return f"resnet_v1_k{self.k}"
-
-    def _count_trainable_parameters(self):
-        """
-        Counts and returns the total number of trainable parameters in the model.
-        These are the parameters whose gradients are computed and are updated during backpropagation.
-        """
-        return sum(p.numel() for p in self.parameters() if p.requires_grad)
 
 
 # --- Functions to create specific Post-Activation ResNet models (ResNet V1) ---

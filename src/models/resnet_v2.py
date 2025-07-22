@@ -2,9 +2,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.amp import autocast
-import torchmetrics
-import torchmetrics.classification
+from . import BaseClassificationModel
 
 def conv3x3(in_planes, out_planes, stride=1):
     return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=1, bias=False)
@@ -103,8 +101,8 @@ class PreActBottleneck(nn.Module):
         return out
 
 
-# General Pre-Activation ResNet Class
-class PreActResNet(nn.Module):
+# General Pre-Activation ResNet Class (Resnet V2)
+class PreActResNet(BaseClassificationModel):
     """
     General Pre-Activation ResNet model implementation (ResNet V2).
     It takes a 'block' type (PreActBasicBlock or PreActBottleneck) and a list of 'num_blocks'
@@ -123,7 +121,7 @@ class PreActResNet(nn.Module):
         metrics:dict=None,
     ): 
         
-        super(PreActResNet, self).__init__()
+        super().__init__(loss_fn=loss_fn, metrics=metrics)
         self.in_planes = init_channels # Initial number of input channels for the first layer
         input_image_size = tuple(input_image_size)
         # Determine initial conv layer parameters based on input_image_size
@@ -189,15 +187,6 @@ class PreActResNet(nn.Module):
                     nn.init.constant_(m.weight, 1)
                     nn.init.constant_(m.bias, 0)
                 
-        if not loss_fn:
-            raise RuntimeError('The loss function must be specified!')
-        self.loss_fn = loss_fn
-        
-        
-        self.metrics = nn.ModuleDict()
-        if metrics:
-            for name, metric_instance in metrics.items():
-                self.metrics[name] = metric_instance
 
 
     def _make_layer(self, block, planes, num_blocks, stride):
@@ -233,63 +222,11 @@ class PreActResNet(nn.Module):
         out = torch.flatten(out, 1)
         out = self.fc(out)
         return out
-    
-    def training_step(self, x, y, use_amp=False, return_preds=False):
-        with autocast('cuda', enabled=use_amp):
-            preds = self(x)
-            loss = self.loss_fn(preds, y)
-        if self.metrics:
-            for name, metric in self.metrics.items():
-                metric.update(preds, y)
-        if return_preds:
-            return loss, preds
-        else:
-            return loss
-    
-    def validation_step(self, x, y, use_amp=False, return_preds=False):
-        with torch.no_grad():
-            with autocast('cuda', enabled=use_amp):
-                preds = self(x)
-                loss = self.loss_fn(preds, y)
-        if self.metrics:
-            for name, metric in self.metrics.items():
-                metric.update(preds, y)
-        if return_preds:
-            return loss, preds
-        else:
-            return loss
-
-    def predict(self, x):
-        with torch.no_grad():
-            preds = self(x)
-        return preds
-
-    def compute_metrics(self):
-        results = {}
-        if self.metrics: 
-            for name, metric in self.metrics.items():
-                results[name] = metric.compute().cpu().item()
-        return results
-    
-    def reset_metrics(self):
-        if self.metrics:
-            for name, metric in self.metrics.items():
-                metric.reset()
 
     def get_identifier(self):
         return f"resnet18k|k{self.k}"
     
     
-
-    def _count_trainable_parameters(self):
-        """
-        Counts and returns the total number of trainable parameters in the model.
-        These are the parameters whose gradients are computed and are updated during backpropagation.
-        """
-        return sum(p.numel() for p in self.parameters() if p.requires_grad)
-
-
-
 
 
 def PreActResNet9(
