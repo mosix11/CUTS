@@ -7,12 +7,12 @@ from typing import List, Tuple, Union
 from tqdm import tqdm
 from torchmetrics import ConfusionMatrix
 
-from . import BaseTrainer
+from . import BaseClassificationTrainer
 
 
 from ..utils import nn_utils, misc_utils
 
-class ETDTrainer(BaseTrainer):
+class ETDTrainer(BaseClassificationTrainer):
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

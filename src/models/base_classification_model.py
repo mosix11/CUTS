@@ -1,25 +1,24 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.cuda.amp import autocast # Use torch.cuda.amp.autocast for clarity
+from torch.amp import autocast
 import torchmetrics
 from abc import ABC, abstractmethod
 
 
 
-class BaseClassificationModel(nn.Module, ABC): # Inherit from nn.Module and ABC
+class BaseClassificationModel(nn.Module, ABC): 
     """
     Abstract Base Class for classification models, providing common
     training, validation, prediction, and metric handling functionalities.
     """
     def __init__(self, loss_fn=None, metrics: dict = None):
         super().__init__()
-        # Ensure loss_fn is provided
+
         if loss_fn is None:
             raise RuntimeError('The loss function must be specified for training/validation.')
         self.loss_fn = loss_fn
 
-        # Initialize metrics as an nn.ModuleDict for proper device management
         self.metrics = nn.ModuleDict()
         if metrics:
             for name, metric_instance in metrics.items():
@@ -37,13 +36,13 @@ class BaseClassificationModel(nn.Module, ABC): # Inherit from nn.Module and ABC
 
     def training_step(self, x, y, use_amp=False, return_preds=False):
         """Performs a single training step."""
-        with autocast(device_type='cuda', dtype=torch.float16, enabled=use_amp):
-            preds = self(x) # Calls the concrete model's forward method
+        with autocast('cuda', enabled=use_amp):
+            preds = self(x) 
             loss = self.loss_fn(preds, y)
 
         if self.metrics:
             for name, metric in self.metrics.items():
-                metric.update(preds.detach(), y.detach()) # Detach preds for metric update
+                metric.update(preds.detach(), y.detach()) 
 
         if return_preds:
             return loss, preds
@@ -53,7 +52,7 @@ class BaseClassificationModel(nn.Module, ABC): # Inherit from nn.Module and ABC
     def validation_step(self, x, y, use_amp=False, return_preds=False):
         """Performs a single validation step (no gradient computation)."""
         with torch.no_grad():
-            with autocast(device_type='cuda', dtype=torch.float16, enabled=use_amp):
+            with autocast('cuda', enabled=use_amp):
                 preds = self(x)
                 loss = self.loss_fn(preds, y)
 

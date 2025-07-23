@@ -1,5 +1,5 @@
 from .trainer_ep import TrainerEp
 from .trainer_gs import TrainerGS
-from .base_trainer import BaseTrainer
+from .base_trainer import BaseClassificationTrainer
 from .standard_trainer import StandardTrainer
 from .etd_trainer import ETDTrainer

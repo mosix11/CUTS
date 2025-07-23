@@ -1,7 +1,7 @@
 import torch
 import torchmetrics
 import torchmetrics.classification
-from . import FC1, FCN, CNN5, CNN5_NoNorm, CNN5_GN
+from . import FC1, FCN, CNN5
 from . import PreActResNet9, PreActResNet18, PreActResNet34, PreActResNet50, PreActResNet101, PreActResNet152
 from . import PostActResNet9, PostActResNet18, PostActResNet34, PostActResNet50, PostActResNet101, PostActResNet152
 from . import PostActResNet9_ETD
@@ -50,10 +50,6 @@ def create_model(cfg, num_classes):
         
     elif model_type == 'cnn5':
         model = CNN5(**cfg)
-    elif model_type == 'cnn5_nonorm':
-        model = CNN5_NoNorm(**cfg)
-    elif model_type == 'cnn5_gn':
-        model = CNN5_GN(**cfg)
         
         
     elif model_type == 'resnet9v2':

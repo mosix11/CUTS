@@ -29,7 +29,7 @@ from ..utils import nn_utils, misc_utils
 from abc import ABC, abstractmethod
 
 
-class BaseTrainer(ABC):
+class BaseClassificationTrainer(ABC):
     """
     Abstract base class for trainers.
     Implements the Template Method design pattern.
@@ -319,7 +319,7 @@ class BaseTrainer(ABC):
             self.epoch = 0
 
         self.grad_scaler = GradScaler("cuda", enabled=self.use_amp)
-        self.early_stop = False
+        self.early_stopping_activated = False
         
         if model.loss_fn.reduction != 'none' and (self.accumulate_low_loss or self.accumulate_high_loss):
             raise RuntimeError('In order to accumulate samples with low or high loss in a subset, the reduction type of the loss function should be set to `none`.')
@@ -335,7 +335,7 @@ class BaseTrainer(ABC):
             if isinstance(pbar, tqdm):
                 pbar.set_description(f"Processing Training Epoch {self.epoch + 1}/{self.max_epochs}")
                 
-            if self.early_stopping and self.early_stop: break
+            if self.early_stopping and self.early_stopping_activated: break
 
             # 1. Call the abstract training method (implemented by subclass)
             if self.train_in_eval_mode:
