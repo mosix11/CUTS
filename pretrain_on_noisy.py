@@ -211,19 +211,18 @@ def generate_latex_table_from_results(results_dict, output_path):
     ]
 
     for name, data in results_dict.items():
-        train_key = "train_results" if "train_results" in data else "train_reults"
 
         test_acc = get_nested(data, "test_results", "ACC")
         test_loss = get_nested(data, "test_results", "Loss")
 
-        noisy_acc = get_nested(data, train_key, "noisy_set", "ACC")
-        noisy_loss = get_nested(data, train_key, "noisy_set", "Loss")
+        noisy_acc = get_nested(data, "train_results", "noisy_set", "ACC")
+        noisy_loss = get_nested(data, "train_results", "noisy_set", "Loss")
 
-        healing_acc = get_nested(data, train_key, "healing_noise", "ACC")
-        healing_loss = get_nested(data, train_key, "healing_noise", "Loss")
+        healing_acc = get_nested(data, "train_results", "healing_noise", "ACC")
+        healing_loss = get_nested(data, "train_results", "healing_noise", "Loss")
 
-        clean_acc = get_nested(data, train_key, "clean_set", "ACC")
-        clean_loss = get_nested(data, train_key, "clean_set", "Loss")
+        clean_acc = get_nested(data, "train_results", "clean_set", "ACC")
+        clean_loss = get_nested(data, "train_results", "clean_set", "Loss")
 
         # Format values
         acc_util_str = format_acc(test_acc) + latex_delta(test_acc, base_utility_acc, positive_good=True)
@@ -266,96 +265,102 @@ def eval_model_on_tvs(model, taskvectors, results_dict, cfg, dataset, num_classe
     results = results_dict
     
     
-    
     for tv_name, tv in taskvectors.items():
         results[tv_name] = OrderedDict()
+        
+        base_model = copy.deepcopy(model)
+        results[tv_name][-1.0] = OrderedDict()
+        tv.apply_to(base_model, scaling_coef=-1.0)
+        base_test_results, _, _ = evaluate_model(base_model, dataset.get_test_dataloader(), device)
+        base_train_split_results = eval_model_on_clean_noise_splits(base_model, cfg, dataset, device)
+        results[tv_name][-1.0]['test_results'] = base_test_results
+        results[tv_name][-1.0]['train_results'] = base_train_split_results
+        
         base_model = copy.deepcopy(model)
 
-        # best_coef, best_results, best_cm = search_optimal_coefficient(
-        #     base_model=base_model,
-        #     task_vector=tv,
-        #     search_range=(-3.0, 0.0),
-        #     dataset=dataset,
-        #     num_classes=num_classes,
-        #     device=device
-        # )
+        best_coef, best_results, best_cm = search_optimal_coefficient(
+            base_model=base_model,
+            task_vector=tv,
+            search_range=(-3.0, 0.0),
+            dataset=dataset,
+            num_classes=num_classes,
+            device=device
+        )
         
+        results[tv_name][best_coef] = OrderedDict()
+        results[tv_name][best_coef]['test_results'] = best_results
         
-        # results[tv_name]['best_alpha'] = best_coef
-        # results[tv_name]['test_results'] = best_results
-        
-        # train_results, _, _ = evaluate_model(model, dataset.get_train_dataloader(), device)
-        # results[tv_name]['train_results'] = train_results
-        base_model = copy.deepcopy(model)
-        # tv.apply_to(base_model, scaling_coef=best_coef)
-        tv.apply_to(base_model, scaling_coef=-1.0)
+        tv.apply_to(base_model, scaling_coef=best_coef)
         
         after_tv_metrics = eval_model_on_clean_noise_splits(base_model, cfg, dataset, device)
-        results[tv_name]['train_reults'] = after_tv_metrics
+        results[tv_name][best_coef]['train_results'] = after_tv_metrics
         
         
-    # avg_tv = None
-    # count = 0  
-    # for tv_name, tv in taskvectors.items():
-    #     if tv_name != "ft_gt_noise":
-    #         count += 1
-    #         if avg_tv is not None:  
-    #             avg_tv += (tv - avg_tv) * (1/count)
-    #         else:
-    #             avg_tv = tv
+    avg_tv = None
+    count = 0  
+    for tv_name, tv in taskvectors.items():
+        if tv_name != "ft_gt_noise":
+            count += 1
+            if avg_tv is not None:  
+                avg_tv += (tv - avg_tv) * (1/count)
+            else:
+                avg_tv = tv
                 
-    # results['avg_noise'] = OrderedDict()
+    results['avg_noise'] = OrderedDict()
+    base_model = copy.deepcopy(model)
+    results['avg_noise'][-1.0] = OrderedDict()
+    avg_tv.apply_to(base_model, scaling_coef=-1.0)
+    base_test_results, _, _ = evaluate_model(base_model, dataset.get_test_dataloader(), device)
+    base_train_split_results = eval_model_on_clean_noise_splits(base_model, cfg, dataset, device)
+    results['avg_noise'][-1.0]['test_results'] = base_test_results
+    results['avg_noise'][-1.0]['train_results'] = base_train_split_results
     
-    # base_model = copy.deepcopy(model)
+    base_model = copy.deepcopy(model)
 
-    # best_coef, best_results, best_cm = search_optimal_coefficient(
-    #     base_model=base_model,
-    #     task_vector=avg_tv,
-    #     search_range=(-3.0, 0.0),
-    #     dataset=dataset,
-    #     num_classes=num_classes,
-    #     device=device
-    # )
+    best_coef, best_results, best_cm = search_optimal_coefficient(
+        base_model=base_model,
+        task_vector=avg_tv,
+        search_range=(-3.0, 0.0),
+        dataset=dataset,
+        num_classes=num_classes,
+        device=device
+    )
     
-    # results['avg_noise']['best_alpha'] = best_coef
-    # results['avg_noise']['test_results'] = best_results
-    
-    
-    # # train_results, _, _ = evaluate_model(model, dataset.get_train_dataloader(), device)
-    # # results[tv_name]['train_results'] = train_results
-    
-    
-    # base_model = copy.deepcopy(model)
-    # avg_tv.apply_to(base_model, scaling_coef=best_coef)
-    
-    # after_tv_metrics = eval_model_on_clean_noise_splits(base_model, cfg, dataset, device)
-    # results['avg_noise']['train_results'] = after_tv_metrics
+    results['avg_noise'][best_coef] = OrderedDict()
+    results['avg_noise'][best_coef]['test_results'] = best_results
+    avg_tv.apply_to(base_model, scaling_coef=best_coef)
+    after_tv_metrics = eval_model_on_clean_noise_splits(base_model, cfg, dataset, device)
+    results['avg_noise'][best_coef]['train_results'] = after_tv_metrics
     
     
-    # random_vec = avg_tv.generate_random_vector_with_same_layer_norms(seed=11)
-    # results['rnd_vec'] = OrderedDict()
+    random_vec = avg_tv.generate_random_vector_with_same_layer_norms(seed=11)
+    results['rnd_vec'] = OrderedDict()
     
-    # base_model = copy.deepcopy(model)
+    base_model = copy.deepcopy(model)
+    results['rnd_vec'][-1.0] = OrderedDict()
+    random_vec.apply_to(base_model, scaling_coef=-1.0)
+    base_test_results, _, _ = evaluate_model(base_model, dataset.get_test_dataloader(), device)
+    base_train_split_results = eval_model_on_clean_noise_splits(base_model, cfg, dataset, device)
+    results['rnd_vec'][-1.0]['test_results'] = base_test_results
+    results['rnd_vec'][-1.0]['train_results'] = base_train_split_results
+    
+    base_model = copy.deepcopy(model)
 
-    # best_coef, best_results, best_cm = search_optimal_coefficient(
-    #     base_model=base_model,
-    #     task_vector=random_vec,
-    #     search_range=(-3.0, 0.0),
-    #     dataset=dataset,
-    #     num_classes=num_classes,
-    #     device=device
-    # )
+    best_coef, best_results, best_cm = search_optimal_coefficient(
+        base_model=base_model,
+        task_vector=random_vec,
+        search_range=(-3.0, 0.0),
+        dataset=dataset,
+        num_classes=num_classes,
+        device=device
+    )
     
-    # results['rnd_vec']['best_alpha'] = best_coef
-    # results['rnd_vec']['test_results'] = best_results
-    
-
-    # base_model = copy.deepcopy(model)
-    # random_vec.apply_to(base_model, scaling_coef=best_coef)
-    
-    # after_tv_metrics = eval_model_on_clean_noise_splits(base_model, cfg, dataset, device)
-    # results['rnd_vec']['train_reults'] = after_tv_metrics
-    
+    results['rnd_vec'][best_coef] = OrderedDict()
+    results['rnd_vec'][best_coef]['test_results'] = best_results
+    base_model = copy.deepcopy(model)
+    random_vec.apply_to(base_model, scaling_coef=best_coef)
+    after_tv_metrics = eval_model_on_clean_noise_splits(base_model, cfg, dataset, device)
+    results['rnd_vec'][best_coef]['train_results'] = after_tv_metrics
     
     return results
 
@@ -570,6 +575,7 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
 
     
     for idx, noise_tv in enumerate(cfg['strategy']['noise']['finetuning']):
+        print(cfg['strategy'])
         if not outputs_dir.joinpath(f"{cfg_name}/finetune_{noise_tv['noise_rate']}_{noise_tv['seed']}/weights/model_weights.pth").exists():
             cfg_cpy = copy.deepcopy(cfg)
             dataset, num_classes = dataset_factory.create_dataset(cfg_cpy, augmentations)
@@ -839,7 +845,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     print(results_dict)
     
     
-    with open(results_dir / 'metrics2.json' , 'w') as json_file:
+    with open(results_dir / 'metrics.json' , 'w') as json_file:
         json.dump(results_dict, json_file, indent=4)
     # generate_latex_table_from_results(results_dict, results_dir / 'results_tex.txt')
     

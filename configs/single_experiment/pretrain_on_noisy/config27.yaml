@@ -13,27 +13,26 @@ strategy:
       noise_type: 'symmetric'
       seed: 8
     finetuning:
-      finetuning:
-      - set: 'Train'
-        noise_rate: 1.0
-        noise_type: 'symmetric'
-        seed: 12
-      - set: 'Train'
-        noise_rate: 1.0
-        noise_type: 'symmetric'
-        seed: 10
-      - set: 'Train'
-        noise_rate: 1.0
-        noise_type: 'symmetric'
-        seed: 15
-      - set: 'Train'
-        noise_rate: 1.0
-        noise_type: 'symmetric'
-        seed: 20
-      - set: 'Train'
-        noise_rate: 1.0
-        noise_type: 'symmetric'
-        seed: 30
+    - set: 'Train'
+      noise_rate: 1.0
+      noise_type: 'symmetric'
+      seed: 12
+    - set: 'Train'
+      noise_rate: 1.0
+      noise_type: 'symmetric'
+      seed: 10
+    - set: 'Train'
+      noise_rate: 1.0
+      noise_type: 'symmetric'
+      seed: 15
+    - set: 'Train'
+      noise_rate: 1.0
+      noise_type: 'symmetric'
+      seed: 20
+    - set: 'Train'
+      noise_rate: 1.0
+      noise_type: 'symmetric'
+      seed: 30
 
 dataset:
   name: "cifar10"
