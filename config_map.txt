@@ -1,0 +1,4 @@
+pton:
+config 4 and 18
+config 5 and 27
+config 11, 12, 13 and 28
