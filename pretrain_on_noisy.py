@@ -575,7 +575,6 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
 
     
     for idx, noise_tv in enumerate(cfg['strategy']['noise']['finetuning']):
-        print(cfg['strategy'])
         if not outputs_dir.joinpath(f"{cfg_name}/finetune_{noise_tv['noise_rate']}_{noise_tv['seed']}/weights/model_weights.pth").exists():
             cfg_cpy = copy.deepcopy(cfg)
             dataset, num_classes = dataset_factory.create_dataset(cfg_cpy, augmentations)
