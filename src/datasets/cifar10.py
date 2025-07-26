@@ -14,16 +14,21 @@ from typing import Tuple, List, Union, Dict
 class CIFAR10(BaseClassificationDataset):
     def __init__(
         self,
-        *args,
+        img_size: Union[tuple, list] = (32, 32),
+        grayscale: bool = False,
+        normalize_imgs: bool = False,
+        flatten: bool = False,
         **kwargs
     ) -> None:
-        
+        self.img_size = img_size
+        self.grayscale = grayscale
+        self.normalize_imgs = normalize_imgs
+        self.flatten = flatten
         
         super().__init__(
             dataset_name='CIFAR10',
             num_classes=10,
-            *args,
-            **kwargs,
+            **kwargs,  
         )
 
 

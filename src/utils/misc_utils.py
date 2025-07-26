@@ -640,7 +640,9 @@ def describe_structure(obj, depth=0):
 
 
 
-def plot_confusion_matrix(cm, class_names=None, title='Confusion Matrix', filepath=None, show=True):
+def plot_confusion_matrix(cm, class_names=None, title='Confusion Matrix', color_map='Blues', color_bar=False, 
+                            x_label=None, y_label=None, vmin=None, vmax=None, tick_label_font_size=None,
+                            filepath=None, show=True):
     """
     Plots the confusion matrix (for integers) or a similarity matrix (for floats)
     and optionally saves it to a file and/or displays it.
@@ -650,9 +652,17 @@ def plot_confusion_matrix(cm, class_names=None, title='Confusion Matrix', filepa
         class_names (list, optional): A list of class names to display on the axes.
                                         If None, will use 0, 1, 2...
         title (str): The title of the plot.
+        color_map (str): Colormap to use for the heatmap. Defaults to 'Blues'.
+        color_bar (bool): If True, a color bar will be displayed. Defaults to False.
         filepath (str, optional): The path and filename to save the plot.
                                    If None, the plot will not be saved.
         show (bool): If True, the plot will be displayed to the user. Defaults to True.
+        vmin (float, optional): The minimum value for the colormap. If provided, overrides
+                                  automatic scaling for the colormap. Useful for fixing the
+                                  range for similarity matrices (e.g., -1 to 1).
+        vmax (float, optional): The maximum value for the colormap. If provided, overrides
+                                  automatic scaling for the colormap. Useful for fixing the
+                                  range for similarity matrices (e.g., -1 to 1).
     """
     if filepath is None and not show:
         print("Warning: Neither 'filepath' is provided nor 'show' is set to True. The plot will not be saved or displayed.")
@@ -668,29 +678,70 @@ def plot_confusion_matrix(cm, class_names=None, title='Confusion Matrix', filepa
     # Determine the format string based on the data type of the matrix
     if np.issubdtype(cm_np.dtype, np.integer):
         fmt = 'd'  # Integer format for confusion matrices
+        # For integer matrices, if vmin/vmax are not explicitly set, let seaborn determine them
+        # However, if they are set, apply them
+        if vmin is None:
+            vmin_effective = cm_np.min()
+        else:
+            vmin_effective = vmin
+        if vmax is None:
+            vmax_effective = cm_np.max()
+        else:
+            vmax_effective = vmax
+
     elif np.issubdtype(cm_np.dtype, np.floating):
         fmt = '.2f'  # Float format with 2 decimal places for similarity matrices
+        # For float matrices, if vmin/vmax are not explicitly set, use the matrix's min/max
+        if vmin is None:
+            vmin_effective = cm_np.min()
+        else:
+            vmin_effective = vmin
+        if vmax is None:
+            vmax_effective = cm_np.max()
+        else:
+            vmax_effective = vmax
     else:
         # Fallback for other types, or raise an error if unsupported
         fmt = '.2f' # Default to float format for safety
+        if vmin is None:
+            vmin_effective = cm_np.min()
+        else:
+            vmin_effective = vmin
+        if vmax is None:
+            vmax_effective = cm_np.max()
+        else:
+            vmax_effective = vmax
 
     plt.figure(figsize=(8, 6))
-    # Use cm_np here
-    sns.heatmap(cm_np, annot=True, fmt=fmt, cmap='Blues', cbar=True, # Changed cbar to True for similarity
-                xticklabels=class_names, yticklabels=class_names)
+    
+    # Use vmin_effective and vmax_effective for the color mapping
+    ax = sns.heatmap(cm_np, annot=True, fmt=fmt, cmap=color_map, cbar=color_bar,
+                xticklabels=class_names, yticklabels=class_names,
+                vmin=vmin_effective, vmax=vmax_effective)
+    
+    # Set font size for xticklabels and yticklabels
+    if tick_label_font_size is not None:
+        ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha='right', fontsize=tick_label_font_size)
+        ax.set_yticklabels(ax.get_yticklabels(), rotation=0, va='center', fontsize=tick_label_font_size)
+    
     plt.title(title)
     # Adjust labels based on whether it's integer (likely confusion matrix) or float (likely similarity)
-    plt.xlabel('Predicted Label' if np.issubdtype(cm_np.dtype, np.integer) else 'Vector Index')
-    plt.ylabel('True Label' if np.issubdtype(cm_np.dtype, np.integer) else 'Vector Index')
+    if x_label:
+        plt.xlabel(x_label)
+    if y_label:
+        plt.ylabel(y_label)
+    
+    
     plt.tight_layout()
 
     if filepath:
-        plt.savefig(filepath)
+        plt.savefig(filepath, dpi=300)
     
     if show:
         plt.show()
     
-    plt.close() # Close the plot to free memory
+    plt.close()
+
     
     
     

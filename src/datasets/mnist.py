@@ -15,15 +15,21 @@ from typing import Tuple, List, Union, Dict
 class MNIST(BaseClassificationDataset):
     def __init__(
         self,
-        *args,
+        img_size: Union[tuple, list] = (28, 28),
+        grayscale: bool = True,
+        normalize_imgs: bool = False,
+        flatten: bool = False,
         **kwargs
     ) -> None:
+        self.img_size = img_size
+        self.grayscale = grayscale
+        self.normalize_imgs = normalize_imgs
+        self.flatten = flatten
         
         super().__init__(
             dataset_name='MNIST',
             num_classes=10,
-            *args,
-            **kwargs,
+            **kwargs,  
         )
 
     def load_train_set(self):

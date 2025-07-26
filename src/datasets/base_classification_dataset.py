@@ -19,16 +19,12 @@ class BaseClassificationDataset(ABC):
         num_classes:int = None,
         data_dir: Path = Path("./data").absolute(),
         batch_size: int = 256,
-        img_size: Union[tuple, list] = (32, 32),
         subsample_size: Union[tuple, list] = (-1, -1),
         class_subset: list = [],
         remap_labels: bool = False,
         balance_classes: bool = False,
         heldout_conf: Union[None, float, Dict[int, float]] = None,
-        grayscale: bool = False,
-        augmentations: list = [],
-        normalize_imgs: bool = False,
-        flatten: bool = False,
+        augmentations: Union[list, None] = None,
         valset_ratio: float = 0.05,
         num_workers: int = 2,
         seed: int = None,
@@ -48,17 +44,13 @@ class BaseClassificationDataset(ABC):
         self.dataset_name = dataset_name
         
         self.batch_size = batch_size
-        self.img_size = img_size
         self.num_workers = num_workers
         self.subsample_size = subsample_size
         self.class_subset = sorted(class_subset) if class_subset else None
         self.remap_labels = remap_labels
         self.balance_classes = balance_classes
         self.heldout_conf = heldout_conf
-        self.grayscale = grayscale
         self.augmentations = augmentations
-        self.normalize_imgs = normalize_imgs
-        self.flatten = flatten
         self.valset_ratio = valset_ratio
         self.trainset_ratio = 1 - self.valset_ratio
 
@@ -114,7 +106,9 @@ class BaseClassificationDataset(ABC):
     def get_transforms(self, train=True):
         """
         This method must be implemented by all subclasses.
-        The method should return an instance of torchvision.transforms.Compose (either v1 or v2).
+        The method should return an instance of torchvision.transforms.Compose (either v1 or v2),
+        or a general transform strategy which can be passed to the dataset instances and be 
+        applied in the `__getitem__` method of the datset.
         """
         pass
     

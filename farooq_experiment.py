@@ -316,8 +316,8 @@ def compare_task_vectors(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_na
     
     temp = TaskVector(mix_weights, noisy_wieghts)
     
-    tv_list = [clean_tv, mix_tv, noisy_tv, temp]
-    tv_names = ['clean', 'mix', 'noise', 'temp']
+    tv_list = [clean_tv, mix_tv, noisy_tv]
+    tv_names = ['Clean', 'Mix', 'Noise']
     
     
     tv_sim = []
@@ -333,6 +333,21 @@ def compare_task_vectors(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_na
     
     
     misc_utils.plot_confusion_matrix(cm=tv_sim, class_names=tv_names, filepath=None, show=True)
+    
+    misc_utils.plot_confusion_matrix(
+        title='Task Vector Similarity Matrix',
+        cm=tv_sim,
+        class_names=tv_names,
+        color_map='vlag',
+        color_bar=True,
+        vmin= -1.0,
+        vmax= 1.0,
+        x_label='Task Vectors',
+        y_label='Task Vectors',
+        tick_label_font_size=6,
+        filepath=results_dir / 'task_similarities.png',
+        show=False
+    )
     
     base_model.load_state_dict(mix_weights)
     

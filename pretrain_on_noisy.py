@@ -170,6 +170,97 @@ def eval_model_on_clean_noise_splits(model, cfg, dataset, device):
     
     
     
+def generate_latex_table_from_results(results_dict, output_path):
+    def format_acc(val):
+        return f"{val * 100:.2f}"
+
+    def format_loss(val):
+        return f"{val:.3f}"
+
+    def get_nested(d, *keys):
+        for key in keys:
+            d = d.get(key, {})
+        return d
+
+    def latex_delta(current, baseline, positive_good=True):
+        delta = (current - baseline) * 100
+        if abs(delta) < 1e-2:
+            return ""
+        color = "green" if (delta > 0 and positive_good) or (delta < 0 and not positive_good) else "red"
+        sign = "+" if delta > 0 else "-"
+        return f" \\textcolor{{{color}}}{{({sign}{abs(delta):.2f})}}"
+
+    # Baselines from "pretrain"
+    pretrain = results_dict["pretrain"]
+    base_utility_acc = get_nested(pretrain, "test_results", "ACC")
+    base_forgetting_acc = get_nested(pretrain, "train_results", "noisy_set", "ACC")
+    base_healing_acc = get_nested(pretrain, "train_results", "healing_noise", "ACC")
+    base_clean_acc = get_nested(pretrain, "train_results", "clean_set", "ACC")
+
+    # Begin LaTeX table
+    lines = [
+        r"\begin{table}[ht]",
+        r"\centering",
+        r"\scriptsize",
+        r"\begin{tabular}{lcccccccc}",
+        r"\toprule",
+        r"& \multicolumn{2}{c}{Utility} & \multicolumn{2}{c}{Forgetting Rate} & \multicolumn{2}{c}{Healing Rate} & \multicolumn{2}{c}{Performance on $\mathcal{D}_{clean}$} \\",
+        r"\cmidrule(lr){2-3} \cmidrule(lr){4-5} \cmidrule(lr){6-7} \cmidrule(lr){8-9}",
+        r"Model & ACC & Loss & ACC & Loss & ACC & Loss & ACC & Loss \\",
+        r"\midrule"
+    ]
+
+    for name, data in results_dict.items():
+        train_key = "train_results" if "train_results" in data else "train_reults"
+
+        test_acc = get_nested(data, "test_results", "ACC")
+        test_loss = get_nested(data, "test_results", "Loss")
+
+        noisy_acc = get_nested(data, train_key, "noisy_set", "ACC")
+        noisy_loss = get_nested(data, train_key, "noisy_set", "Loss")
+
+        healing_acc = get_nested(data, train_key, "healing_noise", "ACC")
+        healing_loss = get_nested(data, train_key, "healing_noise", "Loss")
+
+        clean_acc = get_nested(data, train_key, "clean_set", "ACC")
+        clean_loss = get_nested(data, train_key, "clean_set", "Loss")
+
+        # Format values
+        acc_util_str = format_acc(test_acc) + latex_delta(test_acc, base_utility_acc, positive_good=True)
+        acc_forgot_str = format_acc(noisy_acc) + latex_delta(noisy_acc, base_forgetting_acc, positive_good=False)
+        acc_heal_str = format_acc(healing_acc) + latex_delta(healing_acc, base_healing_acc, positive_good=True)
+        acc_clean_str = format_acc(clean_acc) + latex_delta(clean_acc, base_clean_acc, positive_good=True)
+
+        loss_util_str = format_loss(test_loss)
+        loss_forgot_str = format_loss(noisy_loss)
+        loss_heal_str = format_loss(healing_loss)
+        loss_clean_str = format_loss(clean_loss)
+
+        # Escape underscores in names
+        safe_name = r"\texttt{" + name.replace("_", r"\_") + r"}"
+
+        # Add row
+        lines.append(
+            f"{safe_name} & {acc_util_str} & {loss_util_str} & "
+            f"{acc_forgot_str} & {loss_forgot_str} & "
+            f"{acc_heal_str} & {loss_heal_str} & "
+            f"{acc_clean_str} & {loss_clean_str} \\\\"
+        )
+
+    lines += [
+        r"\bottomrule",
+        r"\end{tabular}",
+        r"\caption{Performance metrics from different model states. Accuracy values are shown as percentages. Differences from the baseline (\texttt{pretrain}) are marked in \textcolor{green}{green} for improvements and \textcolor{red}{red} for regressions.}",
+        r"\label{tab:noise_unlearning_results}",
+        r"\end{table}"
+    ]
+
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    with open(output_path, "w") as f:
+        f.write("\n".join(lines))
+
+    print(f"LaTeX table successfully written to {output_path}")
+    
 def eval_model_on_tvs(model, taskvectors, results_dict, cfg, dataset, num_classes, device):
     
     results = results_dict
@@ -180,89 +271,90 @@ def eval_model_on_tvs(model, taskvectors, results_dict, cfg, dataset, num_classe
         results[tv_name] = OrderedDict()
         base_model = copy.deepcopy(model)
 
-        best_coef, best_results, best_cm = search_optimal_coefficient(
-            base_model=base_model,
-            task_vector=tv,
-            search_range=(-3.0, 0.0),
-            dataset=dataset,
-            num_classes=num_classes,
-            device=device
-        )
+        # best_coef, best_results, best_cm = search_optimal_coefficient(
+        #     base_model=base_model,
+        #     task_vector=tv,
+        #     search_range=(-3.0, 0.0),
+        #     dataset=dataset,
+        #     num_classes=num_classes,
+        #     device=device
+        # )
         
-        results[tv_name]['best_alpha'] = best_coef
-        results[tv_name]['test_results'] = best_results
+        
+        # results[tv_name]['best_alpha'] = best_coef
+        # results[tv_name]['test_results'] = best_results
         
         # train_results, _, _ = evaluate_model(model, dataset.get_train_dataloader(), device)
         # results[tv_name]['train_results'] = train_results
         base_model = copy.deepcopy(model)
-        tv.apply_to(base_model, scaling_coef=best_coef)
+        # tv.apply_to(base_model, scaling_coef=best_coef)
+        tv.apply_to(base_model, scaling_coef=-1.0)
         
         after_tv_metrics = eval_model_on_clean_noise_splits(base_model, cfg, dataset, device)
         results[tv_name]['train_reults'] = after_tv_metrics
         
         
-    avg_tv = None
-    count = 0  
-    for tv_name, tv in taskvectors.items():
-        if tv_name != "ft_gt_noise":
-            count += 1
-            if avg_tv is not None:  
-                avg_tv += (tv - avg_tv) * (1/count)
-            else:
-                avg_tv = tv
+    # avg_tv = None
+    # count = 0  
+    # for tv_name, tv in taskvectors.items():
+    #     if tv_name != "ft_gt_noise":
+    #         count += 1
+    #         if avg_tv is not None:  
+    #             avg_tv += (tv - avg_tv) * (1/count)
+    #         else:
+    #             avg_tv = tv
                 
-    results['avg_noise'] = OrderedDict()
+    # results['avg_noise'] = OrderedDict()
     
-    base_model = copy.deepcopy(model)
+    # base_model = copy.deepcopy(model)
 
-    best_coef, best_results, best_cm = search_optimal_coefficient(
-        base_model=base_model,
-        task_vector=avg_tv,
-        search_range=(-3.0, 0.0),
-        dataset=dataset,
-        num_classes=num_classes,
-        device=device
-    )
+    # best_coef, best_results, best_cm = search_optimal_coefficient(
+    #     base_model=base_model,
+    #     task_vector=avg_tv,
+    #     search_range=(-3.0, 0.0),
+    #     dataset=dataset,
+    #     num_classes=num_classes,
+    #     device=device
+    # )
     
-    results['avg_noise']['best_alpha'] = best_coef
-    results['avg_noise']['test_results'] = best_results
-    
-    
-    # train_results, _, _ = evaluate_model(model, dataset.get_train_dataloader(), device)
-    # results[tv_name]['train_results'] = train_results
+    # results['avg_noise']['best_alpha'] = best_coef
+    # results['avg_noise']['test_results'] = best_results
     
     
-    
-    base_model = copy.deepcopy(model)
-    avg_tv.apply_to(base_model, scaling_coef=best_coef)
-    
-    after_tv_metrics = eval_model_on_clean_noise_splits(base_model, cfg, dataset, device)
-    results['avg_noise']['train_results'] = after_tv_metrics
+    # # train_results, _, _ = evaluate_model(model, dataset.get_train_dataloader(), device)
+    # # results[tv_name]['train_results'] = train_results
     
     
-    random_vec = avg_tv.generate_random_vector_with_same_layer_norms(seed=11)
-    results['rnd_vec'] = OrderedDict()
+    # base_model = copy.deepcopy(model)
+    # avg_tv.apply_to(base_model, scaling_coef=best_coef)
     
-    base_model = copy.deepcopy(model)
+    # after_tv_metrics = eval_model_on_clean_noise_splits(base_model, cfg, dataset, device)
+    # results['avg_noise']['train_results'] = after_tv_metrics
+    
+    
+    # random_vec = avg_tv.generate_random_vector_with_same_layer_norms(seed=11)
+    # results['rnd_vec'] = OrderedDict()
+    
+    # base_model = copy.deepcopy(model)
 
-    best_coef, best_results, best_cm = search_optimal_coefficient(
-        base_model=base_model,
-        task_vector=random_vec,
-        search_range=(-3.0, 0.0),
-        dataset=dataset,
-        num_classes=num_classes,
-        device=device
-    )
+    # best_coef, best_results, best_cm = search_optimal_coefficient(
+    #     base_model=base_model,
+    #     task_vector=random_vec,
+    #     search_range=(-3.0, 0.0),
+    #     dataset=dataset,
+    #     num_classes=num_classes,
+    #     device=device
+    # )
     
-    results['rnd_vec']['best_alpha'] = best_coef
-    results['rnd_vec']['test_results'] = best_results
+    # results['rnd_vec']['best_alpha'] = best_coef
+    # results['rnd_vec']['test_results'] = best_results
     
 
-    base_model = copy.deepcopy(model)
-    random_vec.apply_to(base_model, scaling_coef=best_coef)
+    # base_model = copy.deepcopy(model)
+    # random_vec.apply_to(base_model, scaling_coef=best_coef)
     
-    after_tv_metrics = eval_model_on_clean_noise_splits(base_model, cfg, dataset, device)
-    results['rnd_vec']['train_reults'] = after_tv_metrics
+    # after_tv_metrics = eval_model_on_clean_noise_splits(base_model, cfg, dataset, device)
+    # results['rnd_vec']['train_reults'] = after_tv_metrics
     
     
     return results
@@ -569,6 +661,9 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     base_model = model_factory.create_model(cfg['model'], num_classes)
     
+    results_dir = results_dir / cfg_name
+    results_dir.mkdir(exist_ok=True, parents=True)
+    
     base_expr_dir = outputs_dir / cfg_name
     gold_dir = base_expr_dir / 'gold'
     pretrain_dir = base_expr_dir / 'pretrain'
@@ -608,9 +703,9 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     #         print(key, weight_tensor.sum())
     # exit()
     
-    tv_names = ['ft_gold', 'ft_gt_noise']
+    tv_names = ['Gold', 'Ground Truth Noise']
     # class_names = []
-    tv_names.extend(list(finetune_tvs.keys()))
+    tv_names.extend([f"{float(n_s.split('_')[0])*100:.0f}% Noise, {n_s.split('_')[1]} Seed" for n_s in list(finetune_tvs.keys())])
     
     task_sim = []
     for i in range(len(ft_tvs_list)):
@@ -622,7 +717,20 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             task_sim[i].append(cos_sim)
     task_sim = np.array(task_sim)
     
-    misc_utils.plot_confusion_matrix(cm=task_sim, class_names=tv_names, filepath=None, show=True)
+    misc_utils.plot_confusion_matrix(
+        title='Task Vector Similarity Matrix',
+        cm=task_sim,
+        class_names=tv_names,
+        color_map='vlag',
+        color_bar=True,
+        vmin= -1.0,
+        vmax= 1.0,
+        x_label='Task Vectors',
+        y_label='Task Vectors',
+        tick_label_font_size=6,
+        filepath=results_dir / 'task_similarities.png',
+        show=False
+    )
     
     
     
@@ -730,11 +838,10 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     print(results_dict)
     
-    results_dir = results_dir / cfg_name
-    results_dir.mkdir(exist_ok=True, parents=True)
-    with open(results_dir / 'metrics.json' , 'w') as json_file:
-        json.dump(results_dict, json_file, indent=4)
     
+    with open(results_dir / 'metrics2.json' , 'w') as json_file:
+        json.dump(results_dict, json_file, indent=4)
+    # generate_latex_table_from_results(results_dict, results_dir / 'results_tex.txt')
     
     # otrh_tvs, shrd_tvs = TaskVector.decompose_task_vectors_SVD(ft_tvs_list)
     
