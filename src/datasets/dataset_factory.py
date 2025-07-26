@@ -1,4 +1,4 @@
-from . import CIFAR10, CIFAR100, MNIST
+from . import CIFAR10, CIFAR100, MNIST, FashionMNIST
 import copy
 
 def create_dataset(cfg, augmentations=None):
@@ -9,6 +9,11 @@ def create_dataset(cfg, augmentations=None):
     if dataset_name == 'mnist':
         num_classes = cfg_cpy['dataset'].pop('num_classes')
         dataset = MNIST(
+            **cfg_cpy['dataset']
+        )
+    elif dataset_name == 'fashion_mnist':
+        num_classes = cfg_cpy['dataset'].pop('num_classes')
+        dataset = FashionMNIST(
             **cfg_cpy['dataset']
         )
     elif dataset_name == 'cifar10':

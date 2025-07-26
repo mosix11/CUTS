@@ -1,4 +1,4 @@
-# Config 12 with 60% noise
+# Config 12 for FashionMNIST
 training_seed: &training_seed 11
 dataset_seed: &dataset_seed 11
 
@@ -35,9 +35,8 @@ strategy:
       seed: 30
 
 
-
 dataset:
-  name: "mnist"
+  name: "fashion_mnist"
   num_classes: &num_classes 10
   img_size: [28, 28]
   batch_size: 1024

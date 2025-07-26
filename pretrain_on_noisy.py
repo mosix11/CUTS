@@ -319,7 +319,12 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         #     transformsv2.RandomCrop(32, padding=4),
         #     transformsv2.RandomHorizontalFlip(),
         # ]
-
+    elif cfg['dataset']['name'] == 'fashion_mnist':
+        augmentations = None
+        # augmentations = [
+        #     transformsv2.RandomCrop(32, padding=4),
+        #     transformsv2.RandomHorizontalFlip(),
+        # ]
     
     if not outputs_dir.joinpath(f"{cfg_name}/gold/weights/model_weights.pth").exists():
         cfg_cpy = copy.deepcopy(cfg)
