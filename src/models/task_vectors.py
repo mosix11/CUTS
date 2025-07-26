@@ -2,6 +2,7 @@ import torch
 import torch.nn.functional as F
 from typing import List, Dict
 from collections import OrderedDict
+from typing import Union, List, Dict
 
 class TaskVector:
     # def __init__(self, pretrained_state_dict=None, finetuned_state_dict=None, vector=None):
@@ -115,6 +116,23 @@ class TaskVector:
         return TaskVector(vector=new_vector)
     
     
+    def __truediv__(self, other):
+        """Divide the task vector by a scalar or another task vector."""
+        new_vector = OrderedDict()
+        with torch.no_grad():
+            if isinstance(other, TaskVector):
+                for key in self.vector:
+                    if key not in other.vector:
+                        print(f"Warning: key {key} not found in both task vectors.")
+                        continue
+                    new_vector[key] = self.vector[key] / other.vector[key]
+            elif isinstance(other, (int, float)):
+                for key in self.vector:
+                    new_vector[key] = self.vector[key] / other
+            else:
+                raise TypeError(f"Unsupported operand type(s) for /: 'TaskVector' and '{type(other)}'")
+        return TaskVector(vector=new_vector)
+    
     def dot(self, other):
         """Dot product of two task vectors."""
         with torch.no_grad():
@@ -130,6 +148,33 @@ class TaskVector:
         """Norm of a task vector."""
         return torch.sqrt(self.dot(self))
     
+    
+    @staticmethod
+    def mean(tvs: Union[List, Dict]):
+        if isinstance(tvs, Dict):
+            tvs = tvs.values()
+        tvs = list(tvs)
+        if not tvs:
+            return None
+
+        total = tvs[0]
+        for tv in tvs[1:]:
+            total += tv
+        return total / len(tvs)
+    
+    # @staticmethod
+    # def mean(tvs: Union[List, Dict]):
+    #     if isinstance(tvs, Dict):
+    #         tvs = tvs.values()
+    #     avg_tv = None
+    #     count = 0  
+    #     for tv in tvs:
+    #         count += 1
+    #         if avg_tv is not None:  
+    #             avg_tv += (tv - avg_tv) * (1/count)
+    #         else:
+    #             avg_tv = tv
+    #     return avg_tv
     
     def cosine_similarity(self, A, B):
         A_flat = A.flatten()

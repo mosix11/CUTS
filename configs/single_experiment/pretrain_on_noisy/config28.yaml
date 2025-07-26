@@ -1,4 +1,4 @@
-# Config 11 with low loss percentage 30
+# Config 12 with 60% noise
 training_seed: &training_seed 11
 dataset_seed: &dataset_seed 11
 
@@ -9,7 +9,7 @@ strategy:
   noise:
     pretraining:
       set: 'Train'
-      noise_rate: 0.4
+      noise_rate: 0.6
       noise_type: 'symmetric'
       seed: 8
     finetuning:
@@ -33,6 +33,7 @@ strategy:
       noise_rate: 1.0
       noise_type: 'symmetric'
       seed: 30
+
 
 
 dataset:
