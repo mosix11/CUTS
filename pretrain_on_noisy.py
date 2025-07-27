@@ -326,14 +326,16 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         #     transformsv2.RandomHorizontalFlip(),
         # ]
     
+    
+    base_dataset, num_classes = dataset_factory.create_dataset(cfg, augmentations)
+    base_model = model_factory.create_model(cfg['model'], num_classes)
+    strategy = cfg['strategy']
+    base_dataset.inject_noise(**strategy['noise']['pretraining'])
+    
     if not outputs_dir.joinpath(f"{cfg_name}/gold/weights/model_weights.pth").exists():
-        cfg_cpy = copy.deepcopy(cfg)
-        dataset, num_classes = dataset_factory.create_dataset(cfg_cpy, augmentations)
+        dataset = copy.deepcopy(base_dataset)
+        model = copy.deepcopy(base_model)
         
-        model = model_factory.create_model(cfg_cpy['model'], num_classes)
-        
-        strategy = cfg_cpy['strategy']
-        dataset.inject_noise(**strategy['noise']['pretraining'])
         clean_set, noisy_set = dataset.get_clean_noisy_subsets(set='Train')
         dataset.set_trainset(clean_set, shuffle=True)
             
@@ -350,7 +352,7 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
 
         trainer = StandardTrainer(
             outputs_dir=outputs_dir,
-            **cfg_cpy['trainer']['pretraining'],
+            **cfg['trainer']['pretraining'],
             exp_name=experiment_name,
             exp_tags=None,
         )
@@ -370,14 +372,8 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         
 
     if not outputs_dir.joinpath(f"{cfg_name}/pretrain/weights/model_weights.pth").exists():
-        cfg_cpy = copy.deepcopy(cfg)
-        dataset, num_classes = dataset_factory.create_dataset(cfg_cpy, augmentations)
-        
-        model = model_factory.create_model(cfg_cpy['model'], num_classes)
-        
-        strategy = cfg_cpy['strategy']
-        
-        dataset.inject_noise(**strategy['noise']['pretraining'])
+        dataset = copy.deepcopy(base_dataset)
+        model = copy.deepcopy(base_model)
         
         experiment_name = f"{cfg_name}/pretrain"
 
@@ -396,7 +392,7 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             exp_tags=None,
         )
         
-        if cfg['strategy']['finetuning_set'] == 'LowLoss':
+        if strategy['finetuning_set'] == 'LowLoss':
             trainer.setup_data_loaders(dataset)
             trainer.activate_low_loss_samples_buffer(
                 consistency_window=5,
@@ -420,17 +416,13 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
 
 
     if not outputs_dir.joinpath(f"{cfg_name}/finetune_gold/weights/model_weights.pth").exists():
-        cfg_cpy = copy.deepcopy(cfg)
-        dataset, num_classes = dataset_factory.create_dataset(cfg_cpy, augmentations)
-        
-        model = model_factory.create_model(cfg_cpy['model'], num_classes)
+        dataset = copy.deepcopy(base_dataset)
+        model = copy.deepcopy(base_model)
         
         base_model_ckp_path = outputs_dir/ Path(f"{cfg_name}/pretrain") / Path('weights/model_weights.pth')
         checkpoint = torch.load(base_model_ckp_path)
         model.load_state_dict(checkpoint)
         
-        strategy = cfg_cpy['strategy']
-        dataset.inject_noise(**strategy['noise']['pretraining'])
         clean_set, noisy_set = dataset.get_clean_noisy_subsets(set='Train')
         dataset.set_trainset(clean_set, shuffle=True)
             
@@ -447,7 +439,7 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
 
         trainer = StandardTrainer(
             outputs_dir=outputs_dir,
-            **cfg_cpy['trainer']['pretraining'],
+            **cfg['trainer']['pretraining'],
             exp_name=experiment_name,
             exp_tags=None,
         )
@@ -467,17 +459,13 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         
         
     if not outputs_dir.joinpath(f"{cfg_name}/finetune_gt_noise/weights/model_weights.pth").exists():
-        cfg_cpy = copy.deepcopy(cfg)
-        dataset, num_classes = dataset_factory.create_dataset(cfg_cpy, augmentations)
-        
-        model = model_factory.create_model(cfg_cpy['model'], num_classes)
+        dataset = copy.deepcopy(base_dataset)
+        model = copy.deepcopy(base_model)
         
         base_model_ckp_path = outputs_dir/ Path(f"{cfg_name}/pretrain") / Path('weights/model_weights.pth')
         checkpoint = torch.load(base_model_ckp_path)
         model.load_state_dict(checkpoint)
         
-        strategy = cfg_cpy['strategy']
-        dataset.inject_noise(**strategy['noise']['pretraining'])
         clean_set, noisy_set = dataset.get_clean_noisy_subsets(set='Train')
         dataset.set_trainset(noisy_set, shuffle=True)
             
@@ -494,7 +482,7 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
 
         trainer = StandardTrainer(
             outputs_dir=outputs_dir,
-            **cfg_cpy['trainer']['finetuning'],
+            **cfg['trainer']['finetuning'],
             exp_name=experiment_name,
             exp_tags=None,
         )
@@ -513,18 +501,15 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         )
 
     
-    for idx, noise_tv in enumerate(cfg['strategy']['noise']['finetuning']):
+    for idx, noise_tv in enumerate(strategy['noise']['finetuning']):
         if not outputs_dir.joinpath(f"{cfg_name}/finetune_{noise_tv['noise_rate']}_{noise_tv['seed']}/weights/model_weights.pth").exists():
-            cfg_cpy = copy.deepcopy(cfg)
-            dataset, num_classes = dataset_factory.create_dataset(cfg_cpy, augmentations)
-            
-            model = model_factory.create_model(cfg_cpy['model'], num_classes)
+            dataset = copy.deepcopy(base_dataset)
+            model = copy.deepcopy(base_model)
             
             base_model_ckp_path = outputs_dir/ Path(f"{cfg_name}/pretrain") / Path('weights/model_weights.pth')
             checkpoint = torch.load(base_model_ckp_path)
             model.load_state_dict(checkpoint)
             
-            strategy = cfg_cpy['strategy']
             
             experiment_name = f"{cfg_name}/finetune_{noise_tv['noise_rate']}_{noise_tv['seed']}"
             experiment_dir = outputs_dir / Path(experiment_name)
@@ -539,7 +524,6 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
                 dataset.inject_noise(**noise_tv)
                 dataset.replace_heldout_as_train_dl()
             elif strategy['finetuning_set'] == 'CleanNoiseSplit':
-                dataset.inject_noise(**strategy['noise']['pretraining'])
                 clean_set, noisy_set = dataset.get_clean_noisy_subsets(set='Train')
                 if noise_tv['set'] == 'TrainClean':
                     dataset.set_trainset(clean_set, shuffle=True)
@@ -555,7 +539,6 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
                     low_loss_indices = pickle.load(mfile)
                 all_easy_samples = [idx for class_list in low_loss_indices.values() for idx in class_list]
                 
-                dataset.inject_noise(**strategy['noise']['pretraining'])
                 dataset.subset_set(set='Train', indices=all_easy_samples)
                 
                 dataset.inject_noise(**noise_tv)

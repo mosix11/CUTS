@@ -162,19 +162,18 @@ class TaskVector:
             total += tv
         return total / len(tvs)
     
-    # @staticmethod
-    # def mean(tvs: Union[List, Dict]):
-    #     if isinstance(tvs, Dict):
-    #         tvs = tvs.values()
-    #     avg_tv = None
-    #     count = 0  
-    #     for tv in tvs:
-    #         count += 1
-    #         if avg_tv is not None:  
-    #             avg_tv += (tv - avg_tv) * (1/count)
-    #         else:
-    #             avg_tv = tv
-    #     return avg_tv
+    @staticmethod
+    def sum(tvs: Union[List, Dict]):
+        if isinstance(tvs, Dict):
+            tvs = tvs.values()
+        tvs = list(tvs)
+        if not tvs:
+            return None
+
+        total = tvs[0]
+        for tv in tvs[1:]:
+            total += tv
+        return total
     
     def cosine_similarity(self, A, B):
         A_flat = A.flatten()

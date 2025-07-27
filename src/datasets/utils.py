@@ -51,7 +51,18 @@ class LabelRemapper(Dataset):
 
 
 class NoisyClassificationDataset(Dataset):
-    def __init__(self, dataset: Dataset, dataset_name:str=None, noise_type='symmetric', noise_rate=0.2, num_classes=10, available_labels: list = None, seed=None, generator=None):
+    def __init__(
+        self,
+        dataset: Dataset,
+        dataset_name:str=None,
+        noise_type:str = 'symmetric', # between 'symmetric', 'asymmetric', and 'constant'
+        noise_rate: float = 0.2,
+        num_classes:int = None,
+        target_class:int = None, # Only needed for 'constant' noise
+        available_labels: list = None,
+        seed=None,
+        generator=None
+    ):
         super().__init__()
         self.dataset = dataset
         self.dataset_name = dataset_name
@@ -64,6 +75,12 @@ class NoisyClassificationDataset(Dataset):
             self.available_labels = available_labels
         
         self.num_classes = num_classes 
+        
+        if noise_type == 'constant':
+            if target_class is not None:
+                self.target_class = target_class
+            else:
+                raise ValueError('For constant noise, the target class should be specified!')
         
         if seed and not generator:
             generator = torch.Generator().manual_seed(seed)
@@ -150,7 +167,17 @@ class NoisyClassificationDataset(Dataset):
                     rand_idx = torch.randint(0, len(possible_flips), (1,), generator=self.generator).item()
                     noisy_labels[idx] = possible_flips[rand_idx]
                     self.is_noisy_flags[idx] = 1.0
-
+        elif self.noise_type == 'constant':
+            # how many labels to corrupt
+            num_noisy = int(self.noise_rate * len(original_labels))
+            if num_noisy > 0:
+                # pick that many random indices
+                noisy_indices = torch.randperm(len(original_labels), generator=self.generator)[:num_noisy]
+                # set them all to the single target class
+                noisy_labels[noisy_indices] = self.target_class
+                # mark them as noisy
+                self.is_noisy_flags[noisy_indices] = 1.0
+                
         elif self.noise_type == 'asymmetric':
             # This now uses the fixed-count method on a per-class basis
             if self.dataset_name is None:
