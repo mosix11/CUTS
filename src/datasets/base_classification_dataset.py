@@ -24,8 +24,7 @@ class BaseClassificationDataset(ABC):
         remap_labels: bool = False,
         balance_classes: bool = False,
         heldout_conf: Union[None, float, Dict[int, float]] = None,
-        augmentations: Union[list, None] = None,
-        valset_ratio: float = 0.05,
+        valset_ratio: float = 0.0,
         num_workers: int = 2,
         seed: int = None,
     ) -> None:
@@ -50,7 +49,6 @@ class BaseClassificationDataset(ABC):
         self.remap_labels = remap_labels
         self.balance_classes = balance_classes
         self.heldout_conf = heldout_conf
-        self.augmentations = augmentations
         self.valset_ratio = valset_ratio
         self.trainset_ratio = 1 - self.valset_ratio
 
@@ -102,15 +100,15 @@ class BaseClassificationDataset(ABC):
         """
         pass
     
-    @abstractmethod
-    def get_transforms(self, train=True):
-        """
-        This method must be implemented by all subclasses.
-        The method should return an instance of torchvision.transforms.Compose (either v1 or v2),
-        or a general transform strategy which can be passed to the dataset instances and be 
-        applied in the `__getitem__` method of the datset.
-        """
-        pass
+    # @abstractmethod
+    # def get_transforms(self, train=True):
+    #     """
+    #     This method must be implemented by all subclasses.
+    #     The method should return an instance of torchvision.transforms.Compose (either v1 or v2),
+    #     or a general transform strategy which can be passed to the dataset instances and be 
+    #     applied in the `__getitem__` method of the datset.
+    #     """
+    #     pass
     
     @abstractmethod
     def get_identifier(self):
@@ -279,7 +277,8 @@ class BaseClassificationDataset(ABC):
             train_dataset = Subset(train_dataset, train_indices.tolist())
 
         heldout_set = None
-        train_dataset, heldout_set = self._split_heldout_set(train_dataset)
+        if self.heldout_conf:
+            train_dataset, heldout_set = self._split_heldout_set(train_dataset)
 
         
         if val_dataset != None:

@@ -19,12 +19,14 @@ class CIFAR100(BaseClassificationDataset):
         grayscale: bool = False,
         normalize_imgs: bool = False,
         flatten: bool = False,
+        augmentations: Union[list, None] = None,
         **kwargs
     ) -> None:
         self.img_size = img_size
         self.grayscale = grayscale
         self.normalize_imgs = normalize_imgs
         self.flatten = flatten
+        self.augmentations = augmentations
         
         super().__init__(
             dataset_name='CIFAR100',

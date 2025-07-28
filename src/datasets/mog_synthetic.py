@@ -1,6 +1,6 @@
 import torch
 from torch.utils.data import Dataset, DataLoader, random_split, Subset
-
+from .base_classification_dataset import BaseClassificationDataset
 from pathlib import Path
 from typing import List, Tuple, Union, Literal, Optional, Sequence
 import random
@@ -108,14 +108,17 @@ class MoGSyntheticDataset(Dataset):
             raise ValueError("random_state must be None, int, or torch.Generator")
 
         # --- Attributes to be populated by _generate_data ---
-        self.features: torch.Tensor = None
-        self.labels: torch.Tensor = None
+        self.data: torch.Tensor = None
+        self.targets: torch.Tensor = None
         self.cluster_means_: torch.Tensor = None
         self.cluster_generators_: Union[torch.Tensor, List[torch.Tensor]] = None
         self.cluster_class_labels_: torch.Tensor = None # Store mapping: cluster_idx -> class_label
 
         # Generate the data internally
         self._generate_data()
+        
+    def set_transformations(self, transfromations):
+        self.transfromations = transfromations
 
     def _generate_data(self):
         """Internal method to generate features (X) and labels (y)."""
@@ -220,13 +223,13 @@ class MoGSyntheticDataset(Dataset):
             y_list.append(cluster_y)
 
         # Concatenate all generated data
-        self.features = torch.cat(X_list, dim=0)
-        self.labels = torch.cat(y_list, dim=0)
+        self.data = torch.cat(X_list, dim=0)
+        self.targets = torch.cat(y_list, dim=0)
 
         # Shuffle the generated samples and labels together
         perm = torch.randperm(self.n_samples, generator=self.generator)
-        self.features = self.features[perm]
-        self.labels = self.labels[perm]
+        self.data = self.data[perm]
+        self.targets = self.targets[perm]
 
         # Store the generated cluster parameters (means already stored)
         self.cluster_means_ = cluster_means # Shape: (num_total_clusters, n_features)
@@ -240,75 +243,95 @@ class MoGSyntheticDataset(Dataset):
         """Returns the total number of samples in the dataset."""
         return self.n_samples
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx:int):
         """Returns the feature and label for a given index."""
-        # (Code for __getitem__ remains the same)
-        if not isinstance(idx, int):
-             raise TypeError("Index must be an integer. Slicing is not directly supported, use DataLoader or random_split.")
-        if not (0 <= idx < self.n_samples):
-             raise IndexError(f"Index {idx} out of bounds for dataset with length {self.n_samples}")
-        return self.features[idx], self.labels[idx]
+        if hasattr(self, 'transfromations'):
+            return self.transfromations(self.data[idx]), self.targets[idx]
 
-class MoGSynthetic:
+        return self.data[idx], self.targets[idx]
+
+class MoGSynthetic(BaseClassificationDataset):
     def __init__(
         self,
-        data_dir: Path = Path("./data").absolute(),
-        batch_size: int = 256,
         num_samples: int = 100000,
         num_features: int = 512,
-        num_classes: int = 10,
+        num_classes: int = 30,
         clusters_per_class: Union[str, int, List[int], Tuple[int]] = 'random',
         base_cluster_std: Union[str, float, List[float], Tuple[float]] = 'random',
-        covariance_type: Literal['isotropic', 'diagonal', 'full'] = 'isotropic',
+        covariance_type: Literal['isotropic', 'diagonal', 'full'] = 'full',
         class_sep: float = 1.0,
-        intra_class_spread: float = 0.5,
-        label_noise: float = 0.0,
-        train_val_test_ratio: Tuple[float] = (0.7, 0.0, 0.3),
-        num_workers: int = 2,
+        intra_class_spread: float = 2.0,
+        testset_ratio: float = 0.3,
         seed: int = None,
+        **kwargs
     ):
-        super().__init__()
         
-        data_dir.mkdir(exist_ok=True, parents=True)
-        dataset_dir = data_dir.joinpath(Path("MoGSynthetic"))
-        dataset_dir.mkdir(exist_ok=True, parents=True)
-        self.dataset_dir = dataset_dir
+
         
-        
-        self.batch_size = batch_size
-        self.num_workers = num_workers
-        
-        self.tot_samples = num_samples
+        self.num_samples = num_samples
         self.num_features = num_features
         self.num_classes = num_classes
-        self.label_noise = label_noise
+        self.clusters_per_class = clusters_per_class
+        self.base_cluster_std = base_cluster_std
+        self.covariance_type = covariance_type
+        self.class_sep = class_sep
+        self.intra_class_spread = intra_class_spread
+        self.testset_ratio = testset_ratio
         
-        self.generator = None
-        if seed:
-            self.seed = seed
-            random.seed(seed)
-            np.random.seed(seed)
-            torch.manual_seed(seed)
-            torch.cuda.manual_seed_all(seed)
-            self.generator = torch.Generator()
-            self.generator.manual_seed(self.seed)
-            
-        if np.sum(train_val_test_ratio) != 1.0:
-            raise ValueError('The sum of the values passed as `train_val_test_ratio` should be 1!')
-        self.train_val_test_ratio = train_val_test_ratio
         
-            
+        # self.generator = None
+        # if seed:
+        #     self.seed = seed
+        #     random.seed(seed)
+        #     np.random.seed(seed)
+        #     torch.manual_seed(seed)
+        #     torch.cuda.manual_seed_all(seed)
+        #     self.generator = torch.Generator()
+        #     self.generator.manual_seed(self.seed)
         
+        
+        super().__init__(
+            dataset_name='MoGSynthetic',
+            num_classes=num_classes,
+            **kwargs,
+            seed=seed
+        )
+        
+        
+    def load_train_set(self):
+        self._load_data()
+        return self.trainset
+    
+    def load_validation_set(self):
+        return None
+    
+    def load_test_set(self):
+        if hasattr(self, 'testset'):
+            return self.testset
+        else:
+            raise RuntimeError('In order to be able to load the test set you have to first call the `load_train_set`.')
+
+        
+
+    def get_identifier(self):
+        identifier = 'mog|'
+        identifier += f'smpls{self.num_samples}|'
+        identifier += f'ftrs{self.num_features}|'
+        identifier += f'cls{self.num_classes}'
+        return identifier
+        
+        
+    def _load_data(self):
         param_dict = {
-            'num_samples': num_samples,
-            'num_features': num_features,
-            'num_classes': num_classes,
-            'clusters_per_class': clusters_per_class if isinstance(clusters_per_class, int) else tuple(clusters_per_class) ,
-            'base_cluster_std': base_cluster_std if isinstance(base_cluster_std, float) else tuple(base_cluster_std),
-            'covariance_type': covariance_type,
-            'class_sep': class_sep,
-            'intra_class_spread': intra_class_spread,
-            'seed': seed
+            'num_samples': self.num_samples,
+            'num_features': self.num_features,
+            'num_classes': self.num_classes,
+            'clusters_per_class': self.clusters_per_class if isinstance(self.clusters_per_class, int) else tuple(self.clusters_per_class) ,
+            'base_cluster_std': self.base_cluster_std if isinstance(self.base_cluster_std, float) else tuple(self.base_cluster_std),
+            'covariance_type': self.covariance_type,
+            'class_sep': self.class_sep,
+            'intra_class_spread': self.intra_class_spread,
+            'seed': self.seed
         }
         
         # Generate unique identifier
@@ -321,156 +344,48 @@ class MoGSynthetic:
             self.full_dataset = torch.load(self.dataset_path, weights_only=False)
         else:
             print(f"Generating new dataset (ID: {self.identifier})")
-            if isinstance(clusters_per_class, str) and clusters_per_class == 'random':
-                if not (isinstance(base_cluster_std, str) and base_cluster_std == 'random'):
+            if isinstance(self.clusters_per_class, str) and self.clusters_per_class == 'random':
+                if not (isinstance(self.base_cluster_std, str) and self.base_cluster_std == 'random'):
                     raise ValueError('If the number of clusters is set to be randomly generated, the stds of the clusters must also be generated randomly.')
                 else:
-                    clusters_per_class = torch.randint(low=1, high=5, size=(num_classes,), generator=self.generator).numpy().tolist()
-                    num_clusters = np.sum(clusters_per_class)
-                    base_cluster_std = torch.rand(num_clusters) * (6.0 - 1.0) + 1.0
-                    base_cluster_std = base_cluster_std.numpy().tolist()
+                    self.clusters_per_class = torch.randint(low=1, high=5, size=(self.num_classes,), generator=self.generator).numpy().tolist()
+                    self.num_clusters = np.sum(self.clusters_per_class)
+                    self.base_cluster_std = torch.rand(self.num_clusters) * (6.0 - 1.0) + 1.0
+                    self.base_cluster_std = self.base_cluster_std.numpy().tolist()
 
             
             self.full_dataset = MoGSyntheticDataset(
-                n_samples=num_samples,
-                n_features=num_features,
-                n_classes=num_classes,
-                n_clusters_per_class=clusters_per_class,
-                base_cluster_std=base_cluster_std,
-                covariance_type=covariance_type,
-                class_sep=class_sep,
-                intra_class_spread=intra_class_spread,
+                n_samples=self.num_samples,
+                n_features=self.num_features,
+                n_classes=self.num_classes,
+                n_clusters_per_class=self.clusters_per_class,
+                base_cluster_std=self.base_cluster_std,
+                covariance_type=self.covariance_type,
+                class_sep=self.class_sep,
+                intra_class_spread=self.intra_class_spread,
                 random_state=self.generator,
             )
             torch.save(self.full_dataset, self.dataset_path)
             print(f"Saved dataset to {self.dataset_path}")
-        
-        
-        
-        self._init_loaders()
-        
-    def get_train_dataloader(self):
-        return self.train_loader
-
-    def get_val_dataloader(self):
-        return self.val_loader
-
-    def get_test_dataloader(self):
-        return self.test_loader
     
-    def get_identifier(self):
-        identifier = 'mog|'
-        identifier += f'smpls{self.tot_samples}|'
-        identifier += f'ftrs{self.num_features}|'
-        identifier += f'cls{self.num_classes}'
-        identifier += f'ln{self.label_noise}|'
-        return identifier
-    
-    def _apply_label_noise(self, dataset):
-        num_samples = len(dataset)
-        num_classes = self.num_classes
 
-        # Generate random numbers to decide which labels to flip
-        noise_mask = torch.rand(num_samples, generator=self.generator) < self.label_noise
-
-
-        # Get the original labels
-        # original_labels = dataset.labels.clone().detach()
-        if isinstance(dataset, Subset):
-            original_labels = dataset.dataset.labels[dataset.indices].clone().detach()
-        else:
-            original_labels = dataset.dataset.labels.clone().detach()
-        
-
-        # Generate random incorrect labels
-        random_labels = torch.randint(0, num_classes, (num_samples,), generator=self.generator)
-
-        # Ensure the random labels are different from the original labels
-        incorrect_mask = (random_labels == original_labels)
-        while incorrect_mask.any():
-            new_random_labels = torch.randint(0, num_classes, (incorrect_mask.sum(),), generator=self.generator)
-            random_labels[incorrect_mask] = new_random_labels
-            incorrect_mask = (random_labels == original_labels)
-
-        # Apply the noise to the targets
-        noisy_labels = torch.where(noise_mask, random_labels, original_labels)
-
-        # Update the dataset targets
-        # dataset.dataset.labels[dataset.indices] = noisy_labels
-        # return dataset
-
-        # Update the dataset targets
-        if isinstance(dataset, Subset):
-            # Assign noisy labels to the original dataset's targets at the Subset indices
-            dataset.dataset.labels[dataset.indices] = noisy_labels
-            if not hasattr(dataset.dataset, 'is_noisy'):
-                dataset.dataset.is_noisy = torch.zeros(len(dataset.dataset.labels), dtype=torch.bool)
-            dataset.dataset.is_noisy[dataset.indices] = noise_mask
-        else:
-            # Directly update the dataset's targets (avoids converting to list)
-            dataset.labels = noisy_labels
-            dataset.is_noisy = noise_mask
-
-        return dataset
-    
-    
-    def _init_loaders(self):
-        
-        trainset, valset, testset = random_split(
+        trainset, testset = random_split(
             self.full_dataset,
-            self.train_val_test_ratio,
+            [1 - self.testset_ratio, self.testset_ratio],
             generator=self.generator,
         )
-        
-        if self.label_noise > 0.0:
-            trainset = self._apply_label_noise(trainset)
         
         train_features = torch.stack([x for x, _ in trainset])
         feature_mean = train_features.mean(dim=0)
         feature_std = train_features.std(dim=0) + 1e-8 
         
-        class NormalizedDataset(Dataset):
-            def __init__(self, set, feature_mean, feature_std, is_noisy=False):
-                self.set = set
-                self.feature_mean = feature_mean
-                self.feature_std = feature_std
-                self.is_noisy = is_noisy
-                
-            def __getitem__(self, idx):
-                x, y = self.set[idx]
-                normalized_x = (x - self.feature_mean) / self.feature_std
-
-                # Get the is_noisy flag
-                if self.is_noisy:
-                    # For training set, retrieve the specific is_noisy flag for the current sample
-                    original_idx = self.set.indices[idx] if isinstance(self.set, Subset) else idx
-                    is_noisy_flag = self.set.dataset.is_noisy[original_idx]
-                else:
-                    # For validation/test sets, or if 'is_noisy' not present, it's always False
-                    is_noisy_flag = torch.tensor(False, dtype=torch.bool)
-
-                return normalized_x, y, is_noisy_flag
-                
-            def __len__(self):
-                return len(self.set)
+        normalization_trnsfm = lambda x: (x - feature_mean) / feature_std
         
-        trainset = NormalizedDataset(trainset, feature_mean, feature_std, is_noisy=True if self.label_noise > 0.0 else False)
-        valset = NormalizedDataset(valset, feature_mean, feature_std) if valset else None
-        testset = NormalizedDataset(testset, feature_mean, feature_std)
+        trainset.dataset.set_transformations(normalization_trnsfm)
+        testset.dataset.set_transformations(normalization_trnsfm)
+        
+        self.trainset = trainset
+        self.testset = testset
+        
+        
 
-        self.train_loader = self._build_dataloader(trainset)
-        self.val_loader = (
-            self._build_dataloader(valset) if self.train_val_test_ratio[1] > 0 else None
-        )
-        self.test_loader = self._build_dataloader(testset)
-
-    def _build_dataloader(self, dataset):
-        dataloader = DataLoader(
-            dataset,
-            batch_size=self.batch_size,
-            shuffle=True,
-            num_workers=self.num_workers,
-            pin_memory=True,
-            generator=self.generator
-        )
-        return dataloader

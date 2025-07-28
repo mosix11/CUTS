@@ -1,17 +1,15 @@
-# Config5 with 60% noise
-training_seed: &training_seed 11
-dataset_seed: &dataset_seed 11
-
-# TODO, the pretrain model only got 95% training accuarcy with 300 epochs. Increase trainig and fine tuning epochs for more concrete results.
+# MoG Synthetic 40% noise
+training_seed: &training_seed 22
+dataset_seed: &dataset_seed 22
 
 
 strategy:
   finetuning_set: &finetuning_set 'LowLoss'
-  percentage: 0.2
+  percentage: 0.3
   noise:
     pretraining:
       set: 'Train'
-      noise_rate: 0.6
+      noise_rate: 0.4
       noise_type: 'symmetric'
       seed: 8
     finetuning:
@@ -36,40 +34,46 @@ strategy:
       noise_type: 'symmetric'
       seed: 30
 
+
 dataset:
-  name: "cifar10"
-  num_classes: &num_classes 10
-  img_size: [32, 32]
-  batch_size: 1024
-  subsample_size: [-1, -1]
-  class_subset: []
-  remap_labels: False
+  name: "mog"
+  num_samples: 100000
+  num_classes: &num_classes 30
+  num_features: &feature_dim 512
+  clusters_per_class: 'random'
+  base_cluster_std: 'random'
+  covariance_type: 'full'
+  class_sep: 1.0
+  intra_class_spread: 2.0
+  batch_size: 4096
   heldout_conf: null
-  grayscale: False
-  normalize_imgs: True
-  flatten: False
   valset_ratio: 0.0
+  testset_ratio: 0.3
   num_workers: 8
   seed: *dataset_seed
 
 
 model:
-  type: 'vit_small'
-  num_classes: *num_classes
-  img_size: [32, 32]
+  type: 'fc1'
+  input_dim: *feature_dim
+  hidden_dim: 32768
+  output_dim: *num_classes
   loss_fn: 'CE-NR'
   metrics: ['ACC', 'F1']
 
+
+
+
 trainer:
   pretraining:
-    max_epochs: &max_epochs_pt 500
+    max_epochs: &max_epochs 200
     optimizer_cfg: 
       type: "adamw"
       lr: 5.0e-4
       betas: [0.9, 0.999]
     lr_schedule_cfg:
       type: 'cosann'
-      T_max: *max_epochs_pt
+      T_max: *max_epochs
       eta_min: 5.0e-6
     early_stopping: False
     validation_freq: -1
@@ -82,15 +86,15 @@ trainer:
     seed: *training_seed
 
   finetuning:
-    max_epochs: 500
+    max_epochs: 300
     optimizer_cfg: 
       type: "adamw"
       lr: 1.0e-4
       betas: [0.9, 0.999]
     lr_schedule_cfg:
       type: 'step'
-      milestones: [50, 100, 150, 200, 250, 300, 350]
-      gamma: 0.7
+      milestones: [50, 100, 150, 200, 250]
+      gamma: 0.8
     early_stopping: False
     validation_freq: -1
     save_best_model: False

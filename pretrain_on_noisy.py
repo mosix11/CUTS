@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from src.utils import nn_utils, misc_utils
 import torch
-import torchmetrics
+
 import torchvision.transforms.v2 as transformsv2
 from torch.utils.data import Dataset, Subset, ConcatDataset
 from functools import partial
@@ -25,150 +25,8 @@ import json
 from tqdm import tqdm
 from collections import OrderedDict
 
+from helper_funcs import evaluate_model, eval_model_on_clean_noise_splits, search_optimal_coefficient
 
-
-
-def prepare_batch(batch, device):
-    batch = [tens.to(device) for tens in batch]
-    return batch
-
-
-
-def evaluate_model(model, dataloader, device):
-    """
-    Evaluates the given model on the provided dataloader.
-
-    Args:
-        model (torch.nn.Module): The model to evaluate.
-        dataloader (torch.utils.data.DataLoader): The data loader for evaluation.
-        device (torch.device): The device to run evaluation on.
-
-    Returns:
-        tuple: A tuple containing (all_predictions, all_targets, metrics_dict).
-    """
-    loss_met = misc_utils.AverageMeter()
-    model.reset_metrics()
-    all_preds = []
-    all_targets = []
-    
-    model.to(device)
-    model.eval()
-    with torch.no_grad():
-        for batch in dataloader:
-            batch = prepare_batch(batch, device)
-            input_batch, target_batch = batch[:2]
-            
-            loss, preds = model.validation_step(input_batch, target_batch, use_amp=True, return_preds=True)
-            if model.loss_fn.reduction == 'none':
-                loss = loss.mean()
-            loss_met.update(loss.detach().cpu().item(), n=input_batch.shape[0])
-            
-            predictions = torch.argmax(preds, dim=-1)
-            all_preds.extend(predictions.cpu())
-            all_targets.extend(target_batch.cpu())
-            
-            
-    metric_results = model.compute_metrics()
-    metric_results['Loss'] = loss_met.avg
-    model.reset_metrics()
-    
-    return metric_results, torch.tensor(all_preds), torch.tensor(all_targets) 
-
-
-def search_optimal_coefficient(base_model, task_vector, search_range, dataset, num_classes, device):
-    """
-    Performs a search to find the optimal task vector scaling coefficient.
-
-    Args:
-        base_model (torch.nn.Module): The pre-trained model. A deepcopy is made for each evaluation.
-        task_vector (TaskVector): The task vector object.
-        dataset: The dataset object to get the test dataloader from.
-        search_range (list or tuple): A list/tuple [min_val, max_val] for the search.
-        device (torch.device): The device to run evaluation on.
-        num_classes (int): The number of classes for the confusion matrix.
-
-    Returns:
-        tuple: (best_coefficient, best_performance_metrics, confusion_matrix_tensor)
-    """
-    test_dataloader = dataset.get_test_dataloader()
-    
-    best_coef = 0.0
-    best_acc = -1.0
-    best_results = {}
-    
-    print("--- Starting Coarse Search ---")
-    coarse_search_grid = np.arange(search_range[0], search_range[1] + 0.1, 0.1)
-    
-    for scale_coef in tqdm(coarse_search_grid, desc="Coarse Search"):
-        search_model = copy.deepcopy(base_model)
-        task_vector.apply_to(search_model, scaling_coef=scale_coef)
-        
-        metric_results, _, _ = evaluate_model(search_model, test_dataloader, device)
-        
-        if metric_results['ACC'] > best_acc:
-            best_acc = metric_results['ACC']
-            best_coef = scale_coef
-            best_results = metric_results
-    
-    # print(f"\nCoarse search best coefficient: {best_coef:.2f} with Accuracy: {best_acc:.4f}")
-
-    print("\n--- Starting Fine Search ---")
-    fine_search_start = max(search_range[0], best_coef - 0.1)
-    fine_search_end = min(search_range[1], best_coef + 0.1)
-    fine_search_grid = np.linspace(fine_search_start, fine_search_end, num=21)
-
-    for scale_coef in tqdm(fine_search_grid, desc="Fine Search"):
-        search_model = copy.deepcopy(base_model)
-        task_vector.apply_to(search_model, scaling_coef=scale_coef)
-        
-        metric_results, _, _ = evaluate_model(search_model, test_dataloader, device)
-        
-        if metric_results['ACC'] > best_acc:
-            best_acc = metric_results['ACC']
-            best_coef = scale_coef
-            best_results = metric_results
-
-    # print(f"\nRecalculating metrics and confusion matrix for best coefficient: {best_coef:.2f}")
-    final_model = copy.deepcopy(base_model)
-    task_vector.apply_to(final_model, scaling_coef=best_coef)
-    final_model.to(device)
-
-    best_results, all_preds, all_targets = evaluate_model(final_model, test_dataloader, device)
-    
-    confmat_metric = ConfusionMatrix(task="multiclass", num_classes=num_classes)
-    best_cm_tensor = confmat_metric(all_preds, all_targets)
-
-    return best_coef, best_results, best_cm_tensor
-
-
-def eval_model_on_clean_noise_splits(model, cfg, dataset, device):
-    dataset_cpy = copy.deepcopy(dataset)
-    strategy = cfg['strategy']
-    dataset_cpy.inject_noise(**strategy['noise']['pretraining'])
-    clean_set, noisy_set = dataset_cpy.get_clean_noisy_subsets(set='Train')
-    
-    dataset_cpy.set_trainset(clean_set, shuffle=False)
-    clean_metric, _, _ = evaluate_model(model, dataloader=dataset_cpy.get_train_dataloader(), device=device)
-    
-    dataset_cpy.set_trainset(noisy_set, shuffle=False)
-    noisy_metric, _, _ = evaluate_model(model, dataloader=dataset_cpy.get_train_dataloader(), device=device)
-    
-    dummy_instance = noisy_set
-    while not isinstance(dummy_instance, data_utils.NoisyClassificationDataset):
-        dummy_instance = dummy_instance.dataset
-    dummy_instance.switch_to_clean_lables()
-    
-    dataset_cpy.set_trainset(noisy_set, shuffle=False)
-    healing_metric, _, _ = evaluate_model(model, dataloader=dataset_cpy.get_train_dataloader(), device=device)
-
-    
-    return {
-        'clean_set': clean_metric,
-        'noisy_set': noisy_metric,
-        'healing_noise': healing_metric,
-    }
-    
-    
     
 def generate_latex_table_from_results(results_dict, output_path):
     def format_acc(val):
@@ -302,8 +160,8 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     cfg['trainer']['pretraining']['comet_api_key'] = os.getenv("COMET_API_KEY")
     cfg['trainer']['finetuning']['comet_api_key'] = os.getenv("COMET_API_KEY")
 
+    augmentations = None
     if cfg['dataset']['name'] == 'cifar10':
-        # augmentations = None
         augmentations = [
             transformsv2.RandomCrop(32, padding=4),
             transformsv2.RandomHorizontalFlip(),
@@ -314,13 +172,13 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             transformsv2.RandomHorizontalFlip(),
         ]
     elif cfg['dataset']['name'] == 'mnist':
-        augmentations = None
+        pass
         # augmentations = [
         #     transformsv2.RandomCrop(32, padding=4),
         #     transformsv2.RandomHorizontalFlip(),
         # ]
     elif cfg['dataset']['name'] == 'fashion_mnist':
-        augmentations = None
+        pass
         # augmentations = [
         #     transformsv2.RandomCrop(32, padding=4),
         #     transformsv2.RandomHorizontalFlip(),
@@ -612,21 +470,49 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     
     
-    ft_gold_tv = TaskVector(pretrain_weights, ft_gold_wieghts)
-    ft_gt_noise_tv = TaskVector(pretrain_weights, ft_gt_noise_weights)
+    # ft_gold_tv = TaskVector(pretrain_weights, ft_gold_wieghts)
+    # ft_gt_noise_tv = TaskVector(pretrain_weights, ft_gt_noise_weights)
+    # finetune_tvs = OrderedDict()
+    # for ft_expr, ft_weight in finetune_weights.items():
+    #     finetune_tvs[ft_expr] = TaskVector(pretrain_weights, ft_weight)
+    # finetune_tvs['avg_noise'] = TaskVector.mean(finetune_tvs)
+    # finetune_tvs['rnd_vec'] = finetune_tvs['avg_noise'].generate_random_vector_with_same_layer_norms(seed=11)
+
+    # ft_tvs_list = [ft_gold_tv, ft_gt_noise_tv]
+    # ft_tvs_list.extend(list(finetune_tvs.values()))
+    # print(finetune_tvs.keys())
+    
+    # tv_names = ['Gold', 'Ground Truth Noise']
+    # tv_names.extend([f"{float(n_s.split('_')[0])*100:.0f}% Noise, {n_s.split('_')[1]} Seed" for n_s in list(finetune_tvs.keys())[:-2]])
+    # tv_names.extend(['Average TV', 'Random Vector'])
+    
+
+
     finetune_tvs = OrderedDict()
     for ft_expr, ft_weight in finetune_weights.items():
         finetune_tvs[ft_expr] = TaskVector(pretrain_weights, ft_weight)
-    finetune_tvs['avg_noise'] = TaskVector.mean(finetune_tvs)
-    finetune_tvs['rnd_vec'] = finetune_tvs['avg_noise'].generate_random_vector_with_same_layer_norms(seed=11)
+    finetune_tvs['Average TV'] = TaskVector.mean(finetune_tvs)
+    finetune_tvs.pop('1.0_12')
+    finetune_tvs.pop('1.0_10')
+    finetune_tvs.pop('1.0_15')
+    finetune_tvs.pop('1.0_20')
+    finetune_tvs.pop('1.0_30')
+    finetune_tvs['Average TV Pruned 0.4'] = finetune_tvs['Average TV'].prune_small_weights(rate=0.4)
+    finetune_tvs['Average TV Pruned 0.6'] = finetune_tvs['Average TV'].prune_small_weights(rate=0.6)
+    finetune_tvs['Average TV Pruned 0.8'] = finetune_tvs['Average TV'].prune_small_weights(rate=0.8)
+    finetune_tvs['Average TV Pruned 0.9'] = finetune_tvs['Average TV'].prune_small_weights(rate=0.9)
+    finetune_tvs['Average TV Pruned 0.95'] = finetune_tvs['Average TV'].prune_small_weights(rate=0.95)
+    finetune_tvs['Average TV Pruned 0.99'] = finetune_tvs['Average TV'].prune_small_weights(rate=0.99)
 
-    ft_tvs_list = [ft_gold_tv, ft_gt_noise_tv]
+    ft_tvs_list = []
     ft_tvs_list.extend(list(finetune_tvs.values()))
     print(finetune_tvs.keys())
     
-    tv_names = ['Gold', 'Ground Truth Noise']
-    tv_names.extend([f"{float(n_s.split('_')[0])*100:.0f}% Noise, {n_s.split('_')[1]} Seed" for n_s in list(finetune_tvs.keys())[:-2]])
-    tv_names.extend(['Average TV', 'Random Vector'])
+    tv_names = []
+    tv_names.extend(finetune_tvs.keys())
+    # tv_names.extend(['Average TV', 'Average TV Pruned 0.2', 'Average TV Pruned 0.4', 'Average TV Pruned 0.6', 'Average TV Pruned 0.8'])
+    
+
     
     task_sim = []
     for i in range(len(ft_tvs_list)):
@@ -754,13 +640,15 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     results_dict['pretrain'] = {'test_results': pt_test_results, 'train_results': pt_train_results}
     results_dict['gold'] = {'test_results': gold_test_results, 'train_results': gold_train_results}
     results_dict['ft_gold'] = {'test_results': ft_gold_test_results, 'train_results': ft_gold_train_results}
-    results_dict = eval_model_on_tvs(base_model, OrderedDict(zip(tv_names[1:], ft_tvs_list[1:])), results_dict, cfg, dataset, num_classes, gpu)
+    # results_dict = eval_model_on_tvs(base_model, OrderedDict(zip(tv_names[1:], ft_tvs_list[1:])), results_dict, cfg, dataset, num_classes, gpu)
+    results_dict = eval_model_on_tvs(base_model, OrderedDict(zip(tv_names, ft_tvs_list)), results_dict, cfg, dataset, num_classes, gpu)
     
     
     print(results_dict)
     
     
-    with open(results_dir / 'metrics.json' , 'w') as json_file:
+    # with open(results_dir / 'metrics.json' , 'w') as json_file:
+    with open(results_dir / 'metrics_prune.json' , 'w') as json_file:
         json.dump(results_dict, json_file, indent=4)
     # generate_latex_table_from_results(results_dict, results_dir / 'results_tex.txt')
     

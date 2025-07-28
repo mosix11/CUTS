@@ -225,6 +225,34 @@ class TaskVector:
             pointer += numel
         return TaskVector(vector=new_dict)
     
+    def prune_small_weights(self, rate:float):
+        # Flatten and collect all weights (ignoring biases and non-weight parameters)
+        all_weights = []
+        weight_keys = []
+        for key, value in self.vector.items():
+            if 'bias' not in key:
+                all_weights.append(value.abs().flatten())
+                weight_keys.append(key)
+        
+        all_weights_flat = torch.cat(all_weights)
+        total_weights = all_weights_flat.numel()
+        
+        # Determine the pruning threshold
+        k = int(total_weights * rate)
+        if k == 0:
+            print("Rate too small, nothing will be pruned.")
+            return self
+        
+        threshold = torch.kthvalue(all_weights_flat, k).values.item()
+
+        # Zero out weights below threshold
+        new_vec = OrderedDict()
+        for key in weight_keys:
+            mask = self.vector[key].abs() >= threshold
+            new_vec[key] = self.vector[key] * mask  # keep large weights, zero out small ones
+
+        return TaskVector(vector=new_vec)
+    
     def generate_random_vector_with_same_layer_norms(self, seed: int = None):
         """
         Generate a random task vector with the same per-layer norm as self.vector.

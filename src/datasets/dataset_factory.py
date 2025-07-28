@@ -1,10 +1,12 @@
-from . import CIFAR10, CIFAR100, MNIST, FashionMNIST
+from . import CIFAR10, CIFAR100, MNIST, FashionMNIST, MoGSynthetic
 import copy
 
 def create_dataset(cfg, augmentations=None):
     cfg_cpy = copy.deepcopy(cfg)
     dataset_name = cfg_cpy['dataset'].pop('name')
-    cfg_cpy['dataset']['augmentations'] = augmentations if augmentations else []
+    
+    if augmentations:
+        cfg_cpy['dataset']['augmentations'] = augmentations
     
     if dataset_name == 'mnist':
         num_classes = cfg_cpy['dataset'].pop('num_classes')
@@ -27,7 +29,10 @@ def create_dataset(cfg, augmentations=None):
             **cfg_cpy['dataset']
         )
     elif dataset_name == 'mog':
-        pass
+        num_classes = cfg_cpy['dataset']['num_classes']
+        dataset = MoGSynthetic(
+            **cfg_cpy['dataset']
+        )
     else: raise ValueError(f"Invalid dataset {dataset_name}.")
     
     return dataset, num_classes
