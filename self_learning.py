@@ -46,6 +46,7 @@ def change_dataset_labels_with_preds(model, dataset, device):
     all_indices = []
     all_is_noisy_flags = []
     
+    
     model.to(device)
     model.eval()
     with torch.no_grad():
@@ -75,7 +76,16 @@ def change_dataset_labels_with_preds(model, dataset, device):
     while not isinstance(dummy_instance, data_utils.NoisyClassificationDataset):
         dummy_instance = dummy_instance.dataset
         
-    dummy_instance.replace_labels(torch.tensor(all_preds).long())
+    original_clean_lbls = dummy_instance.get_original_labels()
+    # This should be equal to the noise rate in first iteration
+    print(f'From {len(current_train_set)}, {(original_clean_lbls == all_targets).sum()} had original labels different from targets.')
+    
+    dummy_instance.replace_labels(all_preds_tensor.long())
+    # This should match the forget and healing rate of the task vector
+    print('After changing the targets with predicted labels:')
+    print(f'From {len(current_train_set)}, {(original_clean_lbls == dummy_instance.noisy_labels).sum()} had original labels different from targets.')
+    
+    
     
     dataset.set_trainset(current_train_set, shuffle=True)
     
@@ -279,8 +289,9 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             
             print(f"Best scaling coefficient for TV at attempt {attempt}% = {best_coef}")
             print(f"Metrics of the negated model is {best_results}")
-            
             noise_tv.apply_to(model, scaling_coef=best_coef)
+            print("Clean and noisy set performance after applying TV:")
+            print(eval_model_on_clean_noise_splits(model, base_dataset, cfg, gpu))
             
             self_learnt_dataset, mismatch_subset = change_dataset_labels_with_preds(model, self_learnt_dataset, gpu)
             

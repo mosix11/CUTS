@@ -95,8 +95,9 @@ class NoisyClassificationDataset(Dataset):
         
         self.return_clean_labels = False
 
-        if noise_rate > 0.0:
-            self._add_noise_to_labels()
+        
+        self._add_noise_to_labels()
+            
             
     def switch_to_clean_lables(self):
         self.return_clean_labels = True
@@ -106,6 +107,14 @@ class NoisyClassificationDataset(Dataset):
         
     def replace_labels(self, new_labels):
         self.noisy_labels = new_labels
+        for idx, orig_lbl in self.original_labels:
+            if orig_lbl != new_labels[idx]:
+                self.is_noisy_flags[idx] = 1.0
+            else:
+                self.is_noisy_flags[idx] = 0.0
+    
+    def get_original_labels(self):
+        self.original_labels
             
     def __len__(self):
         return len(self.dataset)
@@ -154,6 +163,9 @@ class NoisyClassificationDataset(Dataset):
         noisy_labels = original_labels.clone()
         self.is_noisy_flags = torch.zeros(len(original_labels))
 
+        if not (self.noise_rate > 0.0 and self.noise_rate <= 1.0):
+            return
+        
         if self.noise_type == 'symmetric':
             # This already uses the fixed-count method on the whole dataset
             num_noisy_labels = int(self.noise_rate * len(original_labels))
