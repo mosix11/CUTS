@@ -27,7 +27,7 @@ class FashionMNIST(BaseClassificationDataset):
         self.grayscale = grayscale
         self.normalize_imgs = normalize_imgs
         self.flatten = flatten
-        self.augmentations = augmentations
+        self.augmentations = [] if augmentations == None else augmentations
         
         super().__init__(
             dataset_name='FashionMNIST',
