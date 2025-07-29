@@ -208,10 +208,8 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     for attempt in range(1, 5):
         if not outputs_dir.joinpath(f"{cfg_name}/finetune_{attempt}/weights/model_weights.pth").exists():
-            cfg_cpy = copy.deepcopy(cfg)
             dataset = copy.deepcopy(self_learnt_dataset)
-            
-            model = model_factory.create_model(cfg_cpy['model'], num_classes)
+            model = copy.deepcopy(base_model)
             
             if attempt == 1:
                 base_model_ckp_path = outputs_dir/ Path(f"{cfg_name}/pretrain") / Path('weights/model_weights.pth')
@@ -231,8 +229,7 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             plots_dir = experiment_dir / Path("plots")
             plots_dir.mkdir(exist_ok=True, parents=True)
             
-            strategy = cfg_cpy['strategy']
-            
+
             if strategy['finetuning_set'] == 'LowLoss':
                 low_loss_idxs_path = outputs_dir/ Path(f"{cfg_name}/pretrain") / f'log/low_loss_indices_{strategy['percentage']:.2f}.pkl'
                 with open(low_loss_idxs_path, 'rb') as mfile:
@@ -289,12 +286,9 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             
             ###################################################################
             
-            cfg_cpy = copy.deepcopy(cfg)
             dataset = copy.deepcopy(self_learnt_dataset)
             dataset.set_trainset(mismatch_subset)
             print("New mismatched set size : ", len(dataset.get_trainset()))
-            
-            # model = model_factory.create_model(cfg_cpy['model'], num_classes)
             
             experiment_name = f"{cfg_name}/pretrain_{attempt}"
             experiment_dir = outputs_dir / Path(experiment_name)
@@ -305,7 +299,6 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             plots_dir = experiment_dir / Path("plots")
             plots_dir.mkdir(exist_ok=True, parents=True)
             
-            strategy = cfg_cpy['strategy']
             
             trainer = StandardTrainer(
                 outputs_dir=outputs_dir,
