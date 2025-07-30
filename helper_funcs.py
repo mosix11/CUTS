@@ -64,8 +64,9 @@ def eval_model_on_clean_noise_splits(
     device:torch.device
 ):
     dataset_cpy = copy.deepcopy(dataset)
-    strategy = cfg['strategy']
-    dataset_cpy.inject_noise(**strategy['noise']['pretraining'])
+    if cfg is not None:
+        strategy = cfg['strategy']
+        dataset_cpy.inject_noise(**strategy['noise']['pretraining'])
     clean_set, noisy_set = dataset_cpy.get_clean_noisy_subsets(set='Train')
     
     dataset_cpy.set_trainset(clean_set, shuffle=False)

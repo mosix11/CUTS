@@ -1,4 +1,4 @@
-from . import CIFAR10, CIFAR100, MNIST, FashionMNIST, MoGSynthetic
+from . import CIFAR10, CIFAR100, MNIST, FashionMNIST, MoGSynthetic, DummyClassificationDataset
 import copy
 
 def create_dataset(cfg, augmentations=None):
@@ -31,6 +31,12 @@ def create_dataset(cfg, augmentations=None):
     elif dataset_name == 'mog':
         num_classes = cfg_cpy['dataset']['num_classes']
         dataset = MoGSynthetic(
+            **cfg_cpy['dataset']
+        )
+        
+    elif dataset_name == 'dummy_class':
+        num_classes = 10
+        dataset = DummyClassificationDataset(
             **cfg_cpy['dataset']
         )
     else: raise ValueError(f"Invalid dataset {dataset_name}.")

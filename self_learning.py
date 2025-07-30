@@ -85,8 +85,6 @@ def change_dataset_labels_with_preds(model, dataset, device):
     print('After changing the targets with predicted labels:')
     print(f'From {len(current_train_set)}, {(original_clean_lbls == dummy_instance.noisy_labels).sum()} had original labels matching targets.')
     
-    
-    
     dataset.set_trainset(current_train_set, shuffle=True)
     
     return dataset, mismatch_subset
@@ -295,6 +293,8 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             
             self_learnt_dataset, mismatch_subset = change_dataset_labels_with_preds(model, self_learnt_dataset, gpu)
             
+            print("Clean and noisy set performance on self learnt dataset before training:")
+            print(eval_model_on_clean_noise_splits(model, None, self_learnt_dataset, gpu))
             
             ###################################################################
             
@@ -331,6 +331,8 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
                 show=False
             )
 
+            print("Clean and noisy set performance on self learnt dataset after training:")
+            print(eval_model_on_clean_noise_splits(model, None, self_learnt_dataset, gpu))
     
     
 
