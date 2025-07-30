@@ -291,7 +291,7 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             print(f"Metrics of the negated model is {best_results}")
             noise_tv.apply_to(model, scaling_coef=best_coef)
             print("Clean and noisy set performance after applying TV:")
-            print(eval_model_on_clean_noise_splits(model, base_dataset, cfg, gpu))
+            print(eval_model_on_clean_noise_splits(model, cfg, base_dataset, gpu))
             
             self_learnt_dataset, mismatch_subset = change_dataset_labels_with_preds(model, self_learnt_dataset, gpu)
             
