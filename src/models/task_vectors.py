@@ -219,11 +219,25 @@ class TaskVector:
         """
         new_dict = OrderedDict()
         pointer = 0
-        for k, v in sorted(self.vector.items()):
+        for k, v in self.vector.items():
             numel = v.numel()
             new_dict[k] = flat_vector[pointer:pointer+numel].reshape_as(v)
             pointer += numel
         return TaskVector(vector=new_dict)
+    
+    
+    def get_layer_rank(self):
+        ranks = OrderedDict()
+        for k, v in self.vector.items():
+            if v.ndim == 2:
+                U, S, Vh = torch.linalg.svd(v)
+                # Use relative tolerance based on max singular value if not provided
+                if tol is None:
+                    tol = S.max() * 1e-5
+                # Count number of significant singular values
+                rank =  (S > tol).sum().item()
+                
+                print(k, rank)
     
     def prune_small_weights(self, rate:float):
         # Flatten and collect all weights (ignoring biases and non-weight parameters)
