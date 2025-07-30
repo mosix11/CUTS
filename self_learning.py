@@ -288,7 +288,7 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             print(f"Best scaling coefficient for TV at attempt {attempt}% = {best_coef}")
             print(f"Metrics of the negated model is {best_results}")
             noise_tv.apply_to(model, scaling_coef=best_coef)
-            print("Clean and noisy set performance after applying TV:")
+            print("Clean and noisy set performance after applying TV on the original mixed dataset:")
             print(eval_model_on_clean_noise_splits(model, cfg, base_dataset, gpu))
             
             self_learnt_dataset, mismatch_subset = change_dataset_labels_with_preds(model, self_learnt_dataset, gpu)
@@ -298,9 +298,10 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             
             ###################################################################
             
+            print("New mismatched set size : ", len(mismatch_subset))
             dataset = copy.deepcopy(self_learnt_dataset)
-            dataset.set_trainset(mismatch_subset)
-            print("New mismatched set size : ", len(dataset.get_trainset()))
+            # dataset.set_trainset(mismatch_subset)
+            
             
             experiment_name = f"{cfg_name}/pretrain_{attempt}"
             experiment_dir = outputs_dir / Path(experiment_name)
