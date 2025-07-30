@@ -107,14 +107,14 @@ class NoisyClassificationDataset(Dataset):
         
     def replace_labels(self, new_labels):
         self.noisy_labels = new_labels
-        for idx, orig_lbl in self.original_labels:
+        for idx, orig_lbl in enumerate(self.original_labels):
             if orig_lbl != new_labels[idx]:
                 self.is_noisy_flags[idx] = 1.0
             else:
                 self.is_noisy_flags[idx] = 0.0
     
     def get_original_labels(self):
-        self.original_labels
+        return self.original_labels
             
     def __len__(self):
         return len(self.dataset)

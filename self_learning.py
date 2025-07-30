@@ -78,12 +78,12 @@ def change_dataset_labels_with_preds(model, dataset, device):
         
     original_clean_lbls = dummy_instance.get_original_labels()
     # This should be equal to the noise rate in first iteration
-    print(f'From {len(current_train_set)}, {(original_clean_lbls == all_targets).sum()} had original labels different from targets.')
+    print(f'From {len(current_train_set)}, {(original_clean_lbls == dummy_instance.noisy_labels).sum()} had original labels matching targets.')
     
     dummy_instance.replace_labels(all_preds_tensor.long())
     # This should match the forget and healing rate of the task vector
     print('After changing the targets with predicted labels:')
-    print(f'From {len(current_train_set)}, {(original_clean_lbls == dummy_instance.noisy_labels).sum()} had original labels different from targets.')
+    print(f'From {len(current_train_set)}, {(original_clean_lbls == dummy_instance.noisy_labels).sum()} had original labels matching targets.')
     
     
     
@@ -294,6 +294,7 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             print(eval_model_on_clean_noise_splits(model, cfg, base_dataset, gpu))
             
             self_learnt_dataset, mismatch_subset = change_dataset_labels_with_preds(model, self_learnt_dataset, gpu)
+            
             
             ###################################################################
             
