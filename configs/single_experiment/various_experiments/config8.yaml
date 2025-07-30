@@ -67,7 +67,7 @@ trainer:
     seed: *training_seed
 
   finetuning:
-    max_epochs: 10
+    max_epochs: 400
     optimizer_cfg: 
       type: "adamw"
       lr: 1.0e-4
