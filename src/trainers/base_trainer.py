@@ -465,6 +465,7 @@ class BaseClassificationTrainer(ABC):
         available_classes = self.dataset.get_available_classes()
         self.num_classes = len(available_classes)
         self.num_train_samples = len(self.train_dataloader.dataset)
+        print(len(self.train_dataloader.dataset))
         
         self.low_loss_sample_indices = {i: set() for i in available_classes}
         self.low_loss_history = {i: collections.deque(maxlen=self.low_loss_consistency_window) for i in range(self.num_train_samples)}

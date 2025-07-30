@@ -226,20 +226,20 @@ class TaskVector:
         return TaskVector(vector=new_dict)
     
     
-    def get_layer_rank(self, tol=None):
-        ranks = OrderedDict()
-        for k, v in self.vector.items():
-            if v.ndim == 2:
-                S = torch.linalg.svdvals(v)
-                # Use relative tolerance based on max singular value if not provided
-                if tol is None:
-                    tol = S.max() * 1e-5
-                # Count number of significant singular values
-                rank =  (S > tol).sum().item()
-                ranks[k] = rank
-            else:
-                ranks[k] = 'Not Matrix Dim = ' + str(v.ndim)
-        return ranks
+    # def get_layer_rank(self, tol=None):
+    #     ranks = OrderedDict()
+    #     for k, v in self.vector.items():
+    #         if v.ndim == 2:
+    #             S = torch.linalg.svdvals(v)
+    #             # Use relative tolerance based on max singular value if not provided
+    #             if tol is None:
+    #                 tol = S.max() * 1e-5
+    #             # Count number of significant singular values
+    #             rank =  (S > tol).sum().item()
+    #             ranks[k] = rank
+    #         else:
+    #             ranks[k] = 'Not Matrix Dim = ' + str(v.ndim)
+    #     return ranks
     
     def prune_small_weights(self, rate:float):
         # Flatten and collect all weights (ignoring biases and non-weight parameters)
@@ -405,10 +405,10 @@ class TaskVector:
         return mask
     
     
-    def compute_SVD_for_each_layer(self, k:float=1.0):
+    def reduce_rank_with_SVD(self, k:float=1.0):
         if k > 1.0 and k < 0.0:
             raise ValueError('k should be in the range [0.0, 1.0]')
-        SVD = OrderedDict()
+        new_vec = OrderedDict()
         for key, layer_weights in self.vector.items():
             if len(layer_weights.shape) == 2 and "text_projection" not in key:
                 u, s, v = torch.linalg.svd(layer_weights, full_matrices=False)
@@ -419,12 +419,10 @@ class TaskVector:
                 u = u[:, :idx]
                 v = v[:idx, :]
                     
-                SVD[key] = {
-                    'u': u,
-                    's': s,
-                    'v': v,
-                }
-                SVD[key]['k'] = k
+                    
+                s = torch.diag_embed(s)
+                reconstructed_layer_weights = u @ s @ v
+                new_vec[key] = reconstructed_layer_weights
                 
             # elif len(layer_weights.shape) == 2 and "text_projection" in key:
             #     SVD[key] = {'vec': layer_weights}
@@ -436,25 +434,11 @@ class TaskVector:
                 pass
                 # TODO impelement conv im2col and svd here
             else:
-                SVD[key] = {'vec': layer_weights}
+                new_vec[key] = layer_weights
         
-        return SVD
+        return TaskVector(vector=new_vec)
     
-    def apply_SVD_to_TV(self, SVD):
-        for key, svd_layer_weights in SVD.items():
-            if 'vec' in svd_layer_weights:
-                self.vector[key] = svd_layer_weights['vec']
-            elif 'u' in svd_layer_weights and 's' in svd_layer_weights and 'v' in svd_layer_weights:
-                u, s, v, k = svd_layer_weights['u'], svd_layer_weights['s'], svd_layer_weights['v'], svd_layer_weights['k']
-                s = torch.diag_embed(s)
-                reconstructed_layer_weights = u @ s @ v
-                
-                # error = torch.linalg.norm(self.vector[key] - reconstructed_layer_weights)
-                # print("Reconstruction Error (Frobenius Norm):", error.item())
-                
-                self.vector[key] = reconstructed_layer_weights
-            else:
-                pass
+
     
     @staticmethod
     def TSV_merge(task_vectors: Dict[str, "TaskVector"], k:float = 1.0, device:torch.device = torch.device('cpu')):

@@ -558,12 +558,12 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         show=False
     )
     
-    rank_dict = OrderedDict()
-    for tv_name, tv in finetune_tvs.items():
-        rank_dict[tv_name] = tv.get_layer_rank()
+    # rank_dict = OrderedDict()
+    # for tv_name, tv in finetune_tvs.items():
+    #     rank_dict[tv_name] = tv.get_layer_rank()
         
-    with open(results_dir / 'ranks.json' , 'w') as json_file:
-        json.dump(rank_dict, json_file, indent=4)
+    # with open(results_dir / 'ranks.json' , 'w') as json_file:
+    #     json.dump(rank_dict, json_file, indent=4)
     
     
     # for i in range(len(ft_tvs_list)):

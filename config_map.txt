@@ -1,5 +1,5 @@
 pton:
 config 4 and 18 cifar10 resnet18v2
 config 5 and 27 cifar10 vit
-config 11, 12*, 13 and 28 mnist fc1
+config 11, 12*, 13 and 28, 33, 34 mnist fc1
 config 29,30 fashion mnist fc1

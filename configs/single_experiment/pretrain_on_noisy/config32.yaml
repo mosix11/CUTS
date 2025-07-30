@@ -1,4 +1,4 @@
-# MoG Synthetic 40% noise
+# MoG Synthetic 70% noise
 training_seed: &training_seed 22
 dataset_seed: &dataset_seed 22
 
