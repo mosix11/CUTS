@@ -226,18 +226,20 @@ class TaskVector:
         return TaskVector(vector=new_dict)
     
     
-    def get_layer_rank(self):
+    def get_layer_rank(self, tol=None):
         ranks = OrderedDict()
         for k, v in self.vector.items():
             if v.ndim == 2:
-                U, S, Vh = torch.linalg.svd(v)
+                S = torch.linalg.svdvals(v)
                 # Use relative tolerance based on max singular value if not provided
                 if tol is None:
                     tol = S.max() * 1e-5
                 # Count number of significant singular values
                 rank =  (S > tol).sum().item()
-                
-                print(k, rank)
+                ranks[k] = rank
+            else:
+                ranks[k] = 'Not Matrix Dim = ' + str(v.ndim)
+        return ranks
     
     def prune_small_weights(self, rate:float):
         # Flatten and collect all weights (ignoring biases and non-weight parameters)
@@ -261,10 +263,12 @@ class TaskVector:
 
         # Zero out weights below threshold
         new_vec = OrderedDict()
-        for key in weight_keys:
-            mask = self.vector[key].abs() >= threshold
-            new_vec[key] = self.vector[key] * mask  # keep large weights, zero out small ones
-
+        for key in self.vector.keys():
+            if key in weight_keys:
+                mask = self.vector[key].abs() >= threshold
+                new_vec[key] = self.vector[key] * mask  # keep large weights, zero out small ones
+            else:
+                new_vec[key] = self.vector[key]
         return TaskVector(vector=new_vec)
     
     def generate_random_vector_with_same_layer_norms(self, seed: int = None):
