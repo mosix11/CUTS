@@ -418,8 +418,8 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             plots_dir.mkdir(exist_ok=True, parents=True)
             
             if strategy['finetuning_set'] == 'Heldout':
+                dataset.set_trainset(dataset.get_heldoutset(), shuffle=True)
                 dataset.inject_noise(**noise_tv)
-                dataset.replace_heldout_as_train_dl()
             elif strategy['finetuning_set'] == 'CleanNoiseSplit':
                 clean_set, noisy_set = dataset.get_clean_noisy_subsets(set='Train')
                 if noise_tv['set'] == 'TrainClean':
