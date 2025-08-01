@@ -420,15 +420,6 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             if strategy['finetuning_set'] == 'Heldout':
                 dataset.set_trainset(dataset.get_heldoutset(), shuffle=True)
                 dataset.inject_noise(**noise_tv)
-            elif strategy['finetuning_set'] == 'CleanNoiseSplit':
-                clean_set, noisy_set = dataset.get_clean_noisy_subsets(set='Train')
-                if noise_tv['set'] == 'TrainClean':
-                    dataset.set_trainset(clean_set, shuffle=True)
-                    noise_tv['set'] = 'Train'
-                    dataset.inject_noise(**noise_tv)
-                
-                elif noise_tv['set'] == 'TrainNoise':
-                    dataset.set_trainset(noisy_set, shuffle=True)
                     
             elif strategy['finetuning_set'] == 'LowLoss':
                 low_loss_idxs_path = outputs_dir/ Path(f"{cfg_name}/pretrain") / f'log/low_loss_indices_{strategy['percentage']:.2f}.pkl'
