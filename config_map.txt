@@ -6,3 +6,4 @@ config 29,30 fashion mnist fc1
 
 config 35-36 fashion-mnist fc1 for heldout finetuning
 config 37-38 cifar10 resnet for heldout finetuning
+config 39-30 cifar10 vit-small for heldout finetuning
