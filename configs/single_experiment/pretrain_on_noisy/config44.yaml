@@ -56,7 +56,7 @@ model:
   type: 'torchvision_resnet18_nonorm'
   num_classes: *num_classes
   img_size: [32, 32]
-  grayscale: True
+  grayscale: False
   loss_fn: 'CE-NR'
   metrics: ['ACC', 'F1']
 
