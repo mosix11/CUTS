@@ -4,8 +4,7 @@ dataset_seed: &dataset_seed 11
 
 
 strategy:
-  finetuning_set: &finetuning_set 'LowLoss'
-  percentage: 0.25
+  finetuning_set: &finetuning_set 'Heldout'
   noise:
     pretraining:
       set: 'Train'
@@ -15,23 +14,23 @@ strategy:
     finetuning:
       - set: 'Train'
         noise_rate: 1.0
-        noise_type: 'symmetric'
+        noise_type: 'asymmetric'
         seed: 12
       - set: 'Train'
         noise_rate: 1.0
-        noise_type: 'symmetric'
+        noise_type: 'asymmetric'
         seed: 10
       - set: 'Train'
         noise_rate: 1.0
-        noise_type: 'symmetric'
+        noise_type: 'asymmetric'
         seed: 15
       - set: 'Train'
         noise_rate: 1.0
-        noise_type: 'symmetric'
+        noise_type: 'asymmetric'
         seed: 20
       - set: 'Train'
         noise_rate: 1.0
-        noise_type: 'symmetric'
+        noise_type: 'asymmetric'
         seed: 30
 
 dataset:
@@ -42,7 +41,17 @@ dataset:
   subsample_size: [-1, -1]
   class_subset: []
   remap_labels: False
-  heldout_conf: null
+  heldout_conf: 
+    0: 0.2
+    1: 0.2
+    2: 0.2
+    3: 0.2
+    4: 0.2
+    5: 0.2
+    6: 0.2
+    7: 0.2
+    8: 0.2
+    9: 0.2
   grayscale: False
   normalize_imgs: True
   flatten: False
@@ -56,10 +65,8 @@ model:
   init_channels: 64
   num_classes: *num_classes
   img_size: [32, 32]
-  loss_fn: 'CE-NR'
+  loss_fn: 'CE'
   metrics: ['ACC', 'F1']
-
-
 
 
 trainer:

@@ -33,6 +33,9 @@ def evaluate_model(
     all_preds = []
     all_targets = []
     
+    if dataloader == None:
+        return None, None, None
+    
     model.to(device)
     model.eval()
     with torch.no_grad():

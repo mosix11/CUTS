@@ -1,4 +1,4 @@
-# Config 33 with 20% noise
+# Config 33 with 0% noise
 training_seed: &training_seed 11
 dataset_seed: &dataset_seed 11
 
