@@ -1,21 +1,38 @@
-# Asymmetric noise
+# Config2 with no warmup
 training_seed: &training_seed 11
 dataset_seed: &dataset_seed 11
 
 
 strategy:
-  finetuning_set: &finetuning_set 'Heldout'
+  finetuning_set: &finetuning_set 'LowLoss'
+  percentage: 0.2
   noise:
     pretraining:
       set: 'Train'
       noise_rate: 0.4
-      noise_type: 'asymmetric'
+      noise_type: 'symmetric'
       seed: 8
     finetuning:
       - set: 'Train'
         noise_rate: 1.0
-        noise_type: 'asymmetric'
+        noise_type: 'symmetric'
         seed: 12
+      - set: 'Train'
+        noise_rate: 1.0
+        noise_type: 'symmetric'
+        seed: 10
+      - set: 'Train'
+        noise_rate: 1.0
+        noise_type: 'symmetric'
+        seed: 15
+      - set: 'Train'
+        noise_rate: 1.0
+        noise_type: 'symmetric'
+        seed: 20
+      - set: 'Train'
+        noise_rate: 1.0
+        noise_type: 'symmetric'
+        seed: 30
 
 
 dataset:
@@ -26,17 +43,7 @@ dataset:
   subsample_size: [-1, -1]
   class_subset: []
   remap_labels: False
-  heldout_conf: 
-    0: 0.2
-    1: 0.2
-    2: 0.2
-    3: 0.2
-    4: 0.2
-    5: 0.2
-    6: 0.2
-    7: 0.2
-    8: 0.2
-    9: 0.2
+  heldout_conf: null
   grayscale: False
   normalize_imgs: True
   flatten: False
@@ -46,12 +53,13 @@ dataset:
 
 
 model:
-  type: 'resnet18v2'
-  init_channels: 64
+  type: 'torchvision_resnet18_nonorm'
   num_classes: *num_classes
   img_size: [32, 32]
-  loss_fn: 'CE'
+  grayscale: True
+  loss_fn: 'CE-NR'
   metrics: ['ACC', 'F1']
+
 
 
 trainer:
@@ -72,7 +80,7 @@ trainer:
     run_on_gpu: True
     use_amp: True
     log_comet: True
-    comet_project_name: 'pretrain-on-noise-asymmetric'
+    comet_project_name: 'pretrain-on-noise'
     seed: *training_seed
 
   finetuning:
@@ -92,6 +100,7 @@ trainer:
     run_on_gpu: True
     use_amp: True
     log_comet: True
-    comet_project_name: 'pretrain-on-noise-asymmetric'
+    comet_project_name: 'pretrain-on-noise'
     seed: *training_seed
+
 

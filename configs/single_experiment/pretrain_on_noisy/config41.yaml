@@ -1,4 +1,4 @@
-# config 4 mnist with config 7 finetune
+# Config 15 with resnet no norm
 training_seed: &training_seed 11
 dataset_seed: &dataset_seed 11
 
