@@ -1,4 +1,4 @@
-# Config 46 but with 10% noise
+# Config 46 but with 80% noise
 training_seed: &training_seed 11
 dataset_seed: &dataset_seed 11
 
@@ -8,7 +8,7 @@ strategy:
   noise:
     pretraining:
       set: 'Train'
-      noise_rate: 0.1
+      noise_rate: 0.8
       noise_type: 'symmetric'
       seed: 8
     finetuning:
@@ -73,7 +73,7 @@ model:
 
 trainer:
   pretraining:
-    max_epochs: &max_epochs 350
+    max_epochs: &max_epochs 400
     optimizer_cfg: 
       type: "adamw"
       lr: 5.0e-4

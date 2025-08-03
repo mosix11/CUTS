@@ -81,9 +81,9 @@ def create_model(cfg, num_classes):
         
     elif model_type == 'vit_small':
         model = ViT_Small(**cfg)
+        
     elif model_type == 'resnet9v1_etd':
         model = PostActResNet9_ETD(**cfg)
-        
     elif model_type == 'cnn5_etd':
         model = CNN5_ETD(**cfg)
         

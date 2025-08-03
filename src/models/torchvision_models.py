@@ -59,4 +59,4 @@ class TorchvisionModels(BaseClassificationModel):
     
     
     def get_identifier(self):
-        return 'Torchvision Model' + self.model_type
+        return 'Torchvision Model ' + self.model_type
