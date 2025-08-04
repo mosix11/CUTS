@@ -68,9 +68,12 @@ def change_dataset_labels_with_preds(model, dataset, device):
     all_indices_tensor = torch.tensor(all_indices)
         
     mismatch_mask = all_preds_tensor != all_targets_tensor
+    match_mask = all_preds_tensor == all_targets_tensor
     mismatch_indices = all_indices_tensor[mismatch_mask]
+    match_indices = all_indices_tensor[match_mask]
     
     mismatch_subset = torch.utils.data.Subset(current_train_set, mismatch_indices.tolist())
+    match_subset = torch.utils.data.Subset(current_train_set, match_indices.tolist())
         
     dummy_instance = current_train_set
     while not isinstance(dummy_instance, data_utils.NoisyClassificationDataset):
@@ -87,7 +90,7 @@ def change_dataset_labels_with_preds(model, dataset, device):
     
     dataset.set_trainset(current_train_set, shuffle=True)
     
-    return dataset, mismatch_subset
+    return dataset, match_subset, mismatch_subset
 
 
 
@@ -214,7 +217,7 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     self_learnt_dataset = copy.deepcopy(base_dataset)
     
-    for attempt in range(1, 5):
+    for attempt in range(1, 3):
         if not outputs_dir.joinpath(f"{cfg_name}/finetune_{attempt}/weights/model_weights.pth").exists():
             dataset = copy.deepcopy(self_learnt_dataset)
             model = copy.deepcopy(base_model)
@@ -248,6 +251,9 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
                 dataset.inject_noise(**strategy['noise']['finetuning'])
             elif strategy['finetuning_set'] == 'HighLoss':
                 pass
+            elif strategy['finetuning_set'] == 'Heldout':
+                dataset.set_trainset(dataset.get_heldoutset(), shuffle=True)
+                dataset.inject_noise(**noise_tv)
             
             trainer = StandardTrainer(
                 outputs_dir=outputs_dir,
@@ -291,7 +297,7 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             print("Clean and noisy set performance after applying TV on the original mixed dataset:")
             print(eval_model_on_clean_noise_splits(model, cfg, base_dataset, gpu))
             
-            self_learnt_dataset, mismatch_subset = change_dataset_labels_with_preds(model, self_learnt_dataset, gpu)
+            self_learnt_dataset, match_subset, mismatch_subset = change_dataset_labels_with_preds(model, self_learnt_dataset, gpu)
             
             print("Clean and noisy set performance on self learnt dataset before training:")
             print(eval_model_on_clean_noise_splits(model, None, self_learnt_dataset, gpu))
@@ -300,7 +306,7 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             
             print("New mismatched set size : ", len(mismatch_subset))
             dataset = copy.deepcopy(self_learnt_dataset)
-            # dataset.set_trainset(mismatch_subset)
+            dataset.set_trainset(match_subset, shuffle=True)
             
             
             experiment_name = f"{cfg_name}/pretrain_{attempt}"
