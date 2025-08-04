@@ -94,7 +94,8 @@ def get_prediction_mismatch_with_trgts(model, dataset, device):
 
 def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     cfg['trainer']['pretraining']['comet_api_key'] = os.getenv("COMET_API_KEY")
-    cfg['trainer']['finetuning']['comet_api_key'] = os.getenv("COMET_API_KEY")
+    cfg['trainer']['finetuning_noise']['comet_api_key'] = os.getenv("COMET_API_KEY")
+    cfg['trainer']['finetuning_correcting']['comet_api_key'] = os.getenv("COMET_API_KEY")
     
     cpu = nn_utils.get_cpu_device()
     gpu = nn_utils.get_gpu_device()
@@ -255,7 +256,7 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             
             trainer = StandardTrainer(
                 outputs_dir=outputs_dir,
-                **cfg['trainer']['finetuning'],
+                **cfg['trainer']['finetuning_noise'],
                 exp_name=experiment_name,
             )
             
@@ -338,7 +339,7 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             
             trainer = StandardTrainer(
                 outputs_dir=outputs_dir,
-                **cfg['trainer']['finetuning'],
+                **cfg['trainer']['finetuning_correcting'],
                 exp_name=experiment_name,
             )
             
