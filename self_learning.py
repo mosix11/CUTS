@@ -282,18 +282,22 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             
             model.load_state_dict(base_model_ckp)
             
-            best_coef, best_results, best_cm = search_optimal_coefficient(
-                base_model=model,
-                task_vector=noise_tv,
-                search_range=(-3.0, 0.0),
-                dataset=base_dataset,
-                num_classes=num_classes,
-                device=gpu
-            )
+            # best_coef, best_results, best_cm = search_optimal_coefficient(
+            #     base_model=model,
+            #     task_vector=noise_tv,
+            #     search_range=(-3.0, 0.0),
+            #     dataset=base_dataset,
+            #     num_classes=num_classes,
+            #     device=gpu
+            # )
             
-            print(f"Best scaling coefficient for TV at attempt {attempt}% = {best_coef}")
-            print(f"Metrics of the negated model is {best_results}")
-            noise_tv.apply_to(model, scaling_coef=best_coef)
+            # print(f"Best scaling coefficient for TV at attempt {attempt}% = {best_coef}")
+            # print(f"Metrics of the negated model is {best_results}")
+            # noise_tv.apply_to(model, scaling_coef=best_coef)
+            
+        
+            noise_tv.apply_to(model, scaling_coef=-1.0)
+            
             print("Clean and noisy set performance after applying TV on the original mixed dataset:")
             print(eval_model_on_clean_noise_splits(model, cfg, base_dataset, gpu))
             
@@ -304,6 +308,7 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             
             ###################################################################
             
+            print("New matched set size : ", len(match_subset))
             print("New mismatched set size : ", len(mismatch_subset))
             dataset = copy.deepcopy(self_learnt_dataset)
             dataset.set_trainset(match_subset, shuffle=True)
