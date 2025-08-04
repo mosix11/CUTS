@@ -217,7 +217,7 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     self_learnt_dataset = copy.deepcopy(base_dataset)
     
-    for attempt in range(1, 3):
+    for attempt in range(1, 5):
         if not outputs_dir.joinpath(f"{cfg_name}/finetune_{attempt}/weights/model_weights.pth").exists():
             dataset = copy.deepcopy(self_learnt_dataset)
             model = copy.deepcopy(base_model)
@@ -306,12 +306,13 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             print("Clean and noisy set performance on self learnt dataset before training:")
             print(eval_model_on_clean_noise_splits(model, None, self_learnt_dataset, gpu))
             
+            self_learnt_dataset.set_trainset(match_subset, shuffle=True)
+            
             ###################################################################
             
             print("New matched set size : ", len(match_subset))
             print("New mismatched set size : ", len(mismatch_subset))
             dataset = copy.deepcopy(self_learnt_dataset)
-            dataset.set_trainset(match_subset, shuffle=True)
             
             
             experiment_name = f"{cfg_name}/pretrain_{attempt}"
@@ -343,8 +344,8 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
                 show=False
             )
 
-            print("Clean and noisy set performance on self learnt dataset after training:")
-            print(eval_model_on_clean_noise_splits(model, None, self_learnt_dataset, gpu))
+            # print("Clean and noisy set performance on self learnt dataset after training:")
+            # print(eval_model_on_clean_noise_splits(model, None, self_learnt_dataset, gpu))
     
     
 
