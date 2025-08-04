@@ -253,7 +253,7 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
                 pass
             elif strategy['finetuning_set'] == 'Heldout':
                 dataset.set_trainset(dataset.get_heldoutset(), shuffle=True)
-                dataset.inject_noise(**noise_tv)
+                dataset.inject_noise(**strategy['noise']['finetuning'])
             
             trainer = StandardTrainer(
                 outputs_dir=outputs_dir,
