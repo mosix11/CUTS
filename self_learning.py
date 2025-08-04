@@ -281,26 +281,26 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             
             model.load_state_dict(base_model_ckp)
             
-            # best_coef, best_results, best_cm = search_optimal_coefficient(
-            #     base_model=model,
-            #     task_vector=noise_tv,
-            #     search_range=(-3.0, 0.0),
-            #     dataset=base_dataset,
-            #     num_classes=num_classes,
-            #     device=gpu
-            # )
+            best_coef, best_results, best_cm = search_optimal_coefficient(
+                base_model=model,
+                task_vector=noise_tv,
+                search_range=(-3.0, 0.0),
+                dataset=base_dataset,
+                num_classes=num_classes,
+                device=gpu
+            )
             
-            # print(f"Best scaling coefficient for TV at attempt {attempt}% = {best_coef}")
-            # print(f"Metrics of the negated model is {best_results}")
-            # noise_tv.apply_to(model, scaling_coef=best_coef)
+            print(f"\n\nBest scaling coefficient for TV at attempt {attempt}% = {best_coef}")
+            print(f"Metrics of the negated model is {best_results}")
+            noise_tv.apply_to(model, scaling_coef=best_coef)
             
         
-            noise_tv.apply_to(model, scaling_coef=-1.0)
+            # noise_tv.apply_to(model, scaling_coef=-1.0)
             
             print("\n\nClean and noisy set performance after applying TV on the original mixed dataset:")
             print(eval_model_on_clean_noise_splits(model, cfg, base_dataset, gpu))
-            print("\n\nModel test performance after applying TV:")
-            print(evaluate_model(model, base_dataset.get_test_dataloader(), gpu))
+            # print("\n\nModel test performance after applying TV:")
+            # print(evaluate_model(model, base_dataset.get_test_dataloader(), gpu))
             
             match_subset, mismatch_subset = get_prediction_mismatch_with_trgts(model, self_learnt_dataset.get_trainset(), gpu)
             print("\n\nNew matched set size : ", len(match_subset))
