@@ -30,10 +30,9 @@ from src.datasets import data_utils
 
 from helper_funcs import evaluate_model, eval_model_on_clean_noise_splits, search_optimal_coefficient, prepare_batch
 
-def change_dataset_labels_with_preds(model, dataset, device):
-    current_train_set = dataset.get_trainset()
-    train_dl = torch.utils.data.DataLoader(
-        current_train_set,
+def get_prediction_mismatch_with_trgts(model, dataset, device):
+    dataloader = torch.utils.data.DataLoader(
+        dataset,
         batch_size=512,
         shuffle=False,
         num_workers=8,
@@ -50,7 +49,7 @@ def change_dataset_labels_with_preds(model, dataset, device):
     model.to(device)
     model.eval()
     with torch.no_grad():
-        for batch in train_dl:
+        for b_idx, batch in enumerate(dataloader):
             batch = prepare_batch(batch, device)
             input_batch, target_batch, indices, is_noisy = batch
             preds = model.predict(input_batch)
@@ -60,37 +59,36 @@ def change_dataset_labels_with_preds(model, dataset, device):
             all_preds_sm.extend(list(torch.unbind(preds, dim=0)))
             all_preds.extend(predictions.detach().cpu())
             all_targets.extend(target_batch.cpu())
-            all_indices.extend(indices.cpu())
+            # all_indices.extend(indices.cpu())
             all_is_noisy_flags.extend(is_noisy.cpu())
         
     all_preds_tensor = torch.tensor(all_preds)
     all_targets_tensor = torch.tensor(all_targets)
-    all_indices_tensor = torch.tensor(all_indices)
+    # all_indices_tensor = torch.tensor(all_indices)
+    all_indices_tensor = torch.arange(len(dataset))
         
     mismatch_mask = all_preds_tensor != all_targets_tensor
     match_mask = all_preds_tensor == all_targets_tensor
     mismatch_indices = all_indices_tensor[mismatch_mask]
     match_indices = all_indices_tensor[match_mask]
     
-    mismatch_subset = torch.utils.data.Subset(current_train_set, mismatch_indices.tolist())
-    match_subset = torch.utils.data.Subset(current_train_set, match_indices.tolist())
+    mismatch_subset = torch.utils.data.Subset(dataset, mismatch_indices.tolist())
+    match_subset = torch.utils.data.Subset(dataset, match_indices.tolist())
         
-    dummy_instance = current_train_set
-    while not isinstance(dummy_instance, data_utils.NoisyClassificationDataset):
-        dummy_instance = dummy_instance.dataset
+    # dummy_instance = dataset
+    # while not isinstance(dummy_instance, data_utils.NoisyClassificationDataset):
+    #     dummy_instance = dummy_instance.dataset
         
-    original_clean_lbls = dummy_instance.get_original_labels()
+    # original_clean_lbls = dummy_instance.get_original_labels()
     # This should be equal to the noise rate in first iteration
-    print(f'From {len(current_train_set)}, {(original_clean_lbls == dummy_instance.noisy_labels).sum()} had original labels matching targets.')
+    # print(f'From {len(dataset)}, {(original_clean_lbls == dummy_instance.noisy_labels).sum()} had original labels matching targets.')
     
-    dummy_instance.replace_labels(all_preds_tensor.long())
+    # dummy_instance.replace_labels(all_preds_tensor.long())
     # This should match the forget and healing rate of the task vector
-    print('After changing the targets with predicted labels:')
-    print(f'From {len(current_train_set)}, {(original_clean_lbls == dummy_instance.noisy_labels).sum()} had original labels matching targets.')
+    # print('After changing the targets with predicted labels:')
+    # print(f'From {len(dataset)}, {(original_clean_lbls == all_preds_tensor.long()).sum()} had original labels matching targets.')
     
-    dataset.set_trainset(current_train_set, shuffle=True)
-    
-    return dataset, match_subset, mismatch_subset
+    return match_subset, mismatch_subset
 
 
 
@@ -298,20 +296,33 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         
             noise_tv.apply_to(model, scaling_coef=-1.0)
             
-            print("Clean and noisy set performance after applying TV on the original mixed dataset:")
+            print("\n\nClean and noisy set performance after applying TV on the original mixed dataset:")
             print(eval_model_on_clean_noise_splits(model, cfg, base_dataset, gpu))
+            print("\n\nModel test performance after applying TV:")
+            print(evaluate_model(model, base_dataset.get_test_dataloader(), gpu))
             
-            self_learnt_dataset, match_subset, mismatch_subset = change_dataset_labels_with_preds(model, self_learnt_dataset, gpu)
+            match_subset, mismatch_subset = get_prediction_mismatch_with_trgts(model, self_learnt_dataset.get_trainset(), gpu)
+            print("\n\nNew matched set size : ", len(match_subset))
+            print("New mismatched set size : ", len(mismatch_subset))
             
-            print("Clean and noisy set performance on self learnt dataset before training:")
-            print(eval_model_on_clean_noise_splits(model, None, self_learnt_dataset, gpu))
+            num_noisy = 0
+            for sample in match_subset:
+                _, _, _, is_noisy = sample
+                if is_noisy: num_noisy += 1
+            print(f"Out of {len(match_subset)} matched samples, {num_noisy} are still noisy.")
+            
+            num_clean = 0
+            for sample in mismatch_subset:
+                _, _, _, is_noisy = sample
+                if not is_noisy: num_clean += 1
+                
+            print(f"Out of {len(mismatch_subset)} unmatched samples, {num_clean} were clean forgotten!")
             
             self_learnt_dataset.set_trainset(match_subset, shuffle=True)
             
             ###################################################################
             
-            print("New matched set size : ", len(match_subset))
-            print("New mismatched set size : ", len(mismatch_subset))
+            
             dataset = copy.deepcopy(self_learnt_dataset)
             
             
