@@ -325,7 +325,9 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             
             
             dataset = copy.deepcopy(self_learnt_dataset)
+            # TODO This line for testing only, remove it later
             
+            model.load_state_dict(base_model_ckp)
             
             experiment_name = f"{cfg_name}/pretrain_{attempt}"
             experiment_dir = outputs_dir / Path(experiment_name)
@@ -339,7 +341,7 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             
             trainer = StandardTrainer(
                 outputs_dir=outputs_dir,
-                **cfg['trainer']['finetuning_correcting'],
+                **cfg['trainer']['pretraining'],
                 exp_name=experiment_name,
             )
             
