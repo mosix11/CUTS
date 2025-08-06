@@ -28,147 +28,7 @@ from collections import OrderedDict
 
 
 
-def prepare_batch(batch, device):
-    batch = [tens.to(device) for tens in batch]
-    return batch
-
-
-
-def evaluate_model(model, dataloader, device):
-    """
-    Evaluates the given model on the provided dataloader.
-
-    Args:
-        model (torch.nn.Module): The model to evaluate.
-        dataloader (torch.utils.data.DataLoader): The data loader for evaluation.
-        device (torch.device): The device to run evaluation on.
-
-    Returns:
-        tuple: A tuple containing (all_predictions, all_targets, metrics_dict).
-    """
-    loss_met = misc_utils.AverageMeter()
-    model.reset_metrics()
-    all_preds = []
-    all_targets = []
-    
-    model.to(device)
-    model.eval()
-    with torch.no_grad():
-        for batch in dataloader:
-            batch = prepare_batch(batch, device)
-            input_batch, target_batch = batch[:2]
-            
-            loss, preds = model.validation_step(input_batch, target_batch, use_amp=True, return_preds=True)
-            if model.loss_fn.reduction == 'none':
-                loss = loss.mean()
-            loss_met.update(loss.detach().cpu().item(), n=input_batch.shape[0])
-            
-            predictions = torch.argmax(preds, dim=-1)
-            all_preds.extend(predictions.cpu())
-            all_targets.extend(target_batch.cpu())
-            
-            
-    metric_results = model.compute_metrics()
-    metric_results['Loss'] = loss_met.avg
-    model.reset_metrics()
-    
-    return metric_results, torch.tensor(all_preds), torch.tensor(all_targets) 
-
-
-def search_optimal_coefficient(base_model, task_vector, search_range, dataset, num_classes, device):
-    """
-    Performs a search to find the optimal task vector scaling coefficient.
-
-    Args:
-        base_model (torch.nn.Module): The pre-trained model. A deepcopy is made for each evaluation.
-        task_vector (TaskVector): The task vector object.
-        dataset: The dataset object to get the test dataloader from.
-        search_range (list or tuple): A list/tuple [min_val, max_val] for the search.
-        device (torch.device): The device to run evaluation on.
-        num_classes (int): The number of classes for the confusion matrix.
-
-    Returns:
-        tuple: (best_coefficient, best_performance_metrics, confusion_matrix_tensor)
-    """
-    test_dataloader = dataset.get_test_dataloader()
-    
-    best_coef = 0.0
-    best_acc = -1.0
-    best_results = {}
-    
-    print("--- Starting Coarse Search ---")
-    coarse_search_grid = np.arange(search_range[0], search_range[1] + 0.1, 0.1)
-    
-    for scale_coef in tqdm(coarse_search_grid, desc="Coarse Search"):
-        search_model = copy.deepcopy(base_model)
-        task_vector.apply_to(search_model, scaling_coef=scale_coef)
-        
-        metric_results, _, _ = evaluate_model(search_model, test_dataloader, device)
-        
-        if metric_results['ACC'] > best_acc:
-            best_acc = metric_results['ACC']
-            best_coef = scale_coef
-            best_results = metric_results
-    
-    # print(f"\nCoarse search best coefficient: {best_coef:.2f} with Accuracy: {best_acc:.4f}")
-
-    print("\n--- Starting Fine Search ---")
-    fine_search_start = max(search_range[0], best_coef - 0.1)
-    fine_search_end = min(search_range[1], best_coef + 0.1)
-    fine_search_grid = np.linspace(fine_search_start, fine_search_end, num=21)
-
-    for scale_coef in tqdm(fine_search_grid, desc="Fine Search"):
-        search_model = copy.deepcopy(base_model)
-        task_vector.apply_to(search_model, scaling_coef=scale_coef)
-        
-        metric_results, _, _ = evaluate_model(search_model, test_dataloader, device)
-        
-        if metric_results['ACC'] > best_acc:
-            best_acc = metric_results['ACC']
-            best_coef = scale_coef
-            best_results = metric_results
-
-    # print(f"\nRecalculating metrics and confusion matrix for best coefficient: {best_coef:.2f}")
-    final_model = copy.deepcopy(base_model)
-    task_vector.apply_to(final_model, scaling_coef=best_coef)
-    final_model.to(device)
-
-    best_results, all_preds, all_targets = evaluate_model(final_model, test_dataloader, device)
-    
-    confmat_metric = ConfusionMatrix(task="multiclass", num_classes=num_classes)
-    best_cm_tensor = confmat_metric(all_preds, all_targets)
-
-    return best_coef, best_results, best_cm_tensor
-
-
-def eval_model_on_clean_noise_splits(model, cfg, dataset, device):
-    dataset_cpy = copy.deepcopy(dataset)
-    strategy = cfg['strategy']
-    dataset_cpy.inject_noise(**strategy['noise']['pretraining'])
-    clean_set, noisy_set = dataset_cpy.get_clean_noisy_subsets(set='Train')
-    
-    dataset_cpy.set_trainset(clean_set, shuffle=False)
-    clean_metric, _, _ = evaluate_model(model, dataloader=dataset_cpy.get_train_dataloader(), device=device)
-    
-    dataset_cpy.set_trainset(noisy_set, shuffle=False)
-    noisy_metric, _, _ = evaluate_model(model, dataloader=dataset_cpy.get_train_dataloader(), device=device)
-    
-    dummy_instance = noisy_set
-    while not isinstance(dummy_instance, data_utils.NoisyClassificationDataset):
-        dummy_instance = dummy_instance.dataset
-    dummy_instance.switch_to_clean_lables()
-    
-    dataset_cpy.set_trainset(noisy_set, shuffle=False)
-    healing_metric, _, _ = evaluate_model(model, dataloader=dataset_cpy.get_train_dataloader(), device=device)
-
-    
-    return {
-        'clean_set': clean_metric,
-        'noisy_set': noisy_metric,
-        'healing_noise': healing_metric,
-    }
-    
-    
+from helper_funcs import evaluate_model, eval_model_on_clean_noise_splits, search_optimal_coefficient
     
     
 def eval_model_on_tvs(model, taskvectors, results_dict, cfg, dataset, num_classes, device):
@@ -180,7 +40,7 @@ def eval_model_on_tvs(model, taskvectors, results_dict, cfg, dataset, num_classe
         results[tv_name] = OrderedDict()
         
         base_model = copy.deepcopy(model)
-        base_alpha = 1.0 if tv_name == 'Gold' else -1.0
+        base_alpha = 1.0 if tv_name == 'Gold TV' else -1.0
         results[tv_name][base_alpha] = OrderedDict()
         tv.apply_to(base_model, scaling_coef=base_alpha)
         base_test_results, _, _ = evaluate_model(base_model, dataset.get_test_dataloader(), device)
@@ -234,7 +94,7 @@ def transfer_noise_vectors(outputs_dir: Path, results_dir: Path, cfg_s: dict, cf
     base_model = model_factory.create_model(cfg_t['model'], num_classes)
     
     
-    results_dir = results_dir / cfg_t_name
+    results_dir = results_dir / f"{cfg_s_name}_to_{cfg_t_name}"
     results_dir.mkdir(exist_ok=True, parents=True)
     
     base_target_expr_dir = outputs_dir / cfg_t_name
@@ -263,16 +123,14 @@ def transfer_noise_vectors(outputs_dir: Path, results_dir: Path, cfg_s: dict, cf
     ft_s_gold_tv = TaskVector(pretrain_s_weights, ft_gold_s_wieghts)
     finetune_s_tvs = OrderedDict()
     for ft_expr, ft_weight in finetune_s_weights.items():
-        finetune_s_tvs[ft_expr] = TaskVector(pretrain_s_weights, ft_weight)
-    finetune_s_tvs['avg_noise'] = TaskVector.mean(finetune_s_tvs)
-
-    ft_s_tvs_list = [ft_s_gold_tv]
-    ft_s_tvs_list.extend(list(finetune_s_tvs.values()))
-    print(finetune_s_tvs.keys())
+        finetune_s_tvs[f"{float(ft_expr.split('_')[0])*100:.0f}% Noise, {ft_expr.split('_')[1]} Seed"] = TaskVector(pretrain_s_weights, ft_weight)
+    finetune_s_tvs['Gold TV'] = ft_s_gold_tv
+    finetune_s_tvs['Average TV'] = TaskVector.mean(finetune_s_tvs)
+    finetune_s_tvs['Average TV Pruned 0.8'] = finetune_s_tvs['Average TV'].prune_small_weights(rate=0.8)
     
-    tv_names = ['Gold']
-    tv_names.extend([f"{float(n_s.split('_')[0])*100:.0f}% Noise, {n_s.split('_')[1]} Seed" for n_s in list(finetune_s_tvs.keys())[:-1]])
-    tv_names.extend(['Average TV'])
+    ft_s_tvs_list = list(finetune_s_tvs.values())
+    print(finetune_s_tvs.keys())
+    tv_names = list(finetune_s_tvs.keys())
     
     # task_sim = []
     # for i in range(len(ft_s_tvs_list)):
@@ -302,7 +160,7 @@ def transfer_noise_vectors(outputs_dir: Path, results_dir: Path, cfg_s: dict, cf
     
     base_model.load_state_dict(pretrain_t_weights)
     results_dict = OrderedDict()    
-    results_dict = eval_model_on_tvs(base_model, OrderedDict(zip(tv_names, ft_s_tvs_list)), results_dict, cfg_t, dataset, num_classes, gpu)
+    results_dict = eval_model_on_tvs(base_model, OrderedDict(zip(tv_names[-3:], ft_s_tvs_list[-3:])), results_dict, cfg_t, dataset, num_classes, gpu)
     
     print(results_dict)
     
