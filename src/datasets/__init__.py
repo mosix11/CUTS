@@ -3,6 +3,7 @@ from .cifar10 import CIFAR10
 from .cifar100 import CIFAR100
 from .mnist import MNIST
 from .fashion_mnist import FashionMNIST
+from .clothing1M import Clothing1M
 from .mog_synthetic import MoGSynthetic
 from .dummy_datasets import DummyClassificationDataset
 from . import utils as data_utils
