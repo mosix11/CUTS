@@ -3,7 +3,7 @@ from torchvision import datasets
 import torchvision.transforms.v2 as transforms
 from torch.utils.data import Dataset, DataLoader, random_split, Subset
 from .base_classification_dataset import BaseClassificationDataset
-from .utils import DatasetWithIndex, LabelRemapper, NoisyClassificationDataset, BinarizedClassificationDataset
+from .dataset_wrappers import DatasetWithIndex, LabelRemapper, NoisyClassificationDataset, BinarizedClassificationDataset
 
 import os
 from pathlib import Path
@@ -15,6 +15,7 @@ from typing import Tuple, List, Union, Dict
 class MNIST(BaseClassificationDataset):
     def __init__(
         self,
+        data_dir: Path = Path("./data").absolute(),
         img_size: Union[tuple, list] = (28, 28),
         grayscale: bool = True,
         normalize_imgs: bool = False,
@@ -28,8 +29,13 @@ class MNIST(BaseClassificationDataset):
         self.flatten = flatten
         self.augmentations = [] if augmentations == None else augmentations
         
+        data_dir.mkdir(exist_ok=True, parents=True)
+        dataset_dir = data_dir / 'MNIST'
+        dataset_dir.mkdir(exist_ok=True, parents=True)
+        
         super().__init__(
             dataset_name='MNIST',
+            dataset_dir=dataset_dir,
             num_classes=10,
             **kwargs,  
         )

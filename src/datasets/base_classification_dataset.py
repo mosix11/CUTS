@@ -3,7 +3,7 @@ from torchvision import datasets
 import torchvision.transforms.v2 as transforms
 from torch.utils.data import Dataset, DataLoader, random_split, Subset
 
-from .utils import DatasetWithIndex, LabelRemapper, NoisyClassificationDataset, BinarizedClassificationDataset
+from .dataset_wrappers import DatasetWithIndex, LabelRemapper, NoisyClassificationDataset, BinarizedClassificationDataset
 
 import os
 from pathlib import Path
@@ -16,8 +16,8 @@ class BaseClassificationDataset(ABC):
     def __init__(
         self,
         dataset_name:str = None,
+        dataset_dir:Path = None,
         num_classes:int = None,
-        data_dir: Path = Path("./data").absolute(),
         batch_size: int = 256,
         subsample_size: Union[tuple, list] = (-1, -1),
         class_subset: list = [],
@@ -30,16 +30,10 @@ class BaseClassificationDataset(ABC):
     ) -> None:
         super().__init__()
 
-        if dataset_name == None:
-            raise ValueError("Dataset Name must be specified for initialization.")
         if num_classes == None:
             raise ValueError("Number of classes must be specified for initialization.")
         
-        data_dir.mkdir(exist_ok=True, parents=True)
-        dataset_dir = data_dir / dataset_name
-        dataset_dir.mkdir(exist_ok=True, parents=True)
         self.dataset_dir = dataset_dir
-
         self.dataset_name = dataset_name
         
         self.batch_size = batch_size

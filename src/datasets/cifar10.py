@@ -3,10 +3,12 @@ from torchvision import datasets
 import torchvision.transforms.v2 as transforms
 from .base_classification_dataset import BaseClassificationDataset
 from typing import Tuple, List, Union, Dict
+from pathlib import Path
 
 class CIFAR10(BaseClassificationDataset):
     def __init__(
         self,
+        data_dir: Path = Path("./data").absolute(),
         img_size: Union[tuple, list] = (32, 32),
         grayscale: bool = False,
         normalize_imgs: bool = False,
@@ -20,8 +22,14 @@ class CIFAR10(BaseClassificationDataset):
         self.flatten = flatten
         self.augmentations = [] if augmentations == None else augmentations
         
+        
+        data_dir.mkdir(exist_ok=True, parents=True)
+        dataset_dir = data_dir / 'CIFAR10'
+        dataset_dir.mkdir(exist_ok=True, parents=True)
+        
         super().__init__(
             dataset_name='CIFAR10',
+            dataset_dir=dataset_dir,
             num_classes=10,
             **kwargs,  
         )

@@ -253,6 +253,7 @@ class MoGSyntheticDataset(Dataset):
 class MoGSynthetic(BaseClassificationDataset):
     def __init__(
         self,
+        data_dir: Path = Path("./data").absolute(),
         num_samples: int = 100000,
         num_features: int = 512,
         num_classes: int = 30,
@@ -266,6 +267,9 @@ class MoGSynthetic(BaseClassificationDataset):
         **kwargs
     ):
         
+        data_dir.mkdir(exist_ok=True, parents=True)
+        dataset_dir = data_dir / 'MoGSynthetic'
+        dataset_dir.mkdir(exist_ok=True, parents=True)
 
         
         self.num_samples = num_samples
@@ -292,6 +296,7 @@ class MoGSynthetic(BaseClassificationDataset):
         
         super().__init__(
             dataset_name='MoGSynthetic',
+            dataset_dir=dataset_dir,
             num_classes=num_classes,
             **kwargs,
             seed=seed
