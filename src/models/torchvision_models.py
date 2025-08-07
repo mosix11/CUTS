@@ -37,8 +37,12 @@ class TorchvisionModels(BaseClassificationModel):
             net.maxpool = nn.Identity()
 
         elif model_type == 'resnet50':
-            net = torchvision.models.resnet50(weights=pt_weights, num_classes=num_classes)
-
+            # net = torchvision.models.resnet50(weights=pt_weights, num_classes=num_classes)
+            net = torchvision.models.resnet50(weights=pt_weights)
+            net.fc = nn.Linear(net.fc.in_features, num_classes)
+        elif model_type == 'resnet50_nonorm':
+            net = torchvision.models.resnet50(norm_layer=nn.Identity, weights=pt_weights, num_classes=num_classes)
+            
         elif model_type == 'vit_b_16':
             net = torchvision.models.vit_b_16(weights=pt_weights, num_classes=num_classes)
                 

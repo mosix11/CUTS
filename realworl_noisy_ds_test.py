@@ -198,31 +198,11 @@ def eval_model_on_tvs(model, taskvectors, results_dict, cfg, dataset, num_classe
 def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     cfg['trainer']['pretraining']['comet_api_key'] = os.getenv("COMET_API_KEY")
     cfg['trainer']['finetuning']['comet_api_key'] = os.getenv("COMET_API_KEY")
-
-    augmentations = None
-    if cfg['dataset']['name'] == 'cifar10':
+    if cfg['dataset']['name'] == 'clothing1M':
         augmentations = [
-            transformsv2.RandomCrop(32, padding=4),
             transformsv2.RandomHorizontalFlip(),
         ]
-    elif cfg['dataset']['name'] == 'cifar100':
-        augmentations = [
-            transformsv2.RandomCrop(32, padding=4),
-            transformsv2.RandomHorizontalFlip(),
-        ]
-    elif cfg['dataset']['name'] == 'mnist':
-        pass
-        # augmentations = [
-        #     transformsv2.RandomCrop(32, padding=4),
-        #     transformsv2.RandomHorizontalFlip(),
-        # ]
-    elif cfg['dataset']['name'] == 'fashion_mnist':
-        pass
-        # augmentations = [
-        #     transformsv2.RandomCrop(32, padding=4),
-        #     transformsv2.RandomHorizontalFlip(),
-        # ]
-    elif cfg['dataset']['name'] == 'clothing1M':
+    elif cfg['dataset']['name'] == 'food101':
         augmentations = [
             transformsv2.RandomHorizontalFlip(),
         ]
@@ -231,46 +211,7 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     base_dataset, num_classes = dataset_factory.create_dataset(cfg, augmentations)
     base_model = model_factory.create_model(cfg['model'], num_classes)
     strategy = cfg['strategy']
-    base_dataset.inject_noise(**strategy['noise']['pretraining'])
     
-    if not outputs_dir.joinpath(f"{cfg_name}/gold/weights/model_weights.pth").exists():
-        dataset = copy.deepcopy(base_dataset)
-        model = copy.deepcopy(base_model)
-        
-        clean_set, noisy_set = dataset.get_clean_noisy_subsets(set='Train')
-        dataset.set_trainset(clean_set, shuffle=True)
-            
-        experiment_name = f"{cfg_name}/gold"
-        experiment_dir = outputs_dir / Path(experiment_name)
-
-        weights_dir = experiment_dir / Path("weights")
-        weights_dir.mkdir(exist_ok=True, parents=True)
-
-        plots_dir = experiment_dir / Path("plots")
-        plots_dir.mkdir(exist_ok=True, parents=True)
-        
-        
-
-        trainer = StandardTrainer(
-            outputs_dir=outputs_dir,
-            **cfg['trainer']['pretraining'],
-            exp_name=experiment_name,
-            exp_tags=None,
-        )
-        
-        results = trainer.fit(model, dataset, resume=False)
-
-        torch.save(model.state_dict(), weights_dir / Path("model_weights.pth"))
-
-        class_names = [f"Class {i}" for i in range(num_classes)]
-        confmat = trainer.confmat("Test")
-        misc_utils.plot_confusion_matrix(
-            cm=confmat,
-            class_names=class_names,
-            filepath=str(plots_dir / Path("confmat.png")),
-            show=False,
-        )
-        
 
     if not outputs_dir.joinpath(f"{cfg_name}/pretrain/weights/model_weights.pth").exists():
         dataset = copy.deepcopy(base_dataset)
@@ -316,90 +257,48 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         )
 
 
-    if not outputs_dir.joinpath(f"{cfg_name}/finetune_gold/weights/model_weights.pth").exists():
-        dataset = copy.deepcopy(base_dataset)
-        model = copy.deepcopy(base_model)
+    # if not outputs_dir.joinpath(f"{cfg_name}/finetune_gold/weights/model_weights.pth").exists():
+    #     dataset = copy.deepcopy(base_dataset)
+    #     model = copy.deepcopy(base_model)
         
-        base_model_ckp_path = outputs_dir/ Path(f"{cfg_name}/pretrain") / Path('weights/model_weights.pth')
-        checkpoint = torch.load(base_model_ckp_path)
-        model.load_state_dict(checkpoint)
+    #     base_model_ckp_path = outputs_dir/ Path(f"{cfg_name}/pretrain") / Path('weights/model_weights.pth')
+    #     checkpoint = torch.load(base_model_ckp_path)
+    #     model.load_state_dict(checkpoint)
         
-        clean_set, noisy_set = dataset.get_clean_noisy_subsets(set='Train')
-        dataset.set_trainset(clean_set, shuffle=True)
+    #     clean_set, noisy_set = dataset.get_clean_noisy_subsets(set='Train')
+    #     dataset.set_trainset(clean_set, shuffle=True)
             
-        experiment_name = f"{cfg_name}/finetune_gold"
-        experiment_dir = outputs_dir / Path(experiment_name)
+    #     experiment_name = f"{cfg_name}/finetune_gold"
+    #     experiment_dir = outputs_dir / Path(experiment_name)
 
-        weights_dir = experiment_dir / Path("weights")
-        weights_dir.mkdir(exist_ok=True, parents=True)
+    #     weights_dir = experiment_dir / Path("weights")
+    #     weights_dir.mkdir(exist_ok=True, parents=True)
 
-        plots_dir = experiment_dir / Path("plots")
-        plots_dir.mkdir(exist_ok=True, parents=True)
+    #     plots_dir = experiment_dir / Path("plots")
+    #     plots_dir.mkdir(exist_ok=True, parents=True)
         
         
 
-        trainer = StandardTrainer(
-            outputs_dir=outputs_dir,
-            **cfg['trainer']['pretraining'],
-            exp_name=experiment_name,
-            exp_tags=None,
-        )
+    #     trainer = StandardTrainer(
+    #         outputs_dir=outputs_dir,
+    #         **cfg['trainer']['pretraining'],
+    #         exp_name=experiment_name,
+    #         exp_tags=None,
+    #     )
         
-        results = trainer.fit(model, dataset, resume=False)
+    #     results = trainer.fit(model, dataset, resume=False)
 
-        torch.save(model.state_dict(), weights_dir / Path("model_weights.pth"))
+    #     torch.save(model.state_dict(), weights_dir / Path("model_weights.pth"))
 
-        class_names = [f"Class {i}" for i in range(num_classes)]
-        confmat = trainer.confmat("Test")
-        misc_utils.plot_confusion_matrix(
-            cm=confmat,
-            class_names=class_names,
-            filepath=str(plots_dir / Path("confmat.png")),
-            show=False,
-        )
+    #     class_names = [f"Class {i}" for i in range(num_classes)]
+    #     confmat = trainer.confmat("Test")
+    #     misc_utils.plot_confusion_matrix(
+    #         cm=confmat,
+    #         class_names=class_names,
+    #         filepath=str(plots_dir / Path("confmat.png")),
+    #         show=False,
+    #     )
         
-        
-    if not outputs_dir.joinpath(f"{cfg_name}/finetune_gt_noise/weights/model_weights.pth").exists():
-        dataset = copy.deepcopy(base_dataset)
-        model = copy.deepcopy(base_model)
-        
-        base_model_ckp_path = outputs_dir/ Path(f"{cfg_name}/pretrain") / Path('weights/model_weights.pth')
-        checkpoint = torch.load(base_model_ckp_path)
-        model.load_state_dict(checkpoint)
-        
-        clean_set, noisy_set = dataset.get_clean_noisy_subsets(set='Train')
-        dataset.set_trainset(noisy_set, shuffle=True)
-            
-        experiment_name = f"{cfg_name}/finetune_gt_noise"
-        experiment_dir = outputs_dir / Path(experiment_name)
-
-        weights_dir = experiment_dir / Path("weights")
-        weights_dir.mkdir(exist_ok=True, parents=True)
-
-        plots_dir = experiment_dir / Path("plots")
-        plots_dir.mkdir(exist_ok=True, parents=True)
-        
-        
-
-        trainer = StandardTrainer(
-            outputs_dir=outputs_dir,
-            **cfg['trainer']['finetuning'],
-            exp_name=experiment_name,
-            exp_tags=None,
-        )
-        
-        results = trainer.fit(model, dataset, resume=False)
-
-        torch.save(model.state_dict(), weights_dir / Path("model_weights.pth"))
-
-        class_names = [f"Class {i}" for i in range(num_classes)]
-        confmat = trainer.confmat("Test")
-        misc_utils.plot_confusion_matrix(
-            cm=confmat,
-            class_names=class_names,
-            filepath=str(plots_dir / Path("confmat.png")),
-            show=False,
-        )
 
     
     for idx, noise_tv in enumerate(strategy['noise']['finetuning']):
@@ -422,7 +321,7 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             plots_dir.mkdir(exist_ok=True, parents=True)
             
             if strategy['finetuning_set'] == 'Heldout':
-                dataset.set_trainset(dataset.get_heldoutset(), shuffle=True)
+                dataset.set_trainset(dataset.get_valset(), shuffle=True)
                 dataset.inject_noise(**noise_tv)
                     
             elif strategy['finetuning_set'] == 'LowLoss':
@@ -552,93 +451,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         filepath=results_dir / 'task_similarities.png',
         show=False
     )
-    
-    # rank_dict = OrderedDict()
-    # for tv_name, tv in finetune_tvs.items():
-    #     rank_dict[tv_name] = tv.get_layer_rank()
-        
-    # with open(results_dir / 'ranks.json' , 'w') as json_file:
-    #     json.dump(rank_dict, json_file, indent=4)
-    
-    
-    # for i in range(len(ft_tvs_list)):
-    #     if i == 0:
-    #         print('passing ft gold from low rank approximation')
-    #         continue
-    #     else:
-    #         ftsv = ft_tvs_list[i].compute_SVD_for_each_layer(k=0.1)
-        
-    #         ft_tvs_list[i].apply_SVD_to_TV(ftsv)
-    
-    
-    # task_sim = []
-    # for i in range(len(ft_tvs_list)):
-    #     anchor_tv = ft_tvs_list[i]
-    #     task_sim.append([])
-    #     for j in range(len(ft_tvs_list)):
-    #         other_tv = ft_tvs_list[j]
-    #         cos_sim = anchor_tv.cosine_similarity_flatten(other_tv)
-    #         task_sim[i].append(cos_sim)
-    # task_sim = np.array(task_sim)
-    
-    # misc_utils.plot_confusion_matrix(cm=task_sim, class_names=class_names, filepath=None, show=True)
-    
-    # for ft_name, ft_tv in finetune_tvs.items():
-    #     best_coef, best_results, best_cm = search_optimal_coefficient(
-    #         base_model=base_model,
-    #         task_vector=ft_tv,
-    #         search_range=(-1.5, 0.0),
-    #         dataset=dataset,
-    #         num_classes=num_classes,
-    #         device=gpu
-    #     )
-    #     print(f"Best scaling coefficient for {ft_name} = {best_coef}")
-    #     print(f"Metrics of the negated model is {best_results}")
-            
-    
-    
 
-        
-    # TSV = TaskVector.TSV_extract_common_direction(finetune_tvs, k=0.3)
-    # TSV.apply_to(base_model, scaling_coef=1.0)
-        
-    # for ft_name, ft_tv in finetune_tvs.items():
-    #     best_coef, best_results, best_cm = search_optimal_coefficient(
-    #         base_model=base_model,
-    #         task_vector=ft_tv,
-    #         search_range=(-1.5, 0.0),
-    #         dataset=dataset,
-    #         num_classes=num_classes,
-    #         device=gpu
-    #     )
-    #     print(f"Best scaling coefficient for {ft_name} = {best_coef}")
-    #     print(f"Metrics of the negated model is {best_results}")
-    
-    # test_tv = (ft_tvs_list[2] + ft_tvs_list[3]) * 0.5
-    
-    # ordered_dict = OrderedDict(zip(tv_names[1:], ft_tvs_list[1:]))
-    
-    # best_coef, best_results, best_cm = search_optimal_coefficient(
-    #     base_model=base_model,
-    #     # task_vector=test_tv,
-    #     task_vector=ft_tvs_list[4],
-    #     search_range=(-3.0, 0.0),
-    #     dataset=dataset,
-    #     num_classes=num_classes,
-    #     device=gpu
-    # )
-    
-    # print(f"Best scaling coefficient for TV = {best_coef}")
-    # print(f"Metrics of the negated model is {best_results}")
-    
-    # before_tv_metrics = eval_model_on_clean_noise_splits(base_model, cfg, dataset, gpu)
-    # print('Performance before TV:', before_tv_metrics)
-    # base_model.to(cpu)
-    # # test_tv.apply_to(base_model, scaling_coef=best_coef)
-    # ft_tvs_list[4].apply_to(base_model, scaling_coef=best_coef)
-    
-    # after_tv_metrics = eval_model_on_clean_noise_splits(base_model, cfg, dataset, gpu)
-    # print('Performance after TV:', after_tv_metrics)
     
     base_model.load_state_dict(pretrain_weights)
     pt_test_results, _, _ = evaluate_model(base_model, dataset.get_test_dataloader(), gpu)
@@ -729,15 +542,15 @@ if __name__ == "__main__":
 
     dotenv.load_dotenv(".env")
     
-    cfg_path = Path('configs/single_experiment/pretrain_on_noisy') / f"{args.config}.yaml"
+    cfg_path = Path('configs/single_experiment/realworld_pretrain_on_noisy') / f"{args.config}.yaml"
 
     if not cfg_path.exists(): raise RuntimeError('The specified config file does not exist.')
     with open(cfg_path, 'r') as file:
         cfg = yaml.full_load(file)
 
-    outputs_dir = Path("outputs/single_experiment/pretrain_on_noisy").absolute()
+    outputs_dir = Path("outputs/single_experiment/realworld_pretrain_on_noisy").absolute()
     outputs_dir.mkdir(exist_ok=True, parents=True)
-    results_dir = Path("results/single_experiment/pretrain_on_noisy").absolute()
+    results_dir = Path("results/single_experiment/realworld_pretrain_on_noisy").absolute()
     results_dir.mkdir(exist_ok=True, parents=True)
 
     if args.tv:

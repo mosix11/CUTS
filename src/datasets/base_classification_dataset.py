@@ -68,8 +68,6 @@ class BaseClassificationDataset(ABC):
         """
         This method must be implemented by all subclasses.
         The method should return a training dataset which is a subclass of torch.data.Dataset.
-        The inputs must be stored in a variable called `data` and the targets should be sotred
-        in a variable called `targets` in the dataset returned.
         """
         
         pass
@@ -79,8 +77,6 @@ class BaseClassificationDataset(ABC):
         """
         This method must be implemented by all subclasses.
         The method should return a validation dataset which is a subclass of torch.data.Dataset.
-        The inputs must be stored in a variable called `data` and the targets should be sotred
-        in a variable called `targets` in the dataset returned.
         """
         pass
     
@@ -89,20 +85,9 @@ class BaseClassificationDataset(ABC):
         """
         This method must be implemented by all subclasses.
         The method should return a test dataset which is a subclass of torch.data.Dataset.
-        The inputs must be stored in a variable called `data` and the targets should be sotred
-        in a variable called `targets` in the dataset returned.
         """
         pass
     
-    # @abstractmethod
-    # def get_transforms(self, train=True):
-    #     """
-    #     This method must be implemented by all subclasses.
-    #     The method should return an instance of torchvision.transforms.Compose (either v1 or v2),
-    #     or a general transform strategy which can be passed to the dataset instances and be 
-    #     applied in the `__getitem__` method of the datset.
-    #     """
-    #     pass
     
     @abstractmethod
     def get_identifier(self):

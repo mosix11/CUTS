@@ -1,5 +1,6 @@
 import torch
 import torchvision.transforms.v2 as transforms
+from torchvision import datasets
 from torch.utils.data import Dataset, DataLoader, random_split, Subset
 from .base_classification_dataset import BaseClassificationDataset
 from .dataset_wrappers import DatasetWithIndex, LabelRemapper, NoisyClassificationDataset, BinarizedClassificationDataset
@@ -16,6 +17,36 @@ from .utils import extract_zip, extract_tar_gz, extract_tar
 import dotenv
 import shutil
 
+from PIL import Image
+1
+
+class Clothing1MDataset(Dataset):
+    """
+    PyTorch Dataset for Clothing1M splits organized under root_dir.
+    Expects subfolders q0000..q0013 each containing image files.
+    """
+    def __init__(self, root_dir, transform=None):
+        self.root_dir = Path(root_dir)
+        self.transform = transform
+        self.samples = []  # list of (image_path, label)
+
+        for class_dir in sorted(self.root_dir.iterdir()):
+            if class_dir.is_dir() and class_dir.name.startswith('q'):
+                # drop leading 'q' and parse class idx
+                label = int(class_dir.name[1:])
+                for img_file in class_dir.iterdir():
+                    if img_file.is_file():
+                        self.samples.append((img_file, label))
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx):
+        path, label = self.samples[idx]
+        image = Image.open(path).convert('RGB')
+        if self.transform:
+            image = self.transform(image)
+        return image, label
 
 
 class Clothing1M(BaseClassificationDataset):
@@ -54,26 +85,29 @@ class Clothing1M(BaseClassificationDataset):
         
         super().__init__(
             dataset_name='Clothing1M',
-            num_classes=14,
+            dataset_dir=dataset_dir,
             **kwargs,  
         )
 
 
     def load_train_set(self):
-        # return datasets.CIFAR10(root=self.dataset_dir, train=True, transform=self.get_transforms(train=True), download=True)
-        pass
+        return Clothing1MDataset(root_dir=self.train_noisy_dir, transform=self.get_transforms(train=True))
     
     def load_validation_set(self):
-        return None
+        return Clothing1MDataset(root_dir=self.val_dir, transform=self.get_transforms(train=False))
     
     def load_test_set(self):
-        # return datasets.CIFAR10(root=self.dataset_dir, train=False, transform=self.get_transforms(train=False), download=True)
-        pass
+        return Clothing1MDataset(root_dir=self.test_dir, transform=self.get_transforms(train=False))
 
     def get_transforms(self, train=True):
         trnsfrms = []
-        if self.img_size != (32, 32):
-            trnsfrms.append(transforms.Resize(self.img_size))
+        trnsfrms.append(transforms.Resize((256, 256)))
+        if train:
+            trnsfrms.append(transforms.RandomCrop((224, 224)))
+        else:
+            trnsfrms.append(transforms.CenterCrop((224, 224)))
+            
+        
         if self.grayscale:
             trnsfrms.append(transforms.Grayscale(num_output_channels=1))
         if len(self.augmentations) > 0 and train:
@@ -83,7 +117,7 @@ class Clothing1M(BaseClassificationDataset):
             transforms.ToDtype(torch.float32, scale=True),
         ])
         if self.normalize_imgs:
-            mean, std = ((0.5,), (0.5,)) if self.grayscale else ((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
+            mean, std = ((0.5,), (0.5,)) if self.grayscale else ((0.6959, 0.6537, 0.6371), (0.3113, 0.3192, 0.3214))
             trnsfrms.append(transforms.Normalize(mean, std))
         if self.flatten:
             trnsfrms.append(transforms.Lambda(lambda x: torch.flatten(x)))
