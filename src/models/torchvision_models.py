@@ -44,7 +44,8 @@ class TorchvisionModels(BaseClassificationModel):
             net = torchvision.models.resnet50(norm_layer=nn.Identity, weights=pt_weights, num_classes=num_classes)
             
         elif model_type == 'vit_b_16':
-            net = torchvision.models.vit_b_16(weights=pt_weights, num_classes=num_classes)
+            net = torchvision.models.vit_b_16(weights=pt_weights)
+            net.heads.head = nn.Linear(net.heads.head.in_features, num_classes)
                 
         elif model_type == 'vit_b_32':
             net = torchvision.models.vit_b_32(weights=pt_weights, num_classes=num_classes)
