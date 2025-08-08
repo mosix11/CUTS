@@ -24,7 +24,7 @@ import pickle
 from typing import List, Tuple, Union
 
 
-from ..utils import nn_utils, misc_utils
+from . import utils
 
 from abc import ABC, abstractmethod
 
@@ -85,8 +85,8 @@ class BaseClassificationTrainer(ABC):
         torch.set_float32_matmul_precision("high")
         
         
-        self.cpu = nn_utils.get_cpu_device()
-        self.gpu = nn_utils.get_gpu_device()
+        self.cpu = utils.get_cpu_device()
+        self.gpu = utils.get_gpu_device()
         if self.gpu == None and run_on_gpu:
             raise RuntimeError("""GPU device not found!""")
         self.run_on_gpu = run_on_gpu

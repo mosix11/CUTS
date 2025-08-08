@@ -9,8 +9,8 @@ from torchmetrics import ConfusionMatrix
 
 from . import BaseClassificationTrainer
 
-
-from ..utils import nn_utils, misc_utils
+from . import utils
+from ..utils import misc_utils
 
 class StandardTrainer(BaseClassificationTrainer):
     

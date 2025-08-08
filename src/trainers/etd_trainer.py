@@ -9,8 +9,9 @@ from torchmetrics import ConfusionMatrix
 
 from . import BaseClassificationTrainer
 
+from . import utils
 
-from ..utils import nn_utils, misc_utils
+from ..utils import  misc_utils
 
 class ETDTrainer(BaseClassificationTrainer):
     
