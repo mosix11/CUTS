@@ -56,7 +56,7 @@ model:
 
 trainer:
   pretraining:
-    max_epochs: &max_epochs 20
+    max_epochs: &max_epochs 30
     optimizer_cfg: 
       type: "adamw"
       lr: 2.0e-5
@@ -76,14 +76,14 @@ trainer:
     seed: *training_seed
 
   finetuning:
-    max_epochs: 450
+    max_epochs: 100
     optimizer_cfg: 
       type: "adamw"
       lr: 1.0e-4
       betas: [0.9, 0.999]
     lr_schedule_cfg:
       type: 'step'
-      milestones: [50, 100, 150, 200, 250, 300, 350, 400]
+      milestones: [40, 50, 60, 70, 80, 90]
       gamma: 0.7
     early_stopping: False
     validation_freq: -1

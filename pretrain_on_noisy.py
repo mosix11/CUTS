@@ -1,10 +1,10 @@
 import comet_ml
-from src.datasets import dataset_factory, data_utils
-from src.models import model_factory, TaskVector
-from src.trainers import StandardTrainer
+from src.datasets import dataset_factory
+from src.models import model_factory, TaskVector, weight_norm_analysis
+from src.trainers import StandardTrainer, utils as trainer_utils
 import matplotlib.pyplot as plt
 import seaborn as sns
-from src.utils import nn_utils, misc_utils
+from src.utils import misc_utils
 import torch
 
 import torchvision.transforms.v2 as transformsv2
@@ -472,8 +472,8 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     torch.use_deterministic_algorithms(True) 
     torch.set_float32_matmul_precision("high")
     
-    cpu = nn_utils.get_cpu_device()
-    gpu = nn_utils.get_gpu_device()
+    cpu = trainer_utils.get_cpu_device()
+    gpu = trainer_utils.get_gpu_device()
     
     
     dataset, num_classes = dataset_factory.create_dataset(cfg)
@@ -501,7 +501,30 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     for ft_expr, ft_dir in finetune_dirs.items():
         finetune_weights[ft_expr] = torch.load(ft_dir / 'weights/model_weights.pth', map_location=cpu)
     
+ 
+    # weight_norm_analysis.plot_abs_weight_norms_from_state_dict(
+    #     state_dict=pretrain_weights,
+    #     include_bias_and_norm=False,
+    #     max_groups=40,
+    #     overall_bins=200,
+    #     layer_bins=200,
+    #     logy=False
+    # )
     
+    weight_norm_analysis.plot_abs_weight_norms_compare(
+        state_dicts={
+            'Pretrain': pretrain_weights,
+            'Gold': gold_weights,
+            # 'FT Gold': ft_gold_wieghts,
+            'FT Noise': next(iter(finetune_weights.items()))[1]
+            },
+        include_bias_and_norm=False,
+        max_groups=40,
+        overall_bins=200,
+        layer_bins=200,
+        logy=False,
+        saving_path=results_dir / 'abs_weight_norm.png'
+    )
     
     
     ft_gold_tv = TaskVector(pretrain_weights, ft_gold_wieghts)
@@ -552,6 +575,37 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         filepath=results_dir / 'task_similarities.png',
         show=False
     )
+    
+    
+    weight_norm_analysis.plot_abs_weight_norms_compare(
+        state_dicts={
+            'Average TV': finetune_tvs['Average TV'].vector,
+            'Gold TV': finetune_tvs['Gold'].vector,
+            # 'Average TV Pruned 0.8': finetune_tvs['Average TV Pruned 0.8'].vector
+            },
+        include_bias_and_norm=False,
+        max_groups=40,
+        overall_bins=200,
+        layer_bins=200,
+        logy=False,
+        saving_path=results_dir / 'abs_weight_norm_TV.png'
+    )
+    
+    weight_norm_analysis.plot_l2_weight_norms_compare(
+        state_dicts={
+            'Average TV': finetune_tvs['Average TV'].vector,
+            'Gold TV': finetune_tvs['Gold'].vector,
+            # 'Average TV Pruned 0.8': finetune_tvs['Average TV Pruned 0.8'].vector
+            },
+        include_bias_and_norm=False,
+        max_groups=40,
+        overall_bins=200,
+        layer_bins=200,
+        logy=False,
+        saving_path=results_dir / 'L2_weight_norm_TV.png'
+    )
+    
+    exit()
     
     # rank_dict = OrderedDict()
     # for tv_name, tv in finetune_tvs.items():

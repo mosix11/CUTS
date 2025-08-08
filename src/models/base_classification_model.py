@@ -25,9 +25,31 @@ class BaseClassificationModel(nn.Module, ABC):
                 if not isinstance(metric_instance, torchmetrics.Metric):
                     raise TypeError(f"Metric '{name}' must be an instance of torchmetrics.Metric.")
                 self.metrics[name] = metric_instance
+                
+                
+        self._NORM_LAYERS = (
+            nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d,
+            nn.LayerNorm, nn.GroupNorm, nn.InstanceNorm1d,
+            nn.InstanceNorm2d, nn.InstanceNorm3d, nn.LocalResponseNorm
+        )
+        
+        self._NORM_HINTS = [
+            "batchnorm", "batch_norm", "bn",
+            "layernorm", "layer_norm", "ln",
+            "groupnorm", "group_norm", "gn",
+            "instancenorm", "instance_norm", "inorm", "in"
+        ]
 
     @abstractmethod
     def forward(self, x):
+        """
+        Abstract method that must be implemented by all concrete subclasses.
+        This defines the specific architecture of the model.
+        """
+        pass
+    
+    @abstractmethod
+    def get_identifier(self):
         """
         Abstract method that must be implemented by all concrete subclasses.
         This defines the specific architecture of the model.
@@ -85,14 +107,10 @@ class BaseClassificationModel(nn.Module, ABC):
             for name, metric in self.metrics.items():
                 metric.reset()
 
+    
+    
     def _count_trainable_parameters(self):
         """Counts and returns the total number of trainable parameters in the model."""
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
 
-    @abstractmethod
-    def get_identifier(self):
-        """
-        Abstract method that must be implemented by all concrete subclasses.
-        This defines the specific architecture of the model.
-        """
-        pass
+    

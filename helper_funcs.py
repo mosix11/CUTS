@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 from torch.utils.data import Dataset, Subset, DataLoader
-from src.datasets import dataset_factory, data_utils, BaseClassificationDataset
+from src.datasets import dataset_factory, dataset_wrappers, BaseClassificationDataset
 from src.models import model_factory, TaskVector
 from src.utils import nn_utils, misc_utils
 import copy
@@ -79,7 +79,7 @@ def eval_model_on_clean_noise_splits(
     noisy_metric, _, _ = evaluate_model(model, dataloader=dataset_cpy.get_train_dataloader(), device=device)
     
     dummy_instance = noisy_set
-    while not isinstance(dummy_instance, data_utils.NoisyClassificationDataset):
+    while not isinstance(dummy_instance, dataset_wrappers.NoisyClassificationDataset):
         dummy_instance = dummy_instance.dataset
     dummy_instance.switch_to_clean_lables()
     

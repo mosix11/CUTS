@@ -4,7 +4,7 @@ from src.models import model_factory, TaskVector
 from src.trainers import StandardTrainer
 import matplotlib.pyplot as plt
 import seaborn as sns
-from src.utils import nn_utils, misc_utils
+from src.utils import misc_utils
 import torch
 import torchvision
 import torchmetrics

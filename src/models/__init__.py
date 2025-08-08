@@ -11,5 +11,7 @@ from .torchvision_models import TorchvisionModels
 from .timm_models import TimmModels
 
 from .task_vectors import TaskVector
-from . import model_factory
 from .loss_functions import CompoundLoss
+
+
+from . import model_factory, utils, weight_norm_analysis

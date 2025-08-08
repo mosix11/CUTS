@@ -365,7 +365,8 @@ class BaseClassificationTrainer(ABC):
             
             # 4. Handle logging, checkpointing, etc. (generic logic)
             if self.checkpoint_freq > 0 and (self.epoch+1) % self.checkpoint_freq == 0:
-                self.save_full_checkpoint(self.checkpoint_dir / 'resume_ckp.pth')
+                # self.save_full_checkpoint(self.checkpoint_dir / 'resume_ckp.pth')
+                self.save_full_checkpoint(self.checkpoint_dir / f'ckp_{self.epoch+1}.pth')
             
             
             

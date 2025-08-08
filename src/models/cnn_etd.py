@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.amp import autocast
 
-from .modules import ExampleTiedDropout
+from .etd import ExampleTiedDropout
 
 class Flatten(nn.Module):
     def forward(self, x): return x.view(x.size(0), x.size(1))

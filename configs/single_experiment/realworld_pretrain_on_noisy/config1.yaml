@@ -56,7 +56,7 @@ model:
 
 trainer:
   pretraining:
-    max_epochs: &max_epochs 100
+    max_epochs: &max_epochs 50
     optimizer_cfg: 
       type: "adamw"
       lr: 5.0e-4
@@ -67,7 +67,7 @@ trainer:
       eta_min: 5.0e-6
     early_stopping: False
     validation_freq: 1
-    save_best_model: False
+    save_best_model: True
     checkpoint_freq: 1
     run_on_gpu: True
     use_amp: True

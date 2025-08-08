@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.amp import autocast
-from .modules import ExampleTiedDropout
+from .etd import ExampleTiedDropout
 
 class Residual(nn.Module):
     def __init__(self, module):

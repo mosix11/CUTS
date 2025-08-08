@@ -1,10 +1,10 @@
 import comet_ml
-from src.datasets import dataset_factory, data_utils
+from src.datasets import dataset_factory
 from src.models import model_factory, TaskVector
-from src.trainers import StandardTrainer
+from src.trainers import StandardTrainer, utils as trainer_utils
 import matplotlib.pyplot as plt
 import seaborn as sns
-from src.utils import nn_utils, misc_utils
+
 import torch
 import torchmetrics
 import torchvision.transforms.v2 as transformsv2
@@ -85,8 +85,8 @@ def transfer_noise_vectors(outputs_dir: Path, results_dir: Path, cfg_s: dict, cf
     torch.use_deterministic_algorithms(True) 
     torch.set_float32_matmul_precision("high")
     
-    cpu = nn_utils.get_cpu_device()
-    gpu = nn_utils.get_gpu_device()
+    cpu = trainer_utils.get_cpu_device()
+    gpu = trainer_utils.get_gpu_device()
     
     
     dataset, num_classes = dataset_factory.create_dataset(cfg_t)

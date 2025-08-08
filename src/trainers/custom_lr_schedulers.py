@@ -1,6 +1,7 @@
 from torch.optim.lr_scheduler import _LRScheduler
 import math
 import warnings
+import numpy as np
 
 # From https://arxiv.org/pdf/1912.02292        
 class InverseSquareRootLR(_LRScheduler):
@@ -34,7 +35,8 @@ class InverseSquareRootLR(_LRScheduler):
         factor = (1.0 + current_step // self.L) ** -0.5
         return [base_lr * factor for base_lr in self.base_lrs]
     
-    
+            
+
     
 class CosineAnnealingWithWarmup(_LRScheduler):
     """
@@ -96,3 +98,112 @@ class CosineAnnealingWithWarmup(_LRScheduler):
                 self.eta_min + (group['lr'] - self.eta_min) * numerator / denominator
                 for group in self.optimizer.param_groups
             ]
+            
+            
+            
+
+def cosine_warmup_lr(epoch, base_lr, warmup_epochs, total_epochs):
+    """
+    Compute learning rate with a linear warmup followed by cosine decay.
+
+    Args:
+        epoch (int): Current epoch.
+        base_lr (float): Base learning rate.
+        warmup_epochs (int): Number of warmup epochs.
+        total_epochs (int): Total number of epochs.
+
+    Returns:
+        float: Adjusted learning rate.
+    """
+    if epoch < warmup_epochs:
+        return base_lr * (epoch + 1) / warmup_epochs
+    else:
+        # Cosine decay after warmup
+        progress = (epoch - warmup_epochs) / (total_epochs - warmup_epochs)
+        return 0.5 * base_lr * (1 + np.cos(np.pi * progress))
+
+
+def exponential_warmup_lr(epoch, base_lr, warmup_epochs):
+    """
+    Compute learning rate with exponential warmup.
+
+    Args:
+        epoch (int): Current epoch.
+        base_lr (float): Base learning rate.
+        warmup_epochs (int): Number of warmup epochs.
+
+    Returns:
+        float: Adjusted learning rate.
+    """
+    if epoch < warmup_epochs:
+        return base_lr * (np.exp(epoch / warmup_epochs) - 1) / (np.e - 1)
+    return base_lr
+
+
+def linear_warmup_lr(epoch, base_lr, warmup_epochs):
+    """
+    Compute learning rate with linear warmup.
+
+    Args:
+        epoch (int): Current epoch.
+        base_lr (float): Base learning rate.
+        warmup_epochs (int): Number of warmup epochs.
+
+    Returns:
+        float: Adjusted learning rate.
+    """
+    if epoch < warmup_epochs:
+        return base_lr * (epoch + 1) / warmup_epochs
+    return base_lr
+
+class CustomWarmupLRScheduler(_LRScheduler):
+    def __init__(
+        self,
+        optimizer,
+        base_scheduler,
+        warmup_strategy="lin",
+        warmup_epochs=10,
+        total_epochs=100,
+        last_epoch=-1,
+    ):
+        """
+        Custom learning rate scheduler with warm-up strategies and integration with a PyTorch scheduler.
+
+        Args:
+            optimizer (Optimizer): Optimizer to be wrapped.
+            base_scheduler (_LRScheduler): Base PyTorch scheduler (e.g., StepLR, CosineAnnealingLR).
+            warmup_strategy (str): Warm-up strategy to use (`lin`, `exp`, `cos`). Defaults to `lin`.
+            warmup_epochs (int): Number of warmup epochs. Defaults to 10.
+            total_epochs (int): Total number of epochs. Defaults to 100.
+            last_epoch (int): The index of the last epoch. Defaults to -1.
+        """
+        self.base_scheduler = base_scheduler
+        self.warmup_strategy = warmup_strategy
+        self.warmup_epochs = warmup_epochs
+        self.total_epochs = total_epochs
+        super(CustomWarmupLRScheduler, self).__init__(optimizer, last_epoch)
+
+    def _get_warmup_lr(self, epoch, base_lr):
+        if self.warmup_strategy == "cos":
+            return cosine_warmup_lr(
+                epoch, base_lr, self.warmup_epochs, self.total_epochs
+            )
+        elif self.warmup_strategy == "exp":
+            return exponential_warmup_lr(epoch, base_lr, self.warmup_epochs)
+        else:  # Default to linear warm-up
+            return linear_warmup_lr(epoch, base_lr, self.warmup_epochs)
+
+    def get_lr(self):
+        epoch = self.last_epoch + 1
+        if epoch < self.warmup_epochs:
+            return [self._get_warmup_lr(epoch, base_lr) for base_lr in self.base_lrs]
+        else:
+            # Step into the base scheduler after warmup
+            return self.base_scheduler.get_last_lr()
+
+    def step(self, epoch=None):
+        super(CustomWarmupLRScheduler, self).step(epoch)
+        if self.last_epoch >= self.warmup_epochs:
+            self.base_scheduler.step(
+                epoch - self.warmup_epochs if epoch is not None else None
+            )

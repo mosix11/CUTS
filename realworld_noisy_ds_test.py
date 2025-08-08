@@ -1,10 +1,10 @@
 import comet_ml
-from src.datasets import dataset_factory, data_utils
+from src.datasets import dataset_factory
 from src.models import model_factory, TaskVector
-from src.trainers import StandardTrainer
+from src.trainers import StandardTrainer, utils as trainer_utils
 import matplotlib.pyplot as plt
 import seaborn as sns
-from src.utils import nn_utils, misc_utils
+from src.utils import misc_utils
 import torch
 
 import torchvision.transforms.v2 as transformsv2
@@ -213,7 +213,8 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     strategy = cfg['strategy']
     
 
-    if not outputs_dir.joinpath(f"{cfg_name}/pretrain/weights/model_weights.pth").exists():
+    # if not outputs_dir.joinpath(f"{cfg_name}/pretrain/weights/model_weights.pth").exists():
+    if True:
         dataset = copy.deepcopy(base_dataset)
         model = copy.deepcopy(base_model)
         
@@ -241,7 +242,8 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
                 consistency_threshold=0.8
             )
 
-        results = trainer.fit(model, dataset, resume=False)
+        # TODO set resume to False 
+        results = trainer.fit(model, dataset, resume=True)
         
         # print(results)
 
@@ -256,6 +258,7 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             show=False,
         )
 
+    
 
     # if not outputs_dir.joinpath(f"{cfg_name}/finetune_gold/weights/model_weights.pth").exists():
     #     dataset = copy.deepcopy(base_dataset)
@@ -371,8 +374,8 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     torch.use_deterministic_algorithms(True) 
     torch.set_float32_matmul_precision("high")
     
-    cpu = nn_utils.get_cpu_device()
-    gpu = nn_utils.get_gpu_device()
+    cpu = trainer_utils.get_cpu_device()
+    gpu = trainer_utils.get_gpu_device()
     
     
     dataset, num_classes = dataset_factory.create_dataset(cfg)

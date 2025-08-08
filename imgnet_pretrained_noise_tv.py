@@ -1,10 +1,10 @@
 import comet_ml
 from src.datasets import dataset_factory
 from src.models import model_factory, TaskVector
-from src.trainers import TrainerEp, TrainerGS
+from src.trainers import StandardTrainer, utils as trainer_utils
 import matplotlib.pyplot as plt
 import seaborn as sns
-from src.utils import nn_utils, misc_utils
+from src.utils import misc_utils
 import torch
 import torchmetrics
 import torchvision.transforms.v2 as transformsv2
@@ -165,7 +165,7 @@ def finetune_model(outputs_dir: Path, cfg: dict, cfg_name:str):
         plots_dir.mkdir(exist_ok=True, parents=True)
         
         
-        trainer = TrainerEp(
+        trainer = StandardTrainer(
             outputs_dir=outputs_dir,
             **cfg_cpy['trainer']['ft_train'],
             exp_name=experiment_name,
@@ -210,7 +210,7 @@ def finetune_model(outputs_dir: Path, cfg: dict, cfg_name:str):
         
         
 
-        trainer = TrainerEp(
+        trainer = StandardTrainer(
             outputs_dir=outputs_dir,
             **cfg_cpy['trainer']['ft_train'],
             exp_name=experiment_name,
@@ -249,7 +249,7 @@ def finetune_model(outputs_dir: Path, cfg: dict, cfg_name:str):
         plots_dir = experiment_dir / Path("plots")
         plots_dir.mkdir(exist_ok=True, parents=True)
         
-        trainer = TrainerEp(
+        trainer = StandardTrainer(
             outputs_dir=outputs_dir,
             **cfg_cpy['trainer']['ft_train'],
             exp_name=experiment_name,
@@ -310,7 +310,7 @@ def finetune_model(outputs_dir: Path, cfg: dict, cfg_name:str):
             dataset.subset_set(set='Train', indices=all_easy_samples)
             dataset.inject_noise(**noise_tv)
             
-            trainer = TrainerEp(
+            trainer = StandardTrainer(
                 outputs_dir=outputs_dir,
                 **cfg_cpy['trainer']['ft_noise'],
                 exp_name=experiment_name,
@@ -351,8 +351,8 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     model_base = model_factory.create_model(cfg['model'], num_classes)
     
-    cpu = nn_utils.get_cpu_device()
-    gpu = nn_utils.get_gpu_device()
+    cpu = trainer_utils.get_cpu_device()
+    gpu = trainer_utils.get_gpu_device()
     
     base_expr_dir = outputs_dir / cfg_name
     

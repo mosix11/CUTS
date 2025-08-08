@@ -1,10 +1,10 @@
 import comet_ml
-from src.datasets import dataset_factory, data_utils
-from src.models import model_factory, TaskVector
+from src.datasets import dataset_factory, dataset_wrappers
+from src.models import model_factory, TaskVector, utils as trainer_utils
 from src.trainers import StandardTrainer
 import matplotlib.pyplot as plt
 import seaborn as sns
-from src.utils import nn_utils, misc_utils
+from src.utils import misc_utils
 import torch
 import torchmetrics
 import torchvision.transforms.v2 as transformsv2
@@ -154,7 +154,7 @@ def eval_model_on_clean_noise_splits(model, cfg, dataset, device):
     noisy_metric, _, _ = evaluate_model(model, dataloader=dataset_cpy.get_train_dataloader(), device=device)
     
     dummy_instance = noisy_set
-    while not isinstance(dummy_instance, data_utils.NoisyClassificationDataset):
+    while not isinstance(dummy_instance, dataset_wrappers.NoisyClassificationDataset):
         dummy_instance = dummy_instance.dataset
     dummy_instance.switch_to_clean_lables()
     
@@ -528,8 +528,8 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     torch.use_deterministic_algorithms(True) 
     torch.set_float32_matmul_precision("high")
     
-    cpu = nn_utils.get_cpu_device()
-    gpu = nn_utils.get_gpu_device()
+    cpu = trainer_utils.get_cpu_device()
+    gpu = trainer_utils.get_gpu_device()
     
     
     dataset, num_classes = dataset_factory.create_dataset(cfg)

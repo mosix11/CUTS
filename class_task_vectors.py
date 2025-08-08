@@ -1,10 +1,11 @@
 import comet_ml
 from src.datasets import dataset_factory
 from src.models import model_factory, TaskVector
-from src.trainers import StandardTrainer
+from src.trainers import StandardTrainer, utils as trainer_utils
+
 import matplotlib.pyplot as plt
 import seaborn as sns
-from src.utils import nn_utils, misc_utils
+from src.utils import misc_utils
 import torch
 import torchmetrics
 import torchvision.transforms.v2 as transformsv2
@@ -286,8 +287,8 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str, sear
     torch.use_deterministic_algorithms(True) 
     torch.set_float32_matmul_precision("high")
     
-    cpu = nn_utils.get_cpu_device()
-    gpu = nn_utils.get_gpu_device()
+    cpu = trainer_utils.get_cpu_device()
+    gpu = trainer_utils.get_gpu_device()
     
     pretrain_dir = outputs_dir/ Path(f"{cfg_name}/pretrain")
     finetune_dir = outputs_dir/ Path(f"{cfg_name}/finetune")

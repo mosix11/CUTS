@@ -1,10 +1,10 @@
 import comet_ml
 from src.datasets import dataset_factory
 from src.models import model_factory, TaskVector
-from src.trainers import StandardTrainer
+from src.trainers import StandardTrainer, utils as trainer_utils
 import matplotlib.pyplot as plt
 import seaborn as sns
-from src.utils import nn_utils, misc_utils
+from src.utils import misc_utils
 import torch
 import torchvision
 import torchmetrics
@@ -35,8 +35,8 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     cfg['trainer']['pretraining']['comet_api_key'] = os.getenv("COMET_API_KEY")
     cfg['trainer']['finetuning']['comet_api_key'] = os.getenv("COMET_API_KEY")
     
-    cpu = nn_utils.get_cpu_device()
-    gpu = nn_utils.get_gpu_device()
+    cpu = trainer_utils.get_cpu_device()
+    gpu = trainer_utils.get_gpu_device()
 
     if cfg['dataset']['name'] == 'cifar10':
         # augmentations = None
@@ -393,8 +393,8 @@ def compare_task_vectors(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_na
     torch.use_deterministic_algorithms(True) 
     torch.set_float32_matmul_precision("high")
     
-    cpu = nn_utils.get_cpu_device()
-    gpu = nn_utils.get_gpu_device()
+    cpu = trainer_utils.get_cpu_device()
+    gpu = trainer_utils.get_gpu_device()
     
     dataset, num_classes = dataset_factory.create_dataset(cfg)
     
