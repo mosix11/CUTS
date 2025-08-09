@@ -111,6 +111,7 @@ class ETDTrainer(BaseClassificationTrainer):
         metrics_results = self.model.compute_metrics()
         self.model.reset_metrics()
         
+        metrics_results = {f"Train/{k}": v for k, v in metrics_results.items()}
         metrics_results['Train/Loss'] = epoch_train_loss.avg
         metrics_results['Train/LR'] = self.optim.param_groups[0]['lr']
         return metrics_results

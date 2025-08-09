@@ -26,136 +26,10 @@ from tqdm import tqdm
 from collections import OrderedDict
 import re
 
-from helper_funcs import evaluate_model, eval_model_on_clean_noise_splits, search_optimal_coefficient
+from helper_funcs import evaluate_model, search_optimal_coefficient
 
     
-def generate_latex_table_from_results(results_dict, output_path):
-    def format_acc(val):
-        return f"{val * 100:.1f}"
 
-    # def format_loss(val):
-    #     return f"{val:.3f}"
-
-    def latex_delta(current, baseline, positive_good=True):
-        delta = (current - baseline) * 100
-        if abs(delta) < 1e-2:
-            return ""
-        color = "green" if (delta > 0 and positive_good) or (delta < 0 and not positive_good) else "red"
-        sign = "+" if delta > 0 else "-"
-        return f" \\textcolor{{{color}}}{{({sign}{abs(delta):.1f})}}"
-
-
-    # Begin LaTeX table
-    lines = [
-        r"\begin{table}[ht]",
-        r"\centering",
-        r"\scriptsize",
-        r"\renewcommand{\arraystretch}{1.5}",
-        r"\begin{tabular}{lcccccccc}",
-        r"\toprule",
-        r"& \multicolumn{2}{c}{Utility \%} & \multicolumn{2}{c}{Forgetting Rate \%} & \multicolumn{2}{c}{Healing Rate \%} & \multicolumn{2}{c}{Performance on $\mathcal{D}_{clean}$ \%} \\",
-        r"\cmidrule(lr){2-3} \cmidrule(lr){4-5} \cmidrule(lr){6-7} \cmidrule(lr){8-9}",
-        r"Model & $\alpha=-1.0$ & Opt & $\alpha=-1.0$ & Opt & $\alpha=-1.0$ & Opt & $\alpha=-1.0$ & Opt \\",
-        r"\midrule"
-    ]
-    
-    # Baselines from "pretrain"
-    pretrain = results_dict.pop("Pretrain")
-    base_utility_acc = pretrain["test_results"]["ACC"]
-    base_forgetting_acc = pretrain["train_results"]["noisy_set"]["ACC"]
-    base_healing_acc = pretrain["train_results"]["healing_noise"]["ACC"]
-    base_clean_acc = pretrain["train_results"]["clean_set"]["ACC"]
-    
-    pretrain_name = r"$\mathcal{M}_{pt}$"
-    lines.append(
-            f"{pretrain_name} & {format_acc(base_utility_acc)} & - & "
-            f"{format_acc(base_forgetting_acc)} & - & "
-            f"{format_acc(base_healing_acc)} & - & "
-            f"{format_acc(base_clean_acc)} & - \\\\"
-        )
-    
-    
-    gold = results_dict.pop("Gold")
-    gold_utility_acc = gold["test_results"]["ACC"]
-    gold_forgetting_acc = gold["train_results"]["noisy_set"]["ACC"]
-    gold_healing_acc = gold["train_results"]["healing_noise"]["ACC"]
-    gold_clean_acc = gold["train_results"]["clean_set"]["ACC"]
-    
-    clean_gold_name = r"$\mathcal{M}_{clean}$"
-    lines.append(
-            f"{clean_gold_name} & {format_acc(gold_utility_acc)} & - & "
-            f"{format_acc(gold_forgetting_acc)} & - & "
-            f"{format_acc(gold_healing_acc)} & - & "
-            f"{format_acc(gold_clean_acc)} & - \\\\"
-        )
-
-    for name, data in results_dict.items():
-        if name == 'Finetune Gold' or name == 'Ground Truth Noise':
-            continue
-        
-        raw_test_acc = data["-1.0"]["test_results"]["ACC"]
-        opt_test_acc = list(data.values())[1]["test_results"]["ACC"]
-
-        raw_noisy_acc = data["-1.0"]["train_results"]["noisy_set"]["ACC"]
-        opt_noisy_acc = list(data.values())[1]["train_results"]["noisy_set"]["ACC"]
-
-        raw_healing_acc = data["-1.0"]["train_results"]["healing_noise"]["ACC"]
-        opt_healing_acc = list(data.values())[1]["train_results"]["healing_noise"]["ACC"]
-
-        raw_clean_acc = data["-1.0"]["train_results"]["clean_set"]["ACC"]
-        opt_clean_acc = list(data.values())[1]["train_results"]["clean_set"]["ACC"]
-
-        # Format values
-        raw_acc_util_str = format_acc(raw_test_acc) + latex_delta(raw_test_acc, base_utility_acc, positive_good=True)
-        opt_acc_util_str = format_acc(opt_test_acc) + latex_delta(opt_test_acc, base_utility_acc, positive_good=True)
-        
-        raw_acc_forgot_str = format_acc(raw_noisy_acc) + latex_delta(raw_noisy_acc, base_forgetting_acc, positive_good=False)
-        opt_acc_forgot_str = format_acc(opt_noisy_acc) + latex_delta(opt_noisy_acc, base_forgetting_acc, positive_good=False)
-        
-        raw_acc_heal_str = format_acc(raw_healing_acc) + latex_delta(raw_healing_acc, base_healing_acc, positive_good=True)
-        opt_acc_heal_str = format_acc(opt_healing_acc) + latex_delta(opt_healing_acc, base_healing_acc, positive_good=True)
-        
-        raw_acc_clean_str = format_acc(raw_clean_acc) + latex_delta(raw_clean_acc, base_clean_acc, positive_good=True)
-        opt_acc_clean_str = format_acc(opt_clean_acc) + latex_delta(opt_clean_acc, base_clean_acc, positive_good=True)
-
-
-        # Escape underscores in names
-        single_noise_match = re.match(r'^\d+% Noise, (\d+) Seed$', name)
-        pruned_avg_match = re.match(r'^Average TV Pruned ([0-9]*\.?[0-9]+)$', name)
-        if single_noise_match:
-            seed = int(single_noise_match.group(1))
-            table_name = r"$\vec{T}^s_{" + str(seed) + r"}$"
-        elif pruned_avg_match:
-            prune_rate = float(pruned_avg_match.group(1))
-            table_name = r"$\vec{T}^p_{" + str(prune_rate) + r"}$"
-        elif name == 'Average TV':
-            table_name = r"$\vec{T}_{avg}$"
-        elif name == 'Random Vector':
-            table_name = r"$\vec{T}_{rnd}$"
-        else:
-            raise ValueError('Vector name is not recognized', name)
-
-        # Add row
-        lines.append(
-            f"{table_name} & {raw_acc_util_str} & {opt_acc_util_str} & "
-            f"{raw_acc_forgot_str} & {opt_acc_forgot_str} & "
-            f"{raw_acc_heal_str} & {opt_acc_heal_str} & "
-            f"{raw_acc_clean_str} & {opt_acc_clean_str} \\\\"
-        )
-
-    lines += [
-        r"\bottomrule",
-        r"\end{tabular}",
-        r"\caption{Performance metrics from different model states. Accuracy values are shown as percentages. Differences from the baseline (\texttt{pretrain}) are marked in \textcolor{green}{green} for improvements and \textcolor{red}{red} for regressions.}",
-        r"\label{tab:noise_unlearning_results}",
-        r"\end{table}"
-    ]
-
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    with open(output_path, "w") as f:
-        f.write("\n".join(lines))
-
-    print(f"LaTeX table successfully written to {output_path}")
     
 def eval_model_on_tvs(model, taskvectors, results_dict, cfg, dataset, num_classes, device):
     
@@ -169,9 +43,8 @@ def eval_model_on_tvs(model, taskvectors, results_dict, cfg, dataset, num_classe
         results[tv_name]["-1.0"] = OrderedDict()
         tv.apply_to(base_model, scaling_coef=-1.0)
         base_test_results, _, _ = evaluate_model(base_model, dataset.get_test_dataloader(), device)
-        base_train_split_results = eval_model_on_clean_noise_splits(base_model, cfg, dataset, device)
+
         results[tv_name]["-1.0"]['test_results'] = base_test_results
-        results[tv_name]["-1.0"]['train_results'] = base_train_split_results
         
         base_model = copy.deepcopy(model)
 
@@ -187,11 +60,7 @@ def eval_model_on_tvs(model, taskvectors, results_dict, cfg, dataset, num_classe
         results[tv_name][best_coef] = OrderedDict()
         results[tv_name][best_coef]['test_results'] = best_results
         
-        tv.apply_to(base_model, scaling_coef=best_coef)
-        
-        after_tv_metrics = eval_model_on_clean_noise_splits(base_model, cfg, dataset, device)
-        results[tv_name][best_coef]['train_results'] = after_tv_metrics
-        
+           
         
     return results
 
@@ -213,8 +82,7 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     strategy = cfg['strategy']
     
 
-    # if not outputs_dir.joinpath(f"{cfg_name}/pretrain/weights/model_weights.pth").exists():
-    if True:
+    if not outputs_dir.joinpath(f"{cfg_name}/pretrain/weights/model_weights.pth").exists():
         dataset = copy.deepcopy(base_dataset)
         model = copy.deepcopy(base_model)
         
@@ -243,7 +111,7 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             )
 
         # TODO set resume to False 
-        results = trainer.fit(model, dataset, resume=True)
+        results = trainer.fit(model, dataset, resume=False)
         
         # print(results)
 
@@ -386,29 +254,18 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     results_dir.mkdir(exist_ok=True, parents=True)
     
     base_expr_dir = outputs_dir / cfg_name
-    gold_dir = base_expr_dir / 'gold'
     pretrain_dir = base_expr_dir / 'pretrain'
-    ft_gold_dir = base_expr_dir / 'finetune_gold'
-    ft_gt_noise_dir = base_expr_dir / 'finetune_gt_noise'
     finetune_dirs = OrderedDict()
     for idx, noise_tv in enumerate(cfg['strategy']['noise']['finetuning']):
         ft_expr_dir = base_expr_dir / f"finetune_{noise_tv['noise_rate']}_{noise_tv['seed']}"
         finetune_dirs[f"{noise_tv['noise_rate']}_{noise_tv['seed']}"] = ft_expr_dir
         
-    gold_weights = torch.load(gold_dir / 'weights/model_weights.pth', map_location=cpu)
     pretrain_weights = torch.load(pretrain_dir / 'weights/model_weights.pth', map_location=cpu)
-    ft_gold_wieghts = torch.load(ft_gold_dir / 'weights/model_weights.pth', map_location=cpu)
-    ft_gt_noise_weights = torch.load(ft_gt_noise_dir / 'weights/model_weights.pth', map_location=cpu)
     finetune_weights = OrderedDict()
     for ft_expr, ft_dir in finetune_dirs.items():
         finetune_weights[ft_expr] = torch.load(ft_dir / 'weights/model_weights.pth', map_location=cpu)
     
     
-    
-    
-    ft_gold_tv = TaskVector(pretrain_weights, ft_gold_wieghts)
-    ft_gt_noise_tv = TaskVector(pretrain_weights, ft_gt_noise_weights)
-
     finetune_tvs = OrderedDict()
     
     for ft_expr, ft_weight in finetune_weights.items():
@@ -421,10 +278,6 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     finetune_tvs['Average TV Pruned 0.95'] = finetune_tvs['Average TV'].prune_small_weights(rate=0.95)
     finetune_tvs['Average TV Pruned 0.99'] = finetune_tvs['Average TV'].prune_small_weights(rate=0.99)
     finetune_tvs['Random Vector'] = finetune_tvs['Average TV'].generate_random_vector_with_same_layer_norms(seed=11)
-    finetune_tvs['Gold'] = ft_gold_tv
-    finetune_tvs['Ground Truth Noise'] = ft_gt_noise_tv
-    finetune_tvs.move_to_end('Ground Truth Noise', last=False)
-    finetune_tvs.move_to_end('Gold', last=False)
 
     ft_tvs_list = list(finetune_tvs.values())
     print(finetune_tvs.keys())
@@ -458,64 +311,24 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     base_model.load_state_dict(pretrain_weights)
     pt_test_results, _, _ = evaluate_model(base_model, dataset.get_test_dataloader(), gpu)
-    pt_train_results = eval_model_on_clean_noise_splits(base_model, cfg, dataset, gpu)
-    
-    base_model.load_state_dict(gold_weights)
-    gold_test_results, _, _ = evaluate_model(base_model, dataset.get_test_dataloader(), gpu)
-    gold_train_results = eval_model_on_clean_noise_splits(base_model, cfg, dataset, gpu)
-    
-    base_model.load_state_dict(ft_gold_wieghts)
-    ft_gold_test_results, _, _ = evaluate_model(base_model, dataset.get_test_dataloader(), gpu)
-    ft_gold_train_results = eval_model_on_clean_noise_splits(base_model, cfg, dataset, gpu)
-    
-    base_model.load_state_dict(pretrain_weights)
-    base_model.to(cpu)
+
     
     results_dict = OrderedDict()
     
-    results_dict['Pretrain'] = {'test_results': pt_test_results, 'train_results': pt_train_results}
-    results_dict['Gold'] = {'test_results': gold_test_results, 'train_results': gold_train_results}
-    results_dict['Finetune Gold'] = {'test_results': ft_gold_test_results, 'train_results': ft_gold_train_results}
-    results_dict = eval_model_on_tvs(base_model, OrderedDict(zip(tv_names[1:], ft_tvs_list[1:])), results_dict, cfg, dataset, num_classes, gpu)
-    # results_dict = eval_model_on_tvs(base_model, OrderedDict(zip(tv_names, ft_tvs_list)), results_dict, cfg, dataset, num_classes, gpu)
+    results_dict['Pretrain'] = {'test_results': pt_test_results}
+
+    results_dict = eval_model_on_tvs(base_model, finetune_tvs, results_dict, cfg, dataset, num_classes, gpu)
     
     
-    # print(results_dict)
+    print(results_dict)
         
         
     with open(results_dir / 'metrics.json' , 'w') as json_file:
         json.dump(results_dict, json_file, indent=4)
-    # with open(results_dir / 'metrics.json', 'r') as json_file:
-    #     loaded_dict = json.load(json_file, object_pairs_hook=OrderedDict)
-    generate_latex_table_from_results(results_dict, results_dir / 'results_tex.txt')
+
+    # generate_latex_table_from_results(results_dict, results_dir / 'results_tex.txt')
     
-    # otrh_tvs, shrd_tvs = TaskVector.decompose_task_vectors_SVD(ft_tvs_list)
-    
-    # orth_task_sim = []
-    # for i in range(len(ft_tvs_list)):
-    #     anchor_tv = otrh_tvs[i]
-    #     orth_task_sim.append([])
-    #     for j in range(len(ft_tvs_list)):
-    #         other_tv = otrh_tvs[j]
-    #         cos_sim = anchor_tv.cosine_similarity_flatten(other_tv)
-    #         orth_task_sim[i].append(cos_sim)
-    # orth_task_sim = np.array(orth_task_sim)
-    
-    # shrd_tvs_sim = []
-    # for i in range(len(ft_tvs_list)):
-    #     anchor_tv = shrd_tvs[i]
-    #     shrd_tvs_sim.append([])
-    #     for j in range(len(ft_tvs_list)):
-    #         other_tv = shrd_tvs[j]
-    #         cos_sim = anchor_tv.cosine_similarity_flatten(other_tv)
-    #         shrd_tvs_sim[i].append(cos_sim)
-    # shrd_tvs_sim = np.array(shrd_tvs_sim)
-    
-    
-    
-    # misc_utils.plot_confusion_matrix(cm=orth_task_sim, class_names=class_names, filepath=None, show=True)
-    # misc_utils.plot_confusion_matrix(cm=shrd_tvs_sim, class_names=class_names, filepath=None, show=True)
-    
+
     
 
 
