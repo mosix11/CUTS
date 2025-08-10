@@ -207,3 +207,73 @@ def get_confusion_matrix(
     cm = cm_metric.compute().cpu().numpy()
     return cm
     
+    
+
+def row_normalize(cm):
+    with np.errstate(divide='ignore', invalid='ignore'):
+        rn = cm / cm.sum(axis=1, keepdims=True)
+        rn[np.isnan(rn)] = 0.0
+    return rn
+    
+def top_confused_pairs(cm, class_names=None, k=10):
+    # exclude diagonal (correct)
+    off = cm.copy()
+    np.fill_diagonal(off, 0)
+    pairs = []
+    for i in range(off.shape[0]):
+        for j in range(off.shape[1]):
+            if off[i, j] > 0:
+                pairs.append((i, j, off[i, j]))
+    pairs.sort(key=lambda x: x[2], reverse=True)
+    def name(ix): 
+        return class_names[ix] if class_names else ix
+    return [(name(i), name(j), n) for i, j, n in pairs[:k]]
+
+def asymmetry_scores(cm, threshold=5, class_names=None):
+    """
+    For each (i,j), compute A_ij = (cm[i,j]-cm[j,i]) / (cm[i,j]+cm[j,i])
+    Only report where total confusions >= threshold.
+    """
+    C = cm.copy().astype(float)
+    out = []
+    K = C.shape[0]
+    for i in range(K):
+        for j in range(i+1, K):
+            a, b = C[i, j], C[j, i]
+            total = a + b
+            if total >= threshold:
+                A_ij = (a - b) / total
+                pair = (i, j, A_ij, int(a), int(b))
+                out.append(pair)
+    # sort by absolute asymmetry
+    out.sort(key=lambda x: abs(x[2]), reverse=True)
+    def name(ix): 
+        return class_names[ix] if class_names else ix
+    return [ (name(i), name(j), aij, a, b) for i, j, aij, a, b in out ]
+
+def per_class_confusion_entropy(cm):
+    """
+    Entropy of row-normalized cm per class (higher => more diffuse confusions).
+    """
+    rn = row_normalize(cm)
+    eps = 1e-12
+    H = -np.sum(rn * np.log(rn + eps), axis=1)
+    return H
+
+
+def analyze_ic(cm, class_names=None):
+    rn = row_normalize(cm)
+    print("\nTop confused pairs (true → predicted):")
+    for t, p, n in top_confused_pairs(cm, class_names, k=10):
+        print(f"{t} → {p}: {n}")
+
+    print("\nMost asymmetric pairs (A_ij near ±1 means strongly one-directional):")
+    for i, j, aij, a, b in asymmetry_scores(cm, threshold=5, class_names=class_names)[:10]:
+        print(f"{i} ↔ {j}: A={aij:+.3f}  ({i}→{j}={a}, {j}→{i}={b})")
+
+    H = per_class_confusion_entropy(cm)
+    if class_names:
+        print("\nPer-class confusion entropy:")
+        for name, h in sorted(zip(class_names, H), key=lambda x: x[1], reverse=True)[:10]:
+            print(f"{name}: {h:.3f}")
+    return cm, rn

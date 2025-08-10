@@ -154,7 +154,7 @@ class StandardTrainer(BaseClassificationTrainer):
         else:
             raise ValueError("Invalid set specified. Choose 'Train', 'Val', or 'Test'.")
         
-        cm_metric = MulticlassConfusionMatrix(num_classes=num_classes)
+        cm_metric = MulticlassConfusionMatrix(num_classes=num_classes).to(self.model.device)
         
         for i, batch in enumerate(dataloader):
             batch = self.prepare_batch(batch)
