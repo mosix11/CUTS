@@ -1,7 +1,7 @@
 import torch
 import torchvision.transforms.v2 as transforms
 from torchvision import datasets
-from torch.utils.data import Dataset, DataLoader, random_split, Subset
+from torch.utils.data import Dataset, ConcatDataset
 from .base_classification_dataset import BaseClassificationDataset
 from .dataset_wrappers import DatasetWithIndex, LabelRemapper, NoisyClassificationDataset, BinarizedClassificationDataset
 
@@ -93,7 +93,9 @@ class Clothing1M(BaseClassificationDataset):
         return Clothing1MDataset(root_dir=self.train_noisy_dir, transform=self.get_transforms(train=True))
     
     def load_validation_set(self):
-        return Clothing1MDataset(root_dir=self.val_dir, transform=self.get_transforms(train=False))
+        valset = Clothing1MDataset(root_dir=self.val_dir, transform=self.get_transforms(train=False))
+        clean_trainset = Clothing1MDataset(root_dir=self.train_clean_dir, transform=self.get_transforms(train=False))
+        return ConcatDataset([valset, clean_trainset])
     
     def load_test_set(self):
         return Clothing1MDataset(root_dir=self.test_dir, transform=self.get_transforms(train=False))

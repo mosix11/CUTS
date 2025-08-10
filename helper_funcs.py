@@ -291,3 +291,53 @@ def analyze_IC(
         for name, h in sorted(zip(class_names, H), key=lambda x: x[1], reverse=True)[:10]:
             print(f"{name}: {h:.3f}")
     return cm, rn
+
+
+
+def estimate_T_from_confusion(cm, alpha=0.5, lam=0.1):
+    """
+    cm: (K,K) confusion counts on a CLEAN set (true rows, predicted cols)
+    alpha: Laplace smoothing for off-diagonal
+    lam: shrinkage toward uniform off-diagonal
+    returns: T (K,K), zero diagonal, rows sum to 1
+    """
+    K = cm.shape[0]
+    T = np.zeros_like(cm, dtype=float)
+
+    # Off-diagonal smoothing
+    off = cm.copy().astype(float)
+    np.fill_diagonal(off, 0.0)
+    off += alpha  # Laplace on off-diagonal cells
+
+    row_sums_off = off.sum(axis=1, keepdims=True)
+    # If a row has zero mistakes, fall back to uniform off-diagonal
+    uniform_off = np.full((K, K), 1.0/(K-1))
+    np.fill_diagonal(uniform_off, 0.0)
+
+    # Row-normalize off-diagonal
+    with np.errstate(divide='ignore', invalid='ignore'):
+        T_hat = np.divide(off, row_sums_off, where=row_sums_off > 0)
+    # For rows with no mistakes: use uniform off-diagonal
+    zero_rows = (row_sums_off.flatten() == 0)
+    if zero_rows.any():
+        T_hat[zero_rows] = uniform_off[zero_rows]
+
+    # Shrinkage toward uniform
+    T = (1 - lam) * T_hat + lam * uniform_off
+    # Ensure exact zeros on diagonal and row sums = 1
+    np.fill_diagonal(T, 0.0)
+    T /= T.sum(axis=1, keepdims=True)
+    return T
+
+def rowwise_kl_to_uniform(T):
+    K = T.shape[0]
+    U = np.full_like(T, 1.0/(K-1))
+    np.fill_diagonal(U, 0.0)
+    # avoid log(0)
+    eps = 1e-12
+    M = T + eps
+    return np.sum(M * (np.log(M) - np.log(U + eps)), axis=1)
+
+def symmetric_noise_detected(T, kl_thresh=0.03):
+    kl = rowwise_kl_to_uniform(T)
+    return bool((kl < kl_thresh).all()), kl

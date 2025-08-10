@@ -26,7 +26,7 @@ from tqdm import tqdm
 from collections import OrderedDict
 import re
 
-from helper_funcs import evaluate_model, search_optimal_coefficient, analyze_IC
+from helper_funcs import evaluate_model, search_optimal_coefficient, analyze_IC, get_confusion_matrix, estimate_T_from_confusion, symmetric_noise_detected
 
     
 
@@ -390,14 +390,23 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         saving_path=results_dir / 'L2_weight_norm_TV.png'
     )
     
+    
+
     base_model.load_state_dict(pretrain_weights)
-    analyze_IC(
+    # analyze_IC(
+    #     base_model,
+    #     dataset.get_num_classes(),
+    #     dataset.get_val_dataloader(),
+    #     gpu,
+    #     dataset.get_class_names()
+    #     )
+    cm = get_confusion_matrix(
         base_model,
         dataset.get_num_classes(),
         dataset.get_val_dataloader(),
-        gpu,
-        dataset.get_class_names()
-        )
+        gpu
+    )
+    T = estimate_T_from_confusion(cm)
     
     exit()
 
