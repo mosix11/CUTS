@@ -606,7 +606,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     )
     
     
-    base_model.load_state_dict(pretrain_weights)
+    # base_model.load_state_dict(pretrain_weights)
     # analyze_IC(
     #     base_model,
     #     dataset.get_num_classes(),
@@ -614,18 +614,18 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     #     gpu,
     #     dataset.get_class_names()
     #     )
-    cm = get_confusion_matrix(
-        base_model,
-        dataset.get_num_classes(),
-        dataset.get_heldout_dataloader(),
-        gpu
-    )
-    T = estimate_T_from_confusion(cm)
-    is_sym, kl = symmetric_noise_detected(T, kl_thresh=0.03)
-    if is_sym:
-        print("Pattern is near-symmetric; using uniform off-diagonal.")
+    # cm = get_confusion_matrix(
+    #     base_model,
+    #     dataset.get_num_classes(),
+    #     dataset.get_heldout_dataloader(),
+    #     gpu
+    # )
+    # T = estimate_T_from_confusion(cm)
+    # is_sym, kl = symmetric_noise_detected(T, kl_thresh=0.03)
+    # if is_sym:
+    #     print("Pattern is near-symmetric; using uniform off-diagonal.")
         
-    exit()
+    # exit()
     
     # rank_dict = OrderedDict()
     # for tv_name, tv in finetune_tvs.items():
