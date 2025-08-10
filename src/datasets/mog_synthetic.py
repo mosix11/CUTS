@@ -316,7 +316,9 @@ class MoGSynthetic(BaseClassificationDataset):
         else:
             raise RuntimeError('In order to be able to load the test set you have to first call the `load_train_set`.')
 
-        
+    def get_class_names(self):
+        class_indices = list(range(self.num_classes))
+        return [str(x) for x in class_indices]
 
     def get_identifier(self):
         identifier = 'mog|'

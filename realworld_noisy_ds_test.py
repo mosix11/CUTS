@@ -26,7 +26,7 @@ from tqdm import tqdm
 from collections import OrderedDict
 import re
 
-from helper_funcs import evaluate_model, search_optimal_coefficient
+from helper_funcs import evaluate_model, search_optimal_coefficient, analyze_IC
 
     
 
@@ -389,6 +389,17 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         logy=False,
         saving_path=results_dir / 'L2_weight_norm_TV.png'
     )
+    
+    base_model.load_state_dict(pretrain_weights)
+    analyze_IC(
+        base_model,
+        dataset.get_num_classes(),
+        dataset.get_val_dataloader(),
+        gpu,
+        dataset.get_class_names()
+        )
+    
+    exit()
 
     
     base_model.load_state_dict(pretrain_weights)

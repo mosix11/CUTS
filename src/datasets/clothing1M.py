@@ -73,8 +73,7 @@ class Clothing1M(BaseClassificationDataset):
         self.dataset_dir = dataset_dir
     
         self._download_dataset()
-        
-        self.class_label_names = ["T-Shirt", "Shirt", "Knitwear", "Chiffon", "Sweater", "Hoodie", "Windbreaker", "Jacket", "Downcoat", "Suit", "Shawl", "Dress", "Vest", "Underwear"]
+         
         
         
         self.img_size = img_size
@@ -123,6 +122,9 @@ class Clothing1M(BaseClassificationDataset):
             trnsfrms.append(transforms.Lambda(lambda x: torch.flatten(x)))
         return transforms.Compose(trnsfrms)
 
+
+    def get_class_names(self):
+        return ["T-Shirt", "Shirt", "Knitwear", "Chiffon", "Sweater", "Hoodie", "Windbreaker", "Jacket", "Downcoat", "Suit", "Shawl", "Dress", "Vest", "Underwear"]
 
     def get_identifier(self):
         identifier = 'clothing1M|'

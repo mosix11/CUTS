@@ -26,7 +26,7 @@ from tqdm import tqdm
 from collections import OrderedDict
 import re
 
-from helper_funcs import evaluate_model, eval_model_on_clean_noise_splits, search_optimal_coefficient
+from helper_funcs import evaluate_model, eval_model_on_clean_noise_splits, search_optimal_coefficient, analyze_IC
 
     
 def generate_latex_table_from_results(results_dict, output_path):
@@ -606,7 +606,14 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     )
     
     
-    
+    base_model.load_state_dict(pretrain_weights)
+    analyze_IC(
+        base_model,
+        dataset.get_num_classes(),
+        dataset.get_val_dataloader(),
+        gpu,
+        dataset.get_class_names()
+        )
     
     exit()
     

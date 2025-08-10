@@ -88,6 +88,14 @@ class BaseClassificationDataset(ABC):
         """
         pass
     
+    @abstractmethod
+    def get_class_names(self):
+        """
+        This method must be implemented by all subclasses.
+        The method should return the class names as a list, matching the order of the label indices.
+        """
+        pass
+    
     
     @abstractmethod
     def get_identifier(self):

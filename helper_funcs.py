@@ -261,8 +261,22 @@ def per_class_confusion_entropy(cm):
     return H
 
 
-def analyze_ic(cm, class_names=None):
+
+def analyze_IC(
+    model:torch.nn.Module,
+    num_classes:int,
+    dataloader:DataLoader,
+    device:torch.device,
+    class_names=None
+):
+    cm = get_confusion_matrix(
+        model,
+        num_classes,
+        dataloader,
+        device
+    )
     rn = row_normalize(cm)
+
     print("\nTop confused pairs (true → predicted):")
     for t, p, n in top_confused_pairs(cm, class_names, k=10):
         print(f"{t} → {p}: {n}")

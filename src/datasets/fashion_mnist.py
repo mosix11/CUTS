@@ -71,6 +71,20 @@ class FashionMNIST(BaseClassificationDataset):
             trnsfrms.append(transforms.Lambda(lambda x: torch.flatten(x)))
         return transforms.Compose(trnsfrms)
         
+        
+    def get_class_names(self):
+        return [
+            "T-shirt/top",
+            "Trouser",
+            "Pullover",
+            "Dress",
+            "Coat",
+            "Sandal",
+            "Shirt",
+            "Sneaker",
+            "Bag",
+            "Ankle boot"
+        ]
 
     
     def get_identifier(self):

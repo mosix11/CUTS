@@ -64,6 +64,20 @@ class CIFAR10(BaseClassificationDataset):
         return transforms.Compose(trnsfrms)
 
 
+    def get_class_names(self):
+        return [
+            "airplane",
+            "automobile",
+            "bird",
+            "cat",
+            "deer",
+            "dog",
+            "frog",
+            "horse",
+            "ship",
+            "truck"
+        ]
+
     def get_identifier(self):
         identifier = 'cifar10|'
         # identifier += f'ln{self.label_noise}|'
