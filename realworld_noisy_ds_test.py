@@ -1,6 +1,6 @@
 import comet_ml
 from src.datasets import dataset_factory
-from src.models import model_factory, TaskVector
+from src.models import model_factory, TaskVector, weight_norm_analysis
 from src.trainers import StandardTrainer, utils as trainer_utils
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -51,7 +51,7 @@ def eval_model_on_tvs(model, taskvectors, results_dict, cfg, dataset, num_classe
         best_coef, best_results, best_cm = search_optimal_coefficient(
             base_model=base_model,
             task_vector=tv,
-            search_range=(-3.0, 0.0),
+            search_range=(-2.0, 0.0),
             dataset=dataset,
             num_classes=num_classes,
             device=device
@@ -227,7 +227,42 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
                 filepath=str(plots_dir / Path("confmat.png")),
                 show=False
             )
-            
+      
+      
+def save_samples_loss_ranked(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
+    training_seed = cfg['training_seed']
+    if training_seed:
+        random.seed(training_seed)
+        np.random.seed(training_seed)
+        torch.manual_seed(training_seed)
+        torch.cuda.manual_seed_all(training_seed)
+    torch.backends.cudnn.enabled = True
+    torch.backends.cudnn.benchmark = False
+    os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
+    torch.use_deterministic_algorithms(True) 
+    torch.set_float32_matmul_precision("high")
+    
+    cpu = trainer_utils.get_cpu_device()
+    gpu = trainer_utils.get_gpu_device()
+    
+    dataset, num_classes = dataset_factory.create_dataset(cfg)
+    
+    model = model_factory.create_model(cfg['model'], num_classes)
+    
+    results_dir = results_dir / cfg_name
+    results_dir.mkdir(exist_ok=True, parents=True)
+    
+    base_expr_dir = outputs_dir / cfg_name
+    pretrain_dir = base_expr_dir / 'pretrain'
+    
+    pretrain_weights = torch.load(pretrain_dir / 'weights/model_weights.pth', map_location=cpu)
+    
+    model.load_state_dict(pretrain_weights)
+    dataset.set_trainset(dataset.get_trainset(), shuffle=False)
+    trainloader = dataset.get_train_dataloader()
+    
+    
+    
             
 def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     training_seed = cfg['training_seed']
@@ -266,6 +301,21 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         finetune_weights[ft_expr] = torch.load(ft_dir / 'weights/model_weights.pth', map_location=cpu)
     
     
+    
+    weight_norm_analysis.plot_abs_weight_norms_compare(
+        state_dicts={
+            'Pretrain': pretrain_weights,
+            # 'FT Gold': ft_gold_wieghts,
+            'FT Noise': next(iter(finetune_weights.items()))[1]
+            },
+        include_bias_and_norm=False,
+        max_groups=40,
+        overall_bins=200,
+        layer_bins=200,
+        logy=False,
+        saving_path=results_dir / 'abs_weight_norm.png'
+    )
+    
     finetune_tvs = OrderedDict()
     
     for ft_expr, ft_weight in finetune_weights.items():
@@ -278,11 +328,17 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     finetune_tvs['Average TV Pruned 0.95'] = finetune_tvs['Average TV'].prune_small_weights(rate=0.95)
     finetune_tvs['Average TV Pruned 0.99'] = finetune_tvs['Average TV'].prune_small_weights(rate=0.99)
     finetune_tvs['Random Vector'] = finetune_tvs['Average TV'].generate_random_vector_with_same_layer_norms(seed=11)
+    
+    # finetune_tvs.pop('100% Noise, 12 Seed')
+    # finetune_tvs.pop('100% Noise, 10 Seed')
+    # finetune_tvs.pop('100% Noise, 15 Seed')
+    # finetune_tvs.pop('100% Noise, 20 Seed')
+    # finetune_tvs.pop('100% Noise, 30 Seed')
 
     ft_tvs_list = list(finetune_tvs.values())
     print(finetune_tvs.keys())
     tv_names = list(finetune_tvs.keys())
-    
+
     task_sim = []
     for i in range(len(ft_tvs_list)):
         anchor_tv = ft_tvs_list[i]
@@ -307,6 +363,32 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         filepath=results_dir / 'task_similarities.png',
         show=False
     )
+    
+    weight_norm_analysis.plot_abs_weight_norms_compare(
+        state_dicts={
+            'Average TV': finetune_tvs['Average TV'].vector,
+            'Average TV Pruned 0.99': finetune_tvs['Average TV Pruned 0.99'].vector
+            },
+        include_bias_and_norm=False,
+        max_groups=40,
+        overall_bins=200,
+        layer_bins=200,
+        logy=False,
+        saving_path=results_dir / 'abs_weight_norm_TV.png'
+    )
+    
+    weight_norm_analysis.plot_l2_weight_norms_compare(
+        state_dicts={
+            'Average TV': finetune_tvs['Average TV'].vector,
+            'Average TV Pruned 0.99': finetune_tvs['Average TV Pruned 0.99'].vector
+            },
+        include_bias_and_norm=False,
+        max_groups=40,
+        overall_bins=200,
+        layer_bins=200,
+        logy=False,
+        saving_path=results_dir / 'L2_weight_norm_TV.png'
+    )
 
     
     base_model.load_state_dict(pretrain_weights)
@@ -318,7 +400,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     results_dict['Pretrain'] = {'test_results': pt_test_results}
 
     results_dict = eval_model_on_tvs(base_model, finetune_tvs, results_dict, cfg, dataset, num_classes, gpu)
-    
+    # results_dict = eval_model_on_tvs(base_model, OrderedDict(zip(tv_names[-1:], ft_tvs_list[-1:])), results_dict, cfg, dataset, num_classes, gpu)
     
     print(results_dict)
         

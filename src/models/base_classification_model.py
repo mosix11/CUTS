@@ -71,12 +71,14 @@ class BaseClassificationModel(nn.Module, ABC):
         else:
             return loss
 
+
+    @torch.no_grad()
     def validation_step(self, x, y, use_amp=False, return_preds=False):
         """Performs a single validation step (no gradient computation)."""
-        with torch.no_grad():
-            with autocast('cuda', enabled=use_amp):
-                preds = self(x)
-                loss = self.loss_fn(preds, y)
+        
+        with autocast('cuda', enabled=use_amp):
+            preds = self(x)
+            loss = self.loss_fn(preds, y)
 
         if self.metrics:
             for name, metric in self.metrics.items():
@@ -87,10 +89,10 @@ class BaseClassificationModel(nn.Module, ABC):
         else:
             return loss
 
+    @torch.no_grad()
     def predict(self, x):
         """Performs inference (prediction) without gradient computation."""
-        with torch.no_grad():
-            preds = self(x)
+        preds = self(x)
         return preds
 
     def compute_metrics(self):

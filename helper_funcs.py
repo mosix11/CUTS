@@ -6,7 +6,8 @@ from src.models import model_factory, TaskVector
 from src.utils import nn_utils, misc_utils
 import copy
 from tqdm import tqdm
-from torchmetrics import ConfusionMatrix
+from torchmetrics.classification import MulticlassConfusionMatrix
+from typing import Union
 
 def prepare_batch(batch, device):
     batch = [tens.to(device) for tens in batch]
@@ -108,7 +109,7 @@ def search_optimal_coefficient(
     Args:
         base_model (torch.nn.Module): The pre-trained model. A deepcopy is made for each evaluation.
         task_vector (TaskVector): The task vector object.
-        dataset: The dataset object to get the test dataloader from.
+        dataset: The dataset object to get the validation and test dataloaders from.
         search_range (list or tuple): A list/tuple [min_val, max_val] for the search.
         device (torch.device): The device to run evaluation on.
         num_classes (int): The number of classes for the confusion matrix.
@@ -116,6 +117,21 @@ def search_optimal_coefficient(
     Returns:
         tuple: (best_coefficient, best_performance_metrics, confusion_matrix_tensor)
     """
+    
+    # If the dataset has a validation set, we optimize on the validation set,
+    # if the dataset doesn't have a validation set, we optimize on the heldout set,
+    # and if the dataset does not have validation or heldout set, we optimize on the
+    # test set.
+    val_dataloader = dataset.get_val_dataloader()
+    if val_dataloader == None or len(val_dataloader) == 0:
+        val_dataloader = dataset.get_heldout_dataloader()
+        if val_dataloader == None or len(val_dataloader) == 0:
+            val_dataloader = dataset.get_test_dataloader()
+            print("Optimizing on the test set.")
+        else:
+            print("Optimizing on the heldout set.")
+    else:
+        print("Optimizing on the validation set.")
     test_dataloader = dataset.get_test_dataloader()
     
     best_coef = 0.0
@@ -129,7 +145,7 @@ def search_optimal_coefficient(
         search_model = copy.deepcopy(base_model)
         task_vector.apply_to(search_model, scaling_coef=scale_coef)
         
-        metric_results, _, _ = evaluate_model(search_model, test_dataloader, device)
+        metric_results, _, _ = evaluate_model(search_model, val_dataloader, device)
         
         if metric_results['ACC'] > best_acc:
             best_acc = metric_results['ACC']
@@ -147,7 +163,7 @@ def search_optimal_coefficient(
         search_model = copy.deepcopy(base_model)
         task_vector.apply_to(search_model, scaling_coef=scale_coef)
         
-        metric_results, _, _ = evaluate_model(search_model, test_dataloader, device)
+        metric_results, _, _ = evaluate_model(search_model, val_dataloader, device)
         
         if metric_results['ACC'] > best_acc:
             best_acc = metric_results['ACC']
@@ -161,7 +177,33 @@ def search_optimal_coefficient(
 
     best_results, all_preds, all_targets = evaluate_model(final_model, test_dataloader, device)
     
-    confmat_metric = ConfusionMatrix(task="multiclass", num_classes=num_classes)
+    confmat_metric = MulticlassConfusionMatrix(num_classes=num_classes)
     best_cm_tensor = confmat_metric(all_preds, all_targets)
 
     return best_coef, best_results, best_cm_tensor
+
+
+
+
+def get_confusion_matrix(
+    model:torch.nn.Module,
+    num_classes:int,
+    dataloader:DataLoader,
+    device:torch.device
+):
+    model.eval()
+    model.to(device)
+    cm_metric = MulticlassConfusionMatrix(num_classes=num_classes).to(device)
+    
+    for i, batch in enumerate(dataloader):
+        batch = prepare_batch(batch, device)
+        input_batch, target_batch = batch[:2]
+        
+        model_output = model.predict(input_batch) # Get raw model output (logits)
+        predictions = torch.argmax(model_output, dim=-1) # Get predicted class labels
+        
+        cm_metric.update(predictions.detach(), target_batch.detach())
+    
+    cm = cm_metric.compute().cpu().numpy()
+    return cm
+    

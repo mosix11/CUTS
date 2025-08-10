@@ -605,6 +605,8 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         saving_path=results_dir / 'L2_weight_norm_TV.png'
     )
     
+    
+    
     exit()
     
     # rank_dict = OrderedDict()

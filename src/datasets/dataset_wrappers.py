@@ -202,6 +202,8 @@ class NoisyClassificationDataset(Dataset):
                 raise RuntimeError("Asymmetric noise for sub-classed CIFAR-10 is not supported.")
             elif self.dataset_name == 'CIFAR100' and len(self.available_labels) != 100:
                 raise RuntimeError("Asymmetric noise for sub-classed CIFAR-100 is not supported.")
+            elif self.dataset_name == 'Clothing1M' and len(self.available_labels) != 14:
+                raise RuntimeError("Asymmetric noise for sub-classed Clothing1M is not supported.")
 
             noise_map = {}
             if self.dataset_name == 'MNIST':
@@ -218,6 +220,31 @@ class NoisyClassificationDataset(Dataset):
                         source_label = super_class[i]
                         target_label = super_class[(i + 1) % len(super_class)]
                         noise_map[source_label] = target_label
+            elif self.dataset_name == 'Clothing1M':
+                # Class order:
+                # 0:T-Shirt, 1:Shirt, 2:Knitwear, 3:Chiffon, 4:Sweater, 5:Hoodie,
+                # 6:Windbreaker, 7:Jacket, 8:Downcoat, 9:Suit, 10:Shawl, 11:Dress,
+                # 12:Vest, 13:Underwear
+                #
+                # Asymmetric flips between visually/semantically similar categories.
+                # (One-to-one mapping; not every class must appear as a source.)
+                noise_map = {
+                    0: 1,   # T-Shirt -> Shirt
+                    1: 0,   # Shirt -> T-Shirt
+                    2: 4,   # Knitwear -> Sweater
+                    4: 2,   # Sweater -> Knitwear
+                    3: 11,  # Chiffon -> Dress
+                    11: 3,  # Dress -> Chiffon
+                    6: 8,   # Windbreaker -> Downcoat
+                    8: 6,   # Downcoat -> Windbreaker
+                    7: 9,   # Jacket -> Suit
+                    9: 7,   # Suit -> Jacket
+                    5: 4,   # Hoodie -> Sweater
+                    10: 11, # Shawl -> Dress
+                    12: 7,  # Vest -> Jacket
+                    13: 0,  # Underwear -> T-Shirt
+                }
+
             else:
                  raise ValueError(f"Asymmetric noise not implemented for dataset '{self.dataset_name}'.")
 

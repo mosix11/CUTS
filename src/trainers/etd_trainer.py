@@ -5,7 +5,7 @@ from torch.amp import autocast
 
 from typing import List, Tuple, Union
 from tqdm import tqdm
-from torchmetrics import ConfusionMatrix
+from torchmetrics.classification import MulticlassConfusionMatrix
 
 from . import BaseClassificationTrainer
 
@@ -156,8 +156,7 @@ class ETDTrainer(BaseClassificationTrainer):
         else:
             raise ValueError("Invalid set specified. Choose 'Train', 'Val', or 'Test'.")
         
-        all_preds = []
-        all_targets = []
+        cm_metric = MulticlassConfusionMatrix(num_classes=num_classes)
         
         for i, batch in enumerate(dataloader):
             batch = self.prepare_batch(batch)
@@ -166,9 +165,7 @@ class ETDTrainer(BaseClassificationTrainer):
             model_output = self.model.predict(input_batch) # Get raw model output (logits)
             predictions = torch.argmax(model_output, dim=-1) # Get predicted class labels
             
-            all_preds.extend(predictions.detach().cpu())
-            all_targets.extend(target_batch.detach().cpu())
-            
-        confmat = ConfusionMatrix(task="multiclass", num_classes=num_classes)
-        cm = confmat(torch.tensor(all_preds), torch.tensor(all_targets))
+            cm_metric.update(predictions.detach(), target_batch.detach())
+        
+        cm = cm_metric.compute().cpu().numpy()
         return cm

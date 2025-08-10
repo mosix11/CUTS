@@ -60,3 +60,6 @@ class EarlyStopping:
                 print(f"EarlyStopping counter: {self.counter}/{self.patience}")
             if self.counter >= self.patience:
                 self.early_stop = True
+
+
+
