@@ -9,7 +9,7 @@ strategy:
     finetuning:
       - set: 'Train'
         noise_rate: 1.0
-        noise_type: 'T_matrix'
+        noise_type: 'asymmetric'
         seed: 12
 
 dataset:
@@ -67,8 +67,8 @@ trainer:
       betas: [0.9, 0.999]
     lr_schedule_cfg:
       type: 'step'
-      milestones: [20, 30, 40, 50, 60, 70]
-      gamma: 0.7
+      milestones: [40, 50, 60, 70]
+      gamma: 0.5
     early_stopping: False
     validation_freq: -1
     save_best_model: False

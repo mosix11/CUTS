@@ -189,15 +189,17 @@ def get_confusion_matrix(
     model:torch.nn.Module,
     num_classes:int,
     dataloader:DataLoader,
-    device:torch.device
+    device:torch.device,
+    normalize:bool=False
 ):
     model.eval()
     model.to(device)
     cm_metric = MulticlassConfusionMatrix(num_classes=num_classes).to(device)
     
     for i, batch in enumerate(dataloader):
+        batch = batch[:2]
         batch = prepare_batch(batch, device)
-        input_batch, target_batch = batch[:2]
+        input_batch, target_batch = batch
         
         model_output = model.predict(input_batch) # Get raw model output (logits)
         predictions = torch.argmax(model_output, dim=-1) # Get predicted class labels
@@ -205,6 +207,8 @@ def get_confusion_matrix(
         cm_metric.update(predictions.detach(), target_batch.detach())
     
     cm = cm_metric.compute().cpu().numpy()
+    if normalize:
+        cm = row_normalize(cm)
     return cm
     
     

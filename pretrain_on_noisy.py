@@ -26,7 +26,7 @@ from tqdm import tqdm
 from collections import OrderedDict
 import re
 
-from helper_funcs import evaluate_model, eval_model_on_clean_noise_splits, search_optimal_coefficient, analyze_IC, get_confusion_matrix, estimate_T_from_confusion, symmetric_noise_detected
+from helper_funcs import evaluate_model, eval_model_on_clean_noise_splits, search_optimal_coefficient, analyze_IC, get_confusion_matrix, estimate_T_from_confusion, symmetric_noise_detected, row_normalize
 
     
 def generate_latex_table_from_results(results_dict, output_path):
@@ -422,8 +422,20 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             plots_dir.mkdir(exist_ok=True, parents=True)
             
             if strategy['finetuning_set'] == 'Heldout':
+                if noise_tv['noise_type'] == 'T_matrix':
+                    cm = get_confusion_matrix(
+                        model,
+                        dataset.get_num_classes(),
+                        dataset.get_heldout_dataloader(),
+                        trainer_utils.get_gpu_device()
+                    )
+                    T = estimate_T_from_confusion(cm, alpha=0.01)
+                    noise_tv['T_mat'] = T
+                
+                
                 dataset.set_trainset(dataset.get_heldoutset(), shuffle=True)
                 dataset.inject_noise(**noise_tv)
+                
                     
             elif strategy['finetuning_set'] == 'LowLoss':
                 low_loss_idxs_path = outputs_dir/ Path(f"{cfg_name}/pretrain") / f'log/low_loss_indices_{strategy['percentage']:.2f}.pkl'
@@ -527,6 +539,21 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     )
     
     
+    weight_norm_analysis.plot_abs_weight_norms_compare(
+        state_dicts={
+            'Pretrain': pretrain_weights,
+            'FT Gold': ft_gold_wieghts,
+            'FT Noise': next(iter(finetune_weights.items()))[1]
+            },
+        include_bias_and_norm=False,
+        max_groups=40,
+        overall_bins=200,
+        layer_bins=200,
+        logy=False,
+        saving_path=results_dir / 'abs_weight_norm_ft.png'
+    )
+    
+    
     ft_gold_tv = TaskVector(pretrain_weights, ft_gold_wieghts)
     ft_gt_noise_tv = TaskVector(pretrain_weights, ft_gt_noise_weights)
 
@@ -534,7 +561,12 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     for ft_expr, ft_weight in finetune_weights.items():
         finetune_tvs[f"{float(ft_expr.split('_')[0])*100:.0f}% Noise, {ft_expr.split('_')[1]} Seed"] = TaskVector(pretrain_weights, ft_weight)
-    finetune_tvs['Average TV'] = TaskVector.mean(finetune_tvs)
+        
+    if len(finetune_tvs) == 1:
+        finetune_tvs['Average TV'] = list(finetune_tvs.items())[0][1]
+        finetune_tvs.popitem(last=False)
+    else:
+        finetune_tvs['Average TV'] = TaskVector.mean(finetune_tvs)
     finetune_tvs['Average TV Pruned 0.4'] = finetune_tvs['Average TV'].prune_small_weights(rate=0.4)
     finetune_tvs['Average TV Pruned 0.6'] = finetune_tvs['Average TV'].prune_small_weights(rate=0.6)
     finetune_tvs['Average TV Pruned 0.8'] = finetune_tvs['Average TV'].prune_small_weights(rate=0.8)
@@ -546,6 +578,8 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     finetune_tvs['Ground Truth Noise'] = ft_gt_noise_tv
     finetune_tvs.move_to_end('Ground Truth Noise', last=False)
     finetune_tvs.move_to_end('Gold', last=False)
+    
+    
 
     ft_tvs_list = list(finetune_tvs.values())
     print(finetune_tvs.keys())
@@ -591,6 +625,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         saving_path=results_dir / 'abs_weight_norm_TV.png'
     )
     
+    
     weight_norm_analysis.plot_l2_weight_norms_compare(
         state_dicts={
             'Average TV': finetune_tvs['Average TV'].vector,
@@ -606,27 +641,54 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     )
     
     
-    # base_model.load_state_dict(pretrain_weights)
-    # analyze_IC(
-    #     base_model,
-    #     dataset.get_num_classes(),
-    #     dataset.get_val_dataloader(),
-    #     gpu,
-    #     dataset.get_class_names()
-    #     )
-    # cm = get_confusion_matrix(
-    #     base_model,
-    #     dataset.get_num_classes(),
-    #     dataset.get_heldout_dataloader(),
-    #     gpu
-    # )
-    # T = estimate_T_from_confusion(cm)
-    # is_sym, kl = symmetric_noise_detected(T, kl_thresh=0.03)
-    # if is_sym:
-    #     print("Pattern is near-symmetric; using uniform off-diagonal.")
-        
-    # exit()
     
+    base_model.load_state_dict(pretrain_weights)
+
+    cm = get_confusion_matrix(
+        base_model,
+        dataset.get_num_classes(),
+        dataset.get_heldout_dataloader(),
+        gpu
+    )
+    T = estimate_T_from_confusion(cm, alpha=0.01)
+    
+    misc_utils.plot_confusion_matrix(
+        title='Normalized Confusion Matrix',
+        cm=row_normalize(cm),
+        class_names=dataset.get_class_names(),
+        color_map='vlag',
+        color_bar=True,
+        # vmin= 0.0,
+        # vmax= 1.0,
+        x_label='Classes',
+        y_label='Classes',
+        tick_label_font_size=6,
+        filepath=results_dir / 'pretrained_normalized_confusion_matrix.png',
+        show=False
+    )
+    
+    misc_utils.plot_confusion_matrix(
+        title='Noise Transition Matrix',
+        cm=T,
+        class_names=dataset.get_class_names(),
+        color_map='vlag',
+        color_bar=True,
+        # vmin= 0.0,
+        # vmax= 1.0,
+        x_label='Classes',
+        y_label='Classes',
+        tick_label_font_size=6,
+        filepath=results_dir / 'transition_matrix.png',
+        show=False
+    )
+    
+    exit()    
+    
+    is_sym, kl = symmetric_noise_detected(T, kl_thresh=0.01)
+    if is_sym:
+        print("Pattern is near-symmetric; using uniform off-diagonal.")
+        
+    exit()
     # rank_dict = OrderedDict()
     # for tv_name, tv in finetune_tvs.items():
     #     rank_dict[tv_name] = tv.get_layer_rank()

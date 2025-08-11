@@ -1,7 +1,7 @@
 import torch
 from torch.utils.data import Dataset, Subset
 import warnings
-
+import numpy as np
 
 class DatasetWithIndex(Dataset):
     
@@ -56,6 +56,7 @@ class NoisyClassificationDataset(Dataset):
         dataset: Dataset,
         dataset_name:str=None,
         noise_type:str = 'symmetric', # between 'symmetric', 'asymmetric', and 'constant'
+        T_mat: np.ndarray = None, # only for noise_type='T_matrix'
         noise_rate: float = 0.2,
         num_classes:int = None,
         target_class:int = None, # Only needed for 'constant' noise
@@ -81,6 +82,12 @@ class NoisyClassificationDataset(Dataset):
                 self.target_class = target_class
             else:
                 raise ValueError('For constant noise, the target class should be specified!')
+        elif noise_type == 'T_matrix':
+            if T_mat is not None:
+                self.T_mat = T_mat
+            else:
+                raise ValueError('For generating noise based on Transition Matrix, the Transition Matrix should be passed as `T_mat`.')
+        
         
         if seed and not generator:
             generator = torch.Generator().manual_seed(seed)
@@ -221,30 +228,32 @@ class NoisyClassificationDataset(Dataset):
                         target_label = super_class[(i + 1) % len(super_class)]
                         noise_map[source_label] = target_label
             elif self.dataset_name == 'Clothing1M':
-                # Class order:
-                # 0:T-Shirt, 1:Shirt, 2:Knitwear, 3:Chiffon, 4:Sweater, 5:Hoodie,
-                # 6:Windbreaker, 7:Jacket, 8:Downcoat, 9:Suit, 10:Shawl, 11:Dress,
-                # 12:Vest, 13:Underwear
-                #
-                # Asymmetric flips between visually/semantically similar categories.
-                # (One-to-one mapping; not every class must appear as a source.)
+                # noise_map = {
+                #     0: 1,   # T-Shirt -> Shirt
+                #     1: 0,   # Shirt -> T-Shirt
+                #     2: 4,   # Knitwear -> Sweater
+                #     4: 2,   # Sweater -> Knitwear
+                #     3: 11,  # Chiffon -> Dress
+                #     11: 3,  # Dress -> Chiffon
+                #     6: 8,   # Windbreaker -> Downcoat
+                #     8: 6,   # Downcoat -> Windbreaker
+                #     7: 9,   # Jacket -> Suit
+                #     9: 7,   # Suit -> Jacket
+                #     5: 4,   # Hoodie -> Sweater
+                #     10: 11, # Shawl -> Dress
+                #     12: 7,  # Vest -> Jacket
+                #     13: 0,  # Underwear -> T-Shirt
+                # }
                 noise_map = {
-                    0: 1,   # T-Shirt -> Shirt
-                    1: 0,   # Shirt -> T-Shirt
                     2: 4,   # Knitwear -> Sweater
-                    4: 2,   # Sweater -> Knitwear
-                    3: 11,  # Chiffon -> Dress
-                    11: 3,  # Dress -> Chiffon
+                    4: 2,   # Sweater -> Kintwear
+                    9: 6,   # Suit -> Windbreaker
+                    12: 11, # Vest -> Dress
+                    8: 12,  # Downcoat -> Vest
+                    13: 12, # Underwear -> Vest
                     6: 8,   # Windbreaker -> Downcoat
-                    8: 6,   # Downcoat -> Windbreaker
-                    7: 9,   # Jacket -> Suit
-                    9: 7,   # Suit -> Jacket
-                    5: 4,   # Hoodie -> Sweater
-                    10: 11, # Shawl -> Dress
-                    12: 7,  # Vest -> Jacket
-                    13: 0,  # Underwear -> T-Shirt
+                    10: 2   # Shawl -> Kintwear
                 }
-
             else:
                  raise ValueError(f"Asymmetric noise not implemented for dataset '{self.dataset_name}'.")
 
@@ -265,7 +274,58 @@ class NoisyClassificationDataset(Dataset):
                     # 4. Apply the noise and set the flags
                     noisy_labels[indices_to_flip_in_class] = target_label
                     self.is_noisy_flags[indices_to_flip_in_class] = 1.0
+                    
+        elif self.noise_type == 'T_matrix':
+            if not isinstance(self.T_mat, np.ndarray):
+                raise TypeError("T_mat must be a numpy.ndarray of shape (num_classes, num_classes).")
+            K = self.num_classes
+            if self.T_mat.shape != (K, K):
+                raise ValueError(f"T_mat must have shape ({K}, {K}), got {self.T_mat.shape}.")
 
+            T = self.T_mat  # do not modify
+            # Tolerances for numerical checks
+            tol_row = 1e-6
+            tol_diag = 1e-9
+
+            # 1) Rows sum to ~1
+            row_sums = T.sum(axis=1)
+            if not np.allclose(row_sums, 1.0, atol=tol_row):
+                raise ValueError(f"T_mat rows must sum to 1 (±{tol_row}). Got {row_sums}.")
+
+            # 2) Zero diagonal (so flips always change the label)
+            if not np.all(np.abs(np.diag(T)) <= tol_diag):
+                raise ValueError(f"T_mat diagonal must be ~0 (≤{tol_diag}). Got {np.diag(T)}.")
+
+            # 3) No negatives
+            if (T < -tol_diag).any():
+                raise ValueError("T_mat must be nonnegative.")
+
+            # Convert to torch tensor for multinomial sampling (no renormalization)
+            T_torch = torch.from_numpy(T).to(dtype=torch.float64)
+
+            # ---- Apply fixed-count corruption per class (matches your asymmetric path) ----
+            for cls in range(K):
+                class_indices = (original_labels == cls).nonzero(as_tuple=True)[0]
+                if len(class_indices) == 0:
+                    continue
+
+                num_to_flip = int(self.noise_rate * len(class_indices))
+                if num_to_flip <= 0:
+                    continue
+
+                # Choose which samples of this class to corrupt (fixed-count)
+                perm = torch.randperm(len(class_indices), generator=self.generator)
+                idx_to_flip = class_indices[perm[:num_to_flip]]
+
+                # Sample target labels from the row distribution T[cls], zero-diagonal ensures different label
+                probs = T_torch[cls]  # shape: (K,)
+                sampled_targets = torch.multinomial(
+                    probs, num_samples=num_to_flip, replacement=True, generator=self.generator
+                ).to(dtype=torch.long)
+
+                noisy_labels[idx_to_flip] = sampled_targets
+                self.is_noisy_flags[idx_to_flip] = 1.0
+            
         self.noisy_labels = noisy_labels.long()
 
     def __getitem__(self, idx):

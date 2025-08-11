@@ -11,11 +11,18 @@ strategy:
       noise_rate: 0.4
       noise_type: 'asymmetric'
       seed: 8
+    # finetuning:
+    #   - set: 'Train'
+    #     noise_rate: 1.0
+    #     noise_type: 'T_matrix'
+    #     seed: 12
     finetuning:
       - set: 'Train'
         noise_rate: 1.0
-        noise_type: 'symmetric'
+        noise_type: 'asymmetric'
         seed: 12
+
+
 
 dataset:
   name: "cifar10"
