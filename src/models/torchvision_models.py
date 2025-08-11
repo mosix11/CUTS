@@ -41,7 +41,13 @@ class TorchvisionModels(BaseClassificationModel):
             net = torchvision.models.resnet50(weights=pt_weights)
             net.fc = nn.Linear(net.fc.in_features, num_classes)
         elif model_type == 'resnet50_nonorm':
-            net = torchvision.models.resnet50(norm_layer=nn.Identity, weights=pt_weights, num_classes=num_classes)
+            if pt_weights:
+                net = torchvision.models.resnet50(weights=pt_weights)
+                self._replace_bn_with_identity(net)
+            else:
+                net = torchvision.models.resnet50(norm_layer=nn.Identity)
+                
+            net.fc = nn.Linear(net.fc.in_features, num_classes)
             
         elif model_type == 'vit_b_16':
             net = torchvision.models.vit_b_16(weights=pt_weights)
@@ -65,3 +71,13 @@ class TorchvisionModels(BaseClassificationModel):
     
     def get_identifier(self):
         return 'Torchvision Model ' + self.model_type
+    
+    
+    
+    def _replace_bn_with_identity(self, module):
+        """Recursively replace all BatchNorm layers with Identity."""
+        for name, child in module.named_children():
+            if isinstance(child, (nn.BatchNorm2d, nn.BatchNorm1d)):
+                setattr(module, name, nn.Identity())
+            else:
+                self._replace_bn_with_identity(child)
