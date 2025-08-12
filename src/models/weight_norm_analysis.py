@@ -345,9 +345,9 @@ def plot_abs_weight_norms_compare(
     state_dicts: Dict[str, Dict[str, torch.Tensor]],
     *,
     include_bias_and_norm: bool = False,
-    max_groups: int = 12,
-    overall_bins: int = 60,
-    layer_bins: int = 50,
+    max_groups: int = 40,
+    overall_bins: int = 200,
+    layer_bins: int = 200,
     logy: bool = False,
     device: Optional[torch.device] = torch.device("cpu"),
     saving_path: Path = None

@@ -530,11 +530,6 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             # 'FT Gold': ft_gold_wieghts,
             'FT Noise': next(iter(finetune_weights.items()))[1]
             },
-        include_bias_and_norm=False,
-        max_groups=40,
-        overall_bins=200,
-        layer_bins=200,
-        logy=False,
         saving_path=results_dir / 'abs_weight_norm.png'
     )
     
@@ -545,11 +540,6 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             'FT Gold': ft_gold_wieghts,
             'FT Noise': next(iter(finetune_weights.items()))[1]
             },
-        include_bias_and_norm=False,
-        max_groups=40,
-        overall_bins=200,
-        layer_bins=200,
-        logy=False,
         saving_path=results_dir / 'abs_weight_norm_ft.png'
     )
     
@@ -617,11 +607,6 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             'Gold TV': finetune_tvs['Gold'].vector,
             # 'Average TV Pruned 0.8': finetune_tvs['Average TV Pruned 0.8'].vector
             },
-        include_bias_and_norm=False,
-        max_groups=40,
-        overall_bins=200,
-        layer_bins=200,
-        logy=False,
         saving_path=results_dir / 'abs_weight_norm_TV.png'
     )
     
@@ -632,40 +617,24 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             'Gold TV': finetune_tvs['Gold'].vector,
             # 'Average TV Pruned 0.8': finetune_tvs['Average TV Pruned 0.8'].vector
             },
-        include_bias_and_norm=False,
-        max_groups=40,
-        overall_bins=200,
-        layer_bins=200,
-        logy=False,
         saving_path=results_dir / 'L2_weight_norm_TV.png'
     )
     
     
     
     base_model.load_state_dict(pretrain_weights)
+    
 
-    cm = get_confusion_matrix(
+    cm_pt = get_confusion_matrix(
         base_model,
         dataset.get_num_classes(),
         dataset.get_heldout_dataloader(),
         gpu
     )
-    T = estimate_T_from_confusion(cm, alpha=0.01)
     
-    misc_utils.plot_confusion_matrix(
-        title='Normalized Confusion Matrix',
-        cm=row_normalize(cm),
-        class_names=dataset.get_class_names(),
-        color_map='vlag',
-        color_bar=True,
-        # vmin= 0.0,
-        # vmax= 1.0,
-        x_label='Classes',
-        y_label='Classes',
-        tick_label_font_size=6,
-        filepath=results_dir / 'pretrained_normalized_confusion_matrix.png',
-        show=False
-    )
+    
+    
+    T = estimate_T_from_confusion(cm_pt, alpha=0.01, lam=0.1)
     
     misc_utils.plot_confusion_matrix(
         title='Noise Transition Matrix',
@@ -682,11 +651,74 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         show=False
     )
     
-    exit()    
-    
-    is_sym, kl = symmetric_noise_detected(T, kl_thresh=0.01)
+    is_sym, kl = symmetric_noise_detected(T, kl_thresh=0.03)
     if is_sym:
         print("Pattern is near-symmetric; using uniform off-diagonal.")
+    
+    
+    
+    misc_utils.plot_confusion_matrix(
+        title='Normalized Confusion Matrix',
+        cm=row_normalize(cm_pt),
+        class_names=dataset.get_class_names(),
+        color_map='vlag',
+        color_bar=True,
+        # vmin= 0.0,
+        # vmax= 1.0,
+        x_label='Classes',
+        y_label='Classes',
+        tick_label_font_size=6,
+        filepath=results_dir / 'pretrained_normalized_confusion_matrix.png',
+        show=False
+    )
+    
+    
+    ft_model = copy.deepcopy(base_model)
+    ft_model.load_state_dict(next(iter(finetune_weights.items()))[1])
+    cm_ft = get_confusion_matrix(
+        ft_model,
+        dataset.get_num_classes(),
+        dataset.get_heldout_dataloader(),
+        gpu
+    )
+    
+    misc_utils.plot_confusion_matrix(
+        title='Normalized Confusion Matrix',
+        cm=row_normalize(cm_ft),
+        class_names=dataset.get_class_names(),
+        color_map='vlag',
+        color_bar=True,
+        # vmin= 0.0,
+        # vmax= 1.0,
+        x_label='Classes',
+        y_label='Classes',
+        tick_label_font_size=6,
+        filepath=results_dir / 'ft_noise_normalized_confusion_matrix.png',
+        show=False
+    )
+    
+    finetune_tvs['Average TV'].apply_to(base_model, scaling_coef=-1.0)
+    cm_ng = get_confusion_matrix(
+        base_model,
+        dataset.get_num_classes(),
+        dataset.get_heldout_dataloader(),
+        gpu
+    )
+    
+    misc_utils.plot_confusion_matrix(
+        title='Normalized Confusion Matrix',
+        cm=row_normalize(cm_ng),
+        class_names=dataset.get_class_names(),
+        color_map='vlag',
+        color_bar=True,
+        # vmin= 0.0,
+        # vmax= 1.0,
+        x_label='Classes',
+        y_label='Classes',
+        tick_label_font_size=6,
+        filepath=results_dir / 'negated_normalized_confusion_matrix.png',
+        show=False
+    )
         
     exit()
     # rank_dict = OrderedDict()

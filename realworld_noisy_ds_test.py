@@ -381,35 +381,26 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         show=False
     )
     
-    weight_norm_analysis.plot_abs_weight_norms_compare(
-        state_dicts={
-            'Average TV': finetune_tvs['Average TV'].vector,
-            'Average TV Pruned 0.9': finetune_tvs['Average TV Pruned 0.9'].vector
-            },
-        include_bias_and_norm=False,
-        max_groups=40,
-        overall_bins=200,
-        layer_bins=200,
-        logy=False,
-        saving_path=results_dir / 'abs_weight_norm_TV.png'
-    )
+    # weight_norm_analysis.plot_abs_weight_norms_compare(
+    #     state_dicts={
+    #         'Average TV': finetune_tvs['Average TV'].vector,
+    #         'Average TV Pruned 0.9': finetune_tvs['Average TV Pruned 0.9'].vector
+    #         },
+    #     saving_path=results_dir / 'abs_weight_norm_TV.png'
+    # )
     
-    weight_norm_analysis.plot_l2_weight_norms_compare(
-        state_dicts={
-            'Average TV': finetune_tvs['Average TV'].vector,
-            'Average TV Pruned 0.9': finetune_tvs['Average TV Pruned 0.9'].vector
-            },
-        include_bias_and_norm=False,
-        max_groups=40,
-        overall_bins=200,
-        layer_bins=200,
-        logy=False,
-        saving_path=results_dir / 'L2_weight_norm_TV.png'
-    )
+    # weight_norm_analysis.plot_l2_weight_norms_compare(
+    #     state_dicts={
+    #         'Average TV': finetune_tvs['Average TV'].vector,
+    #         'Average TV Pruned 0.9': finetune_tvs['Average TV Pruned 0.9'].vector
+    #         },
+    #     saving_path=results_dir / 'L2_weight_norm_TV.png'
+    # )
     
     
 
     base_model.load_state_dict(pretrain_weights)
+    
     # analyze_IC(
     #     base_model,
     #     dataset.get_num_classes(),
@@ -489,7 +480,8 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         show=False
     )
     
-    finetune_tvs['Average TV'].apply_to(base_model, scaling_coef=-1.0)
+    # finetune_tvs['Average TV'].apply_to(base_model, scaling_coef=-1.0)
+    finetune_tvs['Average TV Pruned 0.9'].apply_to(base_model, scaling_coef=-1.0)
     cm_ng = get_confusion_matrix(
         base_model,
         dataset.get_num_classes(),
