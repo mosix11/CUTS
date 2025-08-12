@@ -40,15 +40,19 @@ model:
 
 trainer:
   pretraining:
-    max_epochs: &max_epochs 60
+    max_epochs: &max_epochs 70
     optimizer_cfg: 
       type: "adamw"
-      lr: 1.0e-2
+      lr: 1.0e-4
       betas: [0.9, 0.999]
     lr_schedule_cfg:
-      type: 'cosann'
-      T_max: *max_epochs
-      eta_min: 5.0e-6
+      type: 'step'
+      milestones: [30, 40, 50, 55, 60, 65]
+      gamma: 0.5
+    # lr_schedule_cfg:
+    #   type: 'cosann'
+    #   T_max: *max_epochs
+    #   eta_min: 5.0e-6
     early_stopping: False
     validation_freq: 3
     save_best_model: True
