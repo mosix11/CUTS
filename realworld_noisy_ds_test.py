@@ -301,6 +301,16 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     results_dir = results_dir / cfg_name
     results_dir.mkdir(exist_ok=True, parents=True)
     
+    results_dirs = {}
+    results_dirs['cms'] = results_dir / 'confusion_mats'
+    results_dirs['Ts'] = results_dir / 'transition_mats'
+    results_dirs['W_norms'] = results_dir / 'weight_norms'
+    results_dirs['TV_norms'] = results_dir / 'TV_norms'
+    results_dirs['metrics'] = results_dir / 'metrics'    
+    for dir in results_dirs.values():
+        dir.mkdir(exist_ok=True, parents=True)
+    
+    
     base_expr_dir = outputs_dir / cfg_name
     pretrain_dir = base_expr_dir / 'pretrain'
     finetune_dirs = OrderedDict()
@@ -318,15 +328,17 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     weight_norm_analysis.plot_abs_weight_norms_compare(
         state_dicts={
             'Pretrain': pretrain_weights,
-            # 'FT Gold': ft_gold_wieghts,
             'FT Noise': next(iter(finetune_weights.items()))[1]
             },
-        include_bias_and_norm=False,
-        max_groups=40,
-        overall_bins=200,
-        layer_bins=200,
-        logy=False,
-        saving_path=results_dir / 'abs_weight_norm.png'
+        saving_path=results_dirs['W_norms'] / 'L1_norms.png'
+    )
+    
+    weight_norm_analysis.plot_l2_weight_norms_compare(
+        state_dicts={
+            'Pretrain': pretrain_weights,
+            'FT Noise': next(iter(finetune_weights.items()))[1]
+            },
+        saving_path=results_dirs['W_norms'] / 'L2_norms.png'
     )
     
     finetune_tvs = OrderedDict()
@@ -346,11 +358,6 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # finetune_tvs['Average TV Pruned 0.99'] = finetune_tvs['Average TV'].prune_small_weights(rate=0.99)
     # finetune_tvs['Random Vector'] = finetune_tvs['Average TV'].generate_random_vector_with_same_layer_norms(seed=11)
     
-    # finetune_tvs.pop('100% Noise, 12 Seed')
-    # finetune_tvs.pop('100% Noise, 10 Seed')
-    # finetune_tvs.pop('100% Noise, 15 Seed')
-    # finetune_tvs.pop('100% Noise, 20 Seed')
-    # finetune_tvs.pop('100% Noise, 30 Seed')
 
     ft_tvs_list = list(finetune_tvs.values())
     print(finetune_tvs.keys())
@@ -381,21 +388,15 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         show=False
     )
     
-    # weight_norm_analysis.plot_abs_weight_norms_compare(
-    #     state_dicts={
-    #         'Average TV': finetune_tvs['Average TV'].vector,
-    #         'Average TV Pruned 0.9': finetune_tvs['Average TV Pruned 0.9'].vector
-    #         },
-    #     saving_path=results_dir / 'abs_weight_norm_TV.png'
-    # )
+    weight_norm_analysis.plot_abs_weight_norms_from_state_dict(
+        state_dict=finetune_tvs['Average TV'].vector,
+        saving_path=results_dirs['TV_norms'] / 'L1_norms_avg.png'
+    )
     
-    # weight_norm_analysis.plot_l2_weight_norms_compare(
-    #     state_dicts={
-    #         'Average TV': finetune_tvs['Average TV'].vector,
-    #         'Average TV Pruned 0.9': finetune_tvs['Average TV Pruned 0.9'].vector
-    #         },
-    #     saving_path=results_dir / 'L2_weight_norm_TV.png'
-    # )
+    weight_norm_analysis.plot_l2_weight_norms_from_state_dict(
+        state_dict=finetune_tvs['Average TV'].vector,
+        saving_path=results_dirs['TV_norms'] / 'L2_norms_avg.png'
+    )
     
     
 
@@ -430,7 +431,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         x_label='Classes',
         y_label='Classes',
         tick_label_font_size=6,
-        filepath=results_dir / 'transition_matrix.png',
+        filepath=results_dirs['Ts'] / 'transition_matrix.png',
         show=False
     )
     
@@ -451,7 +452,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         x_label='Classes',
         y_label='Classes',
         tick_label_font_size=6,
-        filepath=results_dir / 'pretrained_normalized_confusion_matrix.png',
+        filepath=results_dirs['cms'] / 'pretrained_normalized.png',
         show=False
     )
     
@@ -476,7 +477,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         x_label='Classes',
         y_label='Classes',
         tick_label_font_size=6,
-        filepath=results_dir / 'ft_noise_normalized_confusion_matrix.png',
+        filepath=results_dirs['cms'] / 'ft_noise_normalized.png',
         show=False
     )
     
@@ -500,7 +501,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         x_label='Classes',
         y_label='Classes',
         tick_label_font_size=6,
-        filepath=results_dir / 'negated_normalized_confusion_matrix.png',
+        filepath=results_dirs['cms'] / 'negated_normalized.png',
         show=False
     )
     

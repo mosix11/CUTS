@@ -495,6 +495,18 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     results_dir = results_dir / cfg_name
     results_dir.mkdir(exist_ok=True, parents=True)
     
+    results_dirs = {}
+    results_dirs['cms'] = results_dir / 'confusion_mats'
+    results_dirs['Ts'] = results_dir / 'transition_mats'
+    results_dirs['W_norms'] = results_dir / 'weight_norms'
+    results_dirs['TV_norms'] = results_dir / 'TV_norms'
+    results_dirs['metrics'] = results_dir / 'metrics'    
+    for dir in results_dirs.values():
+        dir.mkdir(exist_ok=True, parents=True)
+
+    
+    
+    
     base_expr_dir = outputs_dir / cfg_name
     gold_dir = base_expr_dir / 'gold'
     pretrain_dir = base_expr_dir / 'pretrain'
@@ -514,23 +526,14 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         finetune_weights[ft_expr] = torch.load(ft_dir / 'weights/model_weights.pth', map_location=cpu)
     
  
-    # weight_norm_analysis.plot_abs_weight_norms_from_state_dict(
-    #     state_dict=pretrain_weights,
-    #     include_bias_and_norm=False,
-    #     max_groups=40,
-    #     overall_bins=200,
-    #     layer_bins=200,
-    #     logy=False
-    # )
     
     weight_norm_analysis.plot_abs_weight_norms_compare(
         state_dicts={
             'Pretrain': pretrain_weights,
             'Gold': gold_weights,
-            # 'FT Gold': ft_gold_wieghts,
             'FT Noise': next(iter(finetune_weights.items()))[1]
             },
-        saving_path=results_dir / 'abs_weight_norm.png'
+        saving_path=results_dirs['W_norms'] / 'L1_pt_gold_ftnoise.png'
     )
     
     
@@ -540,7 +543,15 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             'FT Gold': ft_gold_wieghts,
             'FT Noise': next(iter(finetune_weights.items()))[1]
             },
-        saving_path=results_dir / 'abs_weight_norm_ft.png'
+        saving_path=results_dirs['W_norms'] / 'L1_pt_ftgold_ftnoise.png'
+    )
+    
+    weight_norm_analysis.plot_abs_weight_norms_compare(
+        state_dicts={
+            'FT Gold': ft_gold_wieghts,
+            'FT Noise': next(iter(finetune_weights.items()))[1]
+            },
+        saving_path=results_dirs['W_norms'] / 'L1_ftgold_ftnoise.png'
     )
     
     
@@ -607,7 +618,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             'Gold TV': finetune_tvs['Gold'].vector,
             # 'Average TV Pruned 0.8': finetune_tvs['Average TV Pruned 0.8'].vector
             },
-        saving_path=results_dir / 'abs_weight_norm_TV.png'
+        saving_path=results_dirs['TV_norms'] / 'L1_norms.png'
     )
     
     
@@ -617,13 +628,11 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             'Gold TV': finetune_tvs['Gold'].vector,
             # 'Average TV Pruned 0.8': finetune_tvs['Average TV Pruned 0.8'].vector
             },
-        saving_path=results_dir / 'L2_weight_norm_TV.png'
+        saving_path=results_dirs['TV_norms'] / 'L2_norms.png'
     )
     
     
-    
     base_model.load_state_dict(pretrain_weights)
-    
 
     cm_pt = get_confusion_matrix(
         base_model,
@@ -631,8 +640,6 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         dataset.get_heldout_dataloader(),
         gpu
     )
-    
-    
     
     T = estimate_T_from_confusion(cm_pt, alpha=0.01, lam=0.1)
     
@@ -647,7 +654,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         x_label='Classes',
         y_label='Classes',
         tick_label_font_size=6,
-        filepath=results_dir / 'transition_matrix.png',
+        filepath=results_dirs['Ts'] / 'transition_matrix.png',
         show=False
     )
     
@@ -668,7 +675,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         x_label='Classes',
         y_label='Classes',
         tick_label_font_size=6,
-        filepath=results_dir / 'pretrained_normalized_confusion_matrix.png',
+        filepath=results_dirs['cms'] / 'pretrained_normalized.png',
         show=False
     )
     
@@ -693,7 +700,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         x_label='Classes',
         y_label='Classes',
         tick_label_font_size=6,
-        filepath=results_dir / 'ft_noise_normalized_confusion_matrix.png',
+        filepath=results_dirs['cms'] / 'ft_noise_normalized.png',
         show=False
     )
     
@@ -716,11 +723,11 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         x_label='Classes',
         y_label='Classes',
         tick_label_font_size=6,
-        filepath=results_dir / 'negated_normalized_confusion_matrix.png',
+        filepath=results_dirs['cms'] / 'negated_normalized.png',
         show=False
     )
         
-    exit()
+
     # rank_dict = OrderedDict()
     # for tv_name, tv in finetune_tvs.items():
     #     rank_dict[tv_name] = tv.get_layer_rank()
@@ -808,6 +815,11 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # after_tv_metrics = eval_model_on_clean_noise_splits(base_model, cfg, dataset, gpu)
     # print('Performance after TV:', after_tv_metrics)
     
+    base_model.load_state_dict(next(iter(finetune_weights.items()))[1])
+    temp_res = eval_model_on_clean_noise_splits(base_model, cfg, dataset, gpu)
+    print(temp_res)
+    exit()
+    
     base_model.load_state_dict(pretrain_weights)
     pt_test_results, _, _ = evaluate_model(base_model, dataset.get_test_dataloader(), gpu)
     pt_train_results = eval_model_on_clean_noise_splits(base_model, cfg, dataset, gpu)
@@ -835,11 +847,9 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # print(results_dict)
         
         
-    with open(results_dir / 'metrics.json' , 'w') as json_file:
+    with open(results_dirs['metrics'] / 'metrics.json' , 'w') as json_file:
         json.dump(results_dict, json_file, indent=4)
-    # with open(results_dir / 'metrics.json', 'r') as json_file:
-    #     loaded_dict = json.load(json_file, object_pairs_hook=OrderedDict)
-    generate_latex_table_from_results(results_dict, results_dir / 'results_tex.txt')
+    generate_latex_table_from_results(results_dict, results_dirs['metrics'] / 'results_tex.txt')
     
     # otrh_tvs, shrd_tvs = TaskVector.decompose_task_vectors_SVD(ft_tvs_list)
     

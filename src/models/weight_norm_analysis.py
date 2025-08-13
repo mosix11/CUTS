@@ -209,10 +209,14 @@ def plot_abs_weight_norms_from_state_dict(
     if not elem_l1:
         print("No parameters selected.")
         return
+    
+    path_lw = saving_path.with_name(f"{saving_path.stem}_lw{saving_path.suffix}")
+    path_oa = saving_path.with_name(f"{saving_path.stem}_oa{saving_path.suffix}")
+    
     _plot_overall_density(np.concatenate(list(elem_l1.values())), bins=overall_bins, log=logy,
-                         title="Whole-model element-wise L1 norms (abs weights)")
+                         title="Whole-model element-wise L1 norms (abs weights)", saving_path=path_lw)
     _plot_layerwise_grouped_densities(elem_l1, max_groups=max_groups, bins=layer_bins, log=logy,
-                                     suptitle="Layer-wise element-wise L1 norms (grouped)")
+                                     suptitle="Layer-wise element-wise L1 norms (grouped)", saving_path=path_oa)
 
 def plot_l2_weight_norms_from_state_dict(
     state_dict: Dict[str, torch.Tensor],
@@ -230,10 +234,15 @@ def plot_l2_weight_norms_from_state_dict(
     if not unit_l2:
         print("No parameters selected.")
         return
+    
+    
+    path_lw = saving_path.with_name(f"{saving_path.stem}_lw{saving_path.suffix}")
+    path_oa = saving_path.with_name(f"{saving_path.stem}_oa{saving_path.suffix}")
+    
     _plot_overall_density(np.concatenate(list(unit_l2.values())), bins=overall_bins, log=logy,
-                         title="Whole-model per-unit L2 norms")
+                         title="Whole-model per-unit L2 norms", saving_path=path_lw)
     _plot_layerwise_grouped_densities(unit_l2, max_groups=max_groups, bins=layer_bins, log=logy,
-                                     suptitle="Layer-wise per-unit L2 norms (grouped)")
+                                     suptitle="Layer-wise per-unit L2 norms (grouped)", saving_path=path_oa)
 
 
 
