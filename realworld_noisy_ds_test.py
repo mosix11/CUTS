@@ -46,23 +46,21 @@ def eval_model_on_tvs(model, taskvectors, results_dict, cfg, dataset, num_classe
 
         results[tv_name]["-1.0"]['test_results'] = base_test_results
         
-        print(tv_name)
-        print(base_test_results)
         
-        base_model = copy.deepcopy(model)
+        # base_model = copy.deepcopy(model)
 
-        best_coef, best_results, best_cm = search_optimal_coefficient(
-            base_model=base_model,
-            task_vector=tv,
-            search_range=(-2.0, 0.0),
-            dataset=dataset,
-            num_classes=num_classes,
-            device=device
-        )
+        # best_coef, best_results, best_cm = search_optimal_coefficient(
+        #     base_model=base_model,
+        #     task_vector=tv,
+        #     search_range=(-2.0, 0.0),
+        #     dataset=dataset,
+        #     num_classes=num_classes,
+        #     device=device
+        # )
         
-        results[tv_name][best_coef] = OrderedDict()
-        results[tv_name][best_coef]['test_results'] = best_results
-        print(best_coef, best_results)
+        # results[tv_name][best_coef] = OrderedDict()
+        # results[tv_name][best_coef]['test_results'] = best_results
+
         
            
         
@@ -204,6 +202,12 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
                     )
                     T = estimate_T_from_confusion(cm, alpha=0.01)
                     noise_tv['T_mat'] = T
+                elif noise_tv['noise_type'] == 'asymmetric':
+                    finetune_only_noisy = strategy.get('finetune_only_noisy', False)
+                    if finetune_only_noisy:
+                        pass
+                    
+                    
                     
                 dataset.set_trainset(dataset.get_valset(), shuffle=True)
                 dataset.inject_noise(**noise_tv)
@@ -350,8 +354,8 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         finetune_tvs.popitem(last=False)
     else:
         finetune_tvs['Average TV'] = TaskVector.mean(finetune_tvs)
-    # finetune_tvs['Average TV Pruned 0.4'] = finetune_tvs['Average TV'].prune_small_weights(rate=0.4)
-    # finetune_tvs['Average TV Pruned 0.6'] = finetune_tvs['Average TV'].prune_small_weights(rate=0.6)
+    finetune_tvs['Average TV Pruned 0.4'] = finetune_tvs['Average TV'].prune_small_weights(rate=0.4)
+    finetune_tvs['Average TV Pruned 0.6'] = finetune_tvs['Average TV'].prune_small_weights(rate=0.6)
     finetune_tvs['Average TV Pruned 0.8'] = finetune_tvs['Average TV'].prune_small_weights(rate=0.8)
     finetune_tvs['Average TV Pruned 0.9'] = finetune_tvs['Average TV'].prune_small_weights(rate=0.9)
     finetune_tvs['Average TV Pruned 0.95'] = finetune_tvs['Average TV'].prune_small_weights(rate=0.95)
@@ -523,7 +527,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     print(results_dict)
         
         
-    with open(results_dir / 'metrics.json' , 'w') as json_file:
+    with open(results_dirs['metrics'] / 'metrics.json' , 'w') as json_file:
         json.dump(results_dict, json_file, indent=4)
 
     # generate_latex_table_from_results(results_dict, results_dir / 'results_tex.txt')

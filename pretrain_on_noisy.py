@@ -436,6 +436,21 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
                 dataset.set_trainset(dataset.get_heldoutset(), shuffle=True)
                 dataset.inject_noise(**noise_tv)
                 
+                if noise_tv['noise_type'] == 'asymmetric':
+                    finetune_only_noisy = strategy.get('finetune_only_noisy', False)
+                    if finetune_only_noisy:
+                        trainset = dataset.get_trainset()
+                        noisy_indices = []
+                        for item in trainset:
+                            if len(item) == 4:
+                                _, _, idx, is_noisy = item
+                                if is_noisy:
+                                    noisy_indices.append(idx)
+                            else:
+                                raise RuntimeError('The chosen dataset is not noisy!')
+                        only_noisy_trainset = Subset(trainset, noisy_indices)
+                        dataset.set_trainset(only_noisy_trainset, shuffle=True)
+                
                     
             elif strategy['finetuning_set'] == 'LowLoss':
                 low_loss_idxs_path = outputs_dir/ Path(f"{cfg_name}/pretrain") / f'log/low_loss_indices_{strategy['percentage']:.2f}.pkl'
