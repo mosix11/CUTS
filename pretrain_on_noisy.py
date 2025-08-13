@@ -830,10 +830,10 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # after_tv_metrics = eval_model_on_clean_noise_splits(base_model, cfg, dataset, gpu)
     # print('Performance after TV:', after_tv_metrics)
     
-    base_model.load_state_dict(next(iter(finetune_weights.items()))[1])
-    temp_res = eval_model_on_clean_noise_splits(base_model, cfg, dataset, gpu)
-    print(temp_res)
-    exit()
+    # base_model.load_state_dict(next(iter(finetune_weights.items()))[1])
+    # temp_res = eval_model_on_clean_noise_splits(base_model, cfg, dataset, gpu)
+    # print(temp_res)
+    # exit()
     
     base_model.load_state_dict(pretrain_weights)
     pt_test_results, _, _ = evaluate_model(base_model, dataset.get_test_dataloader(), gpu)
