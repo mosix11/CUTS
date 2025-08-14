@@ -30,7 +30,7 @@ class TorchvisionModels(BaseClassificationModel):
         # TODO check for img_size and grayscalse and modify models
         if model_type == 'resnet18':
             net = torchvision.models.resnet18(weights=pt_weights, num_classes=num_classes)
-                
+            
         if model_type == 'resnet18_nonorm':
             net = torchvision.models.resnet18(norm_layer=nn.Identity, weights=pt_weights, num_classes=num_classes)
             net.conv1 = nn.Conv2d(1 if grayscale else 3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
