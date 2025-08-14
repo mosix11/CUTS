@@ -57,7 +57,7 @@ dataset:
   normalize_imgs: True
   flatten: True
   valset_ratio: 0.0
-  num_workers: 8
+  num_workers: 4
   seed: *dataset_seed
 
 
