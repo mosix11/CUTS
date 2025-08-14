@@ -421,7 +421,7 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             plots_dir = experiment_dir / Path("plots")
             plots_dir.mkdir(exist_ok=True, parents=True)
             
-            if strategy['finetuning_set'] == 'Heldout':
+            if strategy['finetuning_set'] == 'Heldout' or strategy['finetuning_set'] == 'Heldout+Train':
                 if noise_tv['noise_type'] == 'T_matrix':
                     cm = get_confusion_matrix(
                         model,
@@ -451,7 +451,15 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
                         only_noisy_trainset = Subset(trainset, noisy_indices)
                         dataset.set_trainset(only_noisy_trainset, shuffle=True)
                         
-                
+                if strategy['finetuning_set'] == 'Heldout+Train':
+                    orig_trainset = base_dataset.get_trainset()
+                    print("Original Train Set Len :", len(orig_trainset))
+                    heldout_trainset = dataset.get_trainset()
+                    print("Heldout Train Set Len :", len(heldout_trainset))
+                    merged_traineset = ConcatDataset([orig_trainset, heldout_trainset])
+                    print("Merged Train Set Len :", len(merged_traineset))
+                    dataset.set_trainset(merged_traineset, shuffle=True)
+            
                     
             elif strategy['finetuning_set'] == 'LowLoss':
                 low_loss_idxs_path = outputs_dir/ Path(f"{cfg_name}/pretrain") / f'log/low_loss_indices_{strategy['percentage']:.2f}.pkl'
@@ -568,6 +576,25 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             'FT Noise': next(iter(finetune_weights.items()))[1]
             },
         saving_path=results_dirs['W_norms'] / 'L1_ftgold_ftnoise.png'
+    )
+    
+    weight_norm_analysis.plot_abs_weight_norms_compare(
+        state_dicts={
+            'Gold': gold_weights,
+            'Pretrain': pretrain_weights,
+            'FT Gold': ft_gold_wieghts,
+            },
+        saving_path=results_dirs['W_norms'] / 'L1_pt_gold_ftgold.png'
+    )
+    
+    weight_norm_analysis.plot_abs_weight_norms_compare(
+        state_dicts={
+            'Pretrain': pretrain_weights,
+            'FT Gold': ft_gold_wieghts,
+            'FT Noise': next(iter(finetune_weights.items()))[1],
+            'FT GT Noise': ft_gt_noise_weights
+            },
+        saving_path=results_dirs['W_norms'] / 'L1_pt_ftgold_ftnoise_gtnoise.png'
     )
     
     
