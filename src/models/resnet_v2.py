@@ -116,6 +116,7 @@ class PreActResNet(BaseClassificationModel):
         num_classes=10,
         input_image_size=(32, 32),
         grayscale:bool=False,
+        norm_layer='bn',
         weight_init=None,
         loss_fn=nn.CrossEntropyLoss(),
         metrics:dict=None,
@@ -230,9 +231,9 @@ class PreActResNet(BaseClassificationModel):
 
 
 def PreActResNet9(
-    init_channels=64, num_classes=10, img_size=(32, 32), grayscale:bool=False, weight_init=None, loss_fn=nn.CrossEntropyLoss(), metrics=None
+    init_channels=64, num_classes=10, img_size=(32, 32), norm_layer='bn', grayscale:bool=False, weight_init=None, loss_fn=nn.CrossEntropyLoss(), metrics=None
 ) -> PreActResNet:
-    return PreActResNet(
+    net = PreActResNet(
         block=PreActBasicBlock,
         num_blocks=[1, 1, 1, 1],
         init_channels=init_channels,
@@ -243,12 +244,15 @@ def PreActResNet9(
         loss_fn=loss_fn,
         metrics=metrics
     )
+    if norm_layer == 'identity':
+        _replace_bn_with_identity(net)
+    return net
 
 
 def PreActResNet18(
-    init_channels=64, num_classes=10, img_size=(32, 32), grayscale:bool=False, weight_init=None, loss_fn=nn.CrossEntropyLoss(), metrics=None
+    init_channels=64, num_classes=10, img_size=(32, 32), norm_layer='bn', grayscale:bool=False, weight_init=None, loss_fn=nn.CrossEntropyLoss(), metrics=None
 ) -> PreActResNet:
-    return PreActResNet(
+    net = PreActResNet(
         block=PreActBasicBlock,
         num_blocks=[2, 2, 2, 2],
         init_channels=init_channels,
@@ -259,11 +263,14 @@ def PreActResNet18(
         loss_fn=loss_fn,
         metrics=metrics
     )
+    if norm_layer == 'identity':
+        _replace_bn_with_identity(net)
+    return net
     
 def PreActResNet34(
-    init_channels=64, num_classes=10, img_size=(32, 32), grayscale:bool=False, weight_init=None, loss_fn=nn.CrossEntropyLoss(), metrics=None
+    init_channels=64, num_classes=10, img_size=(32, 32), norm_layer='bn', grayscale:bool=False, weight_init=None, loss_fn=nn.CrossEntropyLoss(), metrics=None
 ) -> PreActResNet:
-    return PreActResNet(
+    net = PreActResNet(
         block=PreActBasicBlock,
         num_blocks=[3, 4, 6, 3],
         init_channels=init_channels,
@@ -274,11 +281,14 @@ def PreActResNet34(
         loss_fn=loss_fn,
         metrics=metrics
     )
+    if norm_layer == 'identity':
+        _replace_bn_with_identity(net)
+    return net
     
 def PreActResNet50(
-    init_channels=64, num_classes=10, img_size=(32, 32), grayscale:bool=False, weight_init=None, loss_fn=nn.CrossEntropyLoss(), metrics=None
+    init_channels=64, num_classes=10, img_size=(32, 32), norm_layer='bn', grayscale:bool=False, weight_init=None, loss_fn=nn.CrossEntropyLoss(), metrics=None
 ) -> PreActResNet:
-    return PreActResNet(
+    net = PreActResNet(
         block=PreActBottleneck,
         num_blocks=[3, 4, 6, 3],
         init_channels=init_channels,
@@ -289,11 +299,14 @@ def PreActResNet50(
         loss_fn=loss_fn,
         metrics=metrics
     )
+    if norm_layer == 'identity':
+        _replace_bn_with_identity(net)
+    return net
     
 def PreActResNet101(
-    init_channels=64, num_classes=10, img_size=(32, 32), grayscale:bool=False, weight_init=None, loss_fn=nn.CrossEntropyLoss(), metrics=None
+    init_channels=64, num_classes=10, img_size=(32, 32), norm_layer='bn', grayscale:bool=False, weight_init=None, loss_fn=nn.CrossEntropyLoss(), metrics=None
 ) -> PreActResNet:
-    return PreActResNet(
+    net = PreActResNet(
         block=PreActBottleneck,
         num_blocks=[3, 4, 23, 3],
         init_channels=init_channels,
@@ -304,11 +317,14 @@ def PreActResNet101(
         loss_fn=loss_fn,
         metrics=metrics
     )
+    if norm_layer == 'identity':
+        _replace_bn_with_identity(net)
+    return net
     
 def PreActResNet152(
-    init_channels=64, num_classes=10, img_size=(32, 32), grayscale:bool=False, weight_init=None, loss_fn=nn.CrossEntropyLoss(), metrics=None
+    init_channels=64, num_classes=10, img_size=(32, 32), norm_layer='bn', grayscale:bool=False, weight_init=None, loss_fn=nn.CrossEntropyLoss(), metrics=None
 ) -> PreActResNet:
-    return PreActResNet(
+    net = PreActResNet(
         block=PreActBottleneck,
         num_blocks=[3, 8, 36, 3],
         init_channels=init_channels,
@@ -319,3 +335,16 @@ def PreActResNet152(
         loss_fn=loss_fn,
         metrics=metrics
     )
+    if norm_layer == 'identity':
+        _replace_bn_with_identity(net)
+        
+    return net
+
+
+def _replace_bn_with_identity(module):
+        """Recursively replace all BatchNorm layers with Identity."""
+        for name, child in module.named_children():
+            if isinstance(child, (nn.BatchNorm2d, nn.BatchNorm1d)):
+                setattr(module, name, nn.Identity())
+            else:
+                _replace_bn_with_identity(child)

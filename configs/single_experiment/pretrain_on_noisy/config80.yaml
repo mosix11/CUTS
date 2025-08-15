@@ -1,4 +1,4 @@
-# fc1 mnist small network width
+# Config 18 but fine tune noise vectors on HeldOut
 training_seed: &training_seed 11
 dataset_seed: &dataset_seed 11
 
@@ -12,34 +12,36 @@ strategy:
       noise_type: 'symmetric'
       seed: 8
     finetuning:
-    - set: 'Train'
-      noise_rate: 1.0
-      noise_type: 'symmetric'
-      seed: 12
-    - set: 'Train'
-      noise_rate: 1.0
-      noise_type: 'symmetric'
-      seed: 10
-    - set: 'Train'
-      noise_rate: 1.0
-      noise_type: 'symmetric'
-      seed: 15
-    - set: 'Train'
-      noise_rate: 1.0
-      noise_type: 'symmetric'
-      seed: 20
-    - set: 'Train'
-      noise_rate: 1.0
-      noise_type: 'symmetric'
-      seed: 30
-
-
+      - set: 'Train'
+        noise_rate: 0.0
+        noise_type: 'symmetric'
+        seed: 12
+      - set: 'Train'
+        noise_rate: 1.0
+        noise_type: 'symmetric'
+        seed: 12
+      - set: 'Train'
+        noise_rate: 1.0
+        noise_type: 'symmetric'
+        seed: 10
+      - set: 'Train'
+        noise_rate: 1.0
+        noise_type: 'symmetric'
+        seed: 15
+      - set: 'Train'
+        noise_rate: 1.0
+        noise_type: 'symmetric'
+        seed: 20
+      - set: 'Train'
+        noise_rate: 1.0
+        noise_type: 'symmetric'
+        seed: 30
 
 dataset:
-  name: "mnist"
+  name: "cifar10"
   num_classes: &num_classes 10
-  img_size: [28, 28]
-  batch_size: 1024
+  img_size: [32, 32]
+  batch_size: 512
   subsample_size: [-1, -1]
   class_subset: []
   remap_labels: False
@@ -54,27 +56,29 @@ dataset:
     7: 0.1
     8: 0.1
     9: 0.1
+  grayscale: False
   normalize_imgs: True
-  flatten: True
+  flatten: False
   valset_ratio: 0.0
-  num_workers: 4
+  num_workers: 8
   seed: *dataset_seed
 
 
 model:
-  type: 'fc1'
-  input_dim: 784
-  hidden_dim: 4096
-  output_dim: *num_classes
+  type: 'resnet18v2'
+  init_channels: 64
+  num_classes: *num_classes
+  img_size: [32, 32]
+  norm_layer: 'identity'
+  grayscale: False
   loss_fn: 'CE'
   metrics: ['ACC', 'F1']
 
 
 
-
 trainer:
   pretraining:
-    max_epochs: &max_epochs 200
+    max_epochs: &max_epochs 500
     optimizer_cfg: 
       type: "adamw"
       lr: 5.0e-4
@@ -94,15 +98,15 @@ trainer:
     seed: *training_seed
 
   finetuning:
-    max_epochs: 300
+    max_epochs: 500
     optimizer_cfg: 
       type: "adamw"
-      lr: 1.0e-4
+      lr: 1.0e-4 
       betas: [0.9, 0.999]
     lr_schedule_cfg:
       type: 'step'
-      milestones: [50, 100, 150, 200, 250]
-      gamma: 0.8
+      milestones: [100, 150, 200, 250, 300, 350, 400, 450]
+      gamma: 0.7
     early_stopping: False
     validation_freq: -1
     save_best_model: False
