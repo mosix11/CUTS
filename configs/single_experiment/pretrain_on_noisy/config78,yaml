@@ -65,7 +65,7 @@ dataset:
 
 
 model:
-  type: 'torchvision_resnet18_nonorm'
+  type: 'torchvision_resnet50_nonorm'
   num_classes: *num_classes
   img_size: [32, 32]
   grayscale: False
