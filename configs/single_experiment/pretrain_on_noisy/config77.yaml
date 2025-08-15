@@ -61,14 +61,13 @@ dataset:
 
 
 model:
-  type: 'torchvision_resnet18_nonorm'
+  type: 'torchvision_resnet101_nonorm'
   pt_weights: 'IMAGENET1K_V2'
   num_classes: *num_classes
   img_size: [32, 32]
   grayscale: False
   loss_fn: 'CE'
   metrics: ['ACC', 'F1']
-
 
 
 

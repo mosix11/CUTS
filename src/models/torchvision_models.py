@@ -29,13 +29,23 @@ class TorchvisionModels(BaseClassificationModel):
         
         # TODO check for img_size and grayscalse and modify models
         if model_type == 'resnet18':
-            net = torchvision.models.resnet18(weights=pt_weights, num_classes=num_classes)
+            net = torchvision.models.resnet50(weights=pt_weights)
+            net.fc = nn.Linear(net.fc.in_features, num_classes)
+            
             if img_size == [32, 32]:
                 net.conv1 = nn.Conv2d(1 if grayscale else 3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
                 net.maxpool = nn.Identity()
             
+            
         if model_type == 'resnet18_nonorm':
-            net = torchvision.models.resnet18(norm_layer=nn.Identity, weights=pt_weights, num_classes=num_classes)
+            if pt_weights:
+                net = torchvision.models.resnet18(weights=pt_weights)
+                self._replace_bn_with_identity(net)
+            else:
+                net = torchvision.models.resnet18(norm_layer=nn.Identity)
+                
+            net.fc = nn.Linear(net.fc.in_features, num_classes)
+            
             if img_size == [32, 32]:
                 net.conv1 = nn.Conv2d(1 if grayscale else 3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
                 net.maxpool = nn.Identity()
@@ -62,7 +72,27 @@ class TorchvisionModels(BaseClassificationModel):
                 net.conv1 = nn.Conv2d(1 if grayscale else 3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
                 net.maxpool = nn.Identity()
                 
+        elif model_type == 'resnet101':
+            net = torchvision.models.resnet101(weights=pt_weights)
+            net.fc = nn.Linear(net.fc.in_features, num_classes)
             
+            if img_size == [32, 32]:
+                net.conv1 = nn.Conv2d(1 if grayscale else 3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+                net.maxpool = nn.Identity()
+            
+            
+        elif model_type == 'resnet101_nonorm':
+            if pt_weights:
+                net = torchvision.models.resnet101(weights=pt_weights)
+                self._replace_bn_with_identity(net)
+            else:
+                net = torchvision.models.resnet101(norm_layer=nn.Identity)
+                
+            net.fc = nn.Linear(net.fc.in_features, num_classes)
+            
+            if img_size == [32, 32]:
+                net.conv1 = nn.Conv2d(1 if grayscale else 3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+                net.maxpool = nn.Identity()
             
         elif model_type == 'vit_b_16':
             net = torchvision.models.vit_b_16(weights=pt_weights)
