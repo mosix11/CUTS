@@ -26,137 +26,8 @@ from tqdm import tqdm
 from collections import OrderedDict
 import re
 
-from helper_funcs import evaluate_model, eval_model_on_clean_noise_splits, search_optimal_coefficient, analyze_IC, get_confusion_matrix, estimate_T_from_confusion, symmetric_noise_detected, row_normalize
+from helper_funcs import evaluate_model, eval_model_on_clean_noise_splits, search_optimal_coefficient, get_confusion_matrix, row_normalize
 
-    
-def generate_latex_table_from_results(results_dict, output_path):
-    def format_acc(val):
-        return f"{val * 100:.1f}"
-
-    # def format_loss(val):
-    #     return f"{val:.3f}"
-
-    def latex_delta(current, baseline, positive_good=True):
-        delta = (current - baseline) * 100
-        if abs(delta) < 1e-2:
-            return ""
-        color = "green" if (delta > 0 and positive_good) or (delta < 0 and not positive_good) else "red"
-        sign = "+" if delta > 0 else "-"
-        return f" \\textcolor{{{color}}}{{({sign}{abs(delta):.1f})}}"
-
-
-    # Begin LaTeX table
-    lines = [
-        r"\begin{table}[ht]",
-        r"\centering",
-        r"\scriptsize",
-        r"\renewcommand{\arraystretch}{1.5}",
-        r"\begin{tabular}{lcccccccc}",
-        r"\toprule",
-        r"& \multicolumn{2}{c}{Utility \%} & \multicolumn{2}{c}{Forgetting Rate \%} & \multicolumn{2}{c}{Healing Rate \%} & \multicolumn{2}{c}{Performance on $\mathcal{D}_{clean}$ \%} \\",
-        r"\cmidrule(lr){2-3} \cmidrule(lr){4-5} \cmidrule(lr){6-7} \cmidrule(lr){8-9}",
-        r"Model & $\alpha=-1.0$ & Opt & $\alpha=-1.0$ & Opt & $\alpha=-1.0$ & Opt & $\alpha=-1.0$ & Opt \\",
-        r"\midrule"
-    ]
-    
-    # Baselines from "pretrain"
-    pretrain = results_dict.pop("Pretrain")
-    base_utility_acc = pretrain["test_results"]["ACC"]
-    base_forgetting_acc = pretrain["train_results"]["noisy_set"]["ACC"]
-    base_healing_acc = pretrain["train_results"]["healing_noise"]["ACC"]
-    base_clean_acc = pretrain["train_results"]["clean_set"]["ACC"]
-    
-    pretrain_name = r"$\mathcal{M}_{pt}$"
-    lines.append(
-            f"{pretrain_name} & {format_acc(base_utility_acc)} & - & "
-            f"{format_acc(base_forgetting_acc)} & - & "
-            f"{format_acc(base_healing_acc)} & - & "
-            f"{format_acc(base_clean_acc)} & - \\\\"
-        )
-    
-    
-    gold = results_dict.pop("Gold")
-    gold_utility_acc = gold["test_results"]["ACC"]
-    gold_forgetting_acc = gold["train_results"]["noisy_set"]["ACC"]
-    gold_healing_acc = gold["train_results"]["healing_noise"]["ACC"]
-    gold_clean_acc = gold["train_results"]["clean_set"]["ACC"]
-    
-    clean_gold_name = r"$\mathcal{M}_{clean}$"
-    lines.append(
-            f"{clean_gold_name} & {format_acc(gold_utility_acc)} & - & "
-            f"{format_acc(gold_forgetting_acc)} & - & "
-            f"{format_acc(gold_healing_acc)} & - & "
-            f"{format_acc(gold_clean_acc)} & - \\\\"
-        )
-
-    for name, data in results_dict.items():
-        if name == 'Finetune Gold' or name == 'Ground Truth Noise':
-            continue
-        
-        raw_test_acc = data["-1.0"]["test_results"]["ACC"]
-        opt_test_acc = list(data.values())[1]["test_results"]["ACC"]
-
-        raw_noisy_acc = data["-1.0"]["train_results"]["noisy_set"]["ACC"]
-        opt_noisy_acc = list(data.values())[1]["train_results"]["noisy_set"]["ACC"]
-
-        raw_healing_acc = data["-1.0"]["train_results"]["healing_noise"]["ACC"]
-        opt_healing_acc = list(data.values())[1]["train_results"]["healing_noise"]["ACC"]
-
-        raw_clean_acc = data["-1.0"]["train_results"]["clean_set"]["ACC"]
-        opt_clean_acc = list(data.values())[1]["train_results"]["clean_set"]["ACC"]
-
-        # Format values
-        raw_acc_util_str = format_acc(raw_test_acc) + latex_delta(raw_test_acc, base_utility_acc, positive_good=True)
-        opt_acc_util_str = format_acc(opt_test_acc) + latex_delta(opt_test_acc, base_utility_acc, positive_good=True)
-        
-        raw_acc_forgot_str = format_acc(raw_noisy_acc) + latex_delta(raw_noisy_acc, base_forgetting_acc, positive_good=False)
-        opt_acc_forgot_str = format_acc(opt_noisy_acc) + latex_delta(opt_noisy_acc, base_forgetting_acc, positive_good=False)
-        
-        raw_acc_heal_str = format_acc(raw_healing_acc) + latex_delta(raw_healing_acc, base_healing_acc, positive_good=True)
-        opt_acc_heal_str = format_acc(opt_healing_acc) + latex_delta(opt_healing_acc, base_healing_acc, positive_good=True)
-        
-        raw_acc_clean_str = format_acc(raw_clean_acc) + latex_delta(raw_clean_acc, base_clean_acc, positive_good=True)
-        opt_acc_clean_str = format_acc(opt_clean_acc) + latex_delta(opt_clean_acc, base_clean_acc, positive_good=True)
-
-
-        # Escape underscores in names
-        single_noise_match = re.match(r'^\d+% Noise, (\d+) Seed$', name)
-        pruned_avg_match = re.match(r'^Average TV Pruned ([0-9]*\.?[0-9]+)$', name)
-        if single_noise_match:
-            seed = int(single_noise_match.group(1))
-            table_name = r"$\vec{T}^s_{" + str(seed) + r"}$"
-        elif pruned_avg_match:
-            prune_rate = float(pruned_avg_match.group(1))
-            table_name = r"$\vec{T}^p_{" + str(prune_rate) + r"}$"
-        elif name == 'Average TV':
-            table_name = r"$\vec{T}_{avg}$"
-        elif name == 'Random Vector':
-            table_name = r"$\vec{T}_{rnd}$"
-        else:
-            raise ValueError('Vector name is not recognized', name)
-
-        # Add row
-        lines.append(
-            f"{table_name} & {raw_acc_util_str} & {opt_acc_util_str} & "
-            f"{raw_acc_forgot_str} & {opt_acc_forgot_str} & "
-            f"{raw_acc_heal_str} & {opt_acc_heal_str} & "
-            f"{raw_acc_clean_str} & {opt_acc_clean_str} \\\\"
-        )
-
-    lines += [
-        r"\bottomrule",
-        r"\end{tabular}",
-        r"\caption{Performance metrics from different model states. Accuracy values are shown as percentages. Differences from the baseline (\texttt{pretrain}) are marked in \textcolor{green}{green} for improvements and \textcolor{red}{red} for regressions.}",
-        r"\label{tab:noise_unlearning_results}",
-        r"\end{table}"
-    ]
-
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    with open(output_path, "w") as f:
-        f.write("\n".join(lines))
-
-    print(f"LaTeX table successfully written to {output_path}")
-    
 def eval_model_on_tvs(model, taskvectors, results_dict, cfg, dataset, num_classes, device):
     
     results = results_dict
@@ -193,9 +64,55 @@ def eval_model_on_tvs(model, taskvectors, results_dict, cfg, dataset, num_classe
         results[tv_name][best_coef]['train_results'] = after_tv_metrics
         
         
-    return results
+    return results    
 
-def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
+
+def linear_probe_heads(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
+    cfg['trainer']['linear_probing']['comet_api_key'] = os.getenv("COMET_API_KEY")
+    # cfg['trainer']['finetuning']['comet_api_key'] = os.getenv("COMET_API_KEY")
+
+    
+    model = model_factory.create_model(cfg['model'])
+    model.freeze_encoder()
+    
+    for head_cfg, dataset_cfg in zip(cfg['model']['heads_cfg'], cfg['datasets']):
+        
+        dataset_cfg['train_transforms'] = model.get_train_transforms()
+        dataset_cfg['val_transforms'] = model.get_val_transforms()
+        dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
+        
+        experiment_name = f"{cfg_name}/{dataset_cfg['name']}/head_probe"
+        experiment_dir = outputs_dir / f"{cfg_name}/{dataset_cfg['name']}"
+        
+        weights_dir = experiment_dir / Path("weights")
+        weights_dir.mkdir(exist_ok=True, parents=True)
+        
+        plots_dir = experiment_dir / Path("plots")
+        plots_dir.mkdir(exist_ok=True, parents=True)
+        
+        if weights_dir.joinpath("head_weights.pth").exists():
+            continue
+        
+        trainer = StandardTrainer(
+            outputs_dir=outputs_dir,
+            **cfg['trainer']['linear_probing'],
+            exp_name=experiment_name,
+            exp_tags=None,
+        )
+        
+        results = trainer.fit(model, dataset, resume=False)
+        torch.save(model.get_head_weights(head_name=head_cfg['head_name']), weights_dir / Path("head_weights.pth"))
+        # class_names = [f"Class {i}" for i in range(num_classes)]
+        # confmat = trainer.confmat("Test")
+        # misc_utils.plot_confusion_matrix(
+        #     cm=confmat,
+        #     class_names=class_names,
+        #     filepath=str(plots_dir / Path("confmat.png")),
+        #     show=False,
+        # )
+    
+
+def finetune_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     cfg['trainer']['pretraining']['comet_api_key'] = os.getenv("COMET_API_KEY")
     cfg['trainer']['finetuning']['comet_api_key'] = os.getenv("COMET_API_KEY")
 
@@ -429,8 +346,8 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
                         dataset.get_heldout_dataloader(),
                         trainer_utils.get_gpu_device()
                     )
-                    T = estimate_T_from_confusion(cm, alpha=0.01)
-                    noise_tv['T_mat'] = T
+                    # T = estimate_T_from_confusion(cm, alpha=0.01)
+                    # noise_tv['T_mat'] = T
                 
                 
                 dataset.set_trainset(dataset.get_heldoutset(), shuffle=True)
@@ -684,7 +601,8 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         gpu
     )
     
-    T = estimate_T_from_confusion(cm_pt, alpha=0.01, lam=0.1)
+    # T = estimate_T_from_confusion(cm_pt, alpha=0.01, lam=0.1)
+    T= None
     
     misc_utils.plot_confusion_matrix(
         title='Noise Transition Matrix',
@@ -701,9 +619,6 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         show=False
     )
     
-    is_sym, kl = symmetric_noise_detected(T, kl_thresh=0.03)
-    if is_sym:
-        print("Pattern is near-symmetric; using uniform off-diagonal.")
     
     
     
@@ -892,9 +807,14 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         
     with open(results_dirs['metrics'] / 'metrics.json' , 'w') as json_file:
         json.dump(results_dict, json_file, indent=4)
-    generate_latex_table_from_results(results_dict, results_dirs['metrics'] / 'results_tex.txt')
+
     
 
+
+
+
+    
+    
 
 
 if __name__ == "__main__":
@@ -906,10 +826,18 @@ if __name__ == "__main__":
         help="Configuration to used for model.",
         type=str,
     )
+    
     parser.add_argument(
-        "-r",
-        "--resume",
-        help="Resume training from the last checkpoint.",
+        "-l",
+        "--linprobe",
+        help="Train heads by linear probing.",
+        action="store_true",
+    )
+    
+    parser.add_argument(
+        "-f",
+        "--finetune",
+        help="Finetune the image encoder with forzen heads.",
         action="store_true",
     )
     
@@ -934,7 +862,9 @@ if __name__ == "__main__":
     results_dir = Path("results/single_experiment/closed_vocab_TA").absolute()
     results_dir.mkdir(exist_ok=True, parents=True)
 
+    if args.linprobe:
+        linear_probe_heads(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)
     if args.tv:
         apply_tv(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)
-    else:
-        pt_ft_model(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)
+    # else:
+    #     finetune_model(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)

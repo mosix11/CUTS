@@ -319,10 +319,6 @@ class BaseClassificationTrainer(ABC):
             self.best_model_perf = checkpoint['best_prf']
             
             
-                 
-
-            
-            
     def fit(self, model, dataset, resume=False):
         """
         This is the main "template method". It orchestrates the training process.
@@ -374,17 +370,12 @@ class BaseClassificationTrainer(ABC):
                 epoch_train_stats=statistics,
                 epoch_train_loss=statistics.get('Train/Loss') if isinstance(statistics, dict) else None
             )
-                        
-            
-            if self.log_comet:
-                comet_step = (self.global_step if self.iteration_mode else self.epoch)
-                self.comet_experiment.log_metrics(statistics, step=comet_step)
                 
            
             if self.iteration_mode and self.global_step >= self.max_iterations:
                 break
 
-
+        print('Training is finished!')
         # Final evaluation, saving, etc.
         final_results = {}
         final_results.update(self.evaluate(set='Train'))
@@ -406,46 +397,19 @@ class BaseClassificationTrainer(ABC):
             self.comet_experiment.log_parameters(results, nested_support=True)
             self.comet_experiment.end()
         
-        final_ckp_path = self.checkpoint_dir / Path('final_ckp.pth')
-        self.save_full_checkpoint(final_ckp_path)
+        # final_ckp_path = self.checkpoint_dir / Path('final_ckp.pth')
+        # self.save_full_checkpoint(final_ckp_path)
         results_path = self.log_dir / Path('results.json')
         
         with open(results_path, 'w') as json_file:
             json.dump(results, json_file, indent=4)
         
         return results
-            
-            
-            
-            
-    
-        
-    def evaluate(self, set: str = 'Val') -> dict:
-        """
-        Public-facing evaluation method.
-        """
-        self.model.eval()
-        self.model.reset_metrics()
-        
-        if set == 'Train':
-            dataloader = self.train_dataloader
-        elif set == 'Val':
-            dataloader = self.val_dataloader
-        elif set == 'Test':
-            dataloader = self.test_dataloader
-        else:
-            raise ValueError("Invalid set specified. Choose 'Train', 'Val', or 'Test'.")
-        
-        metrics = self._evaluate_set(dataloader)
-        
-        # Add the set name prefix to the metrics
-        return {f"{set}/{k}": v for k, v in metrics.items()}    
-    
+                   
     
     def after_optimizer_step(
         self,
         *,
-        step_loss: float | None = None,
         train_snapshot: dict | None = None
     ) -> None:
         """
@@ -462,7 +426,7 @@ class BaseClassificationTrainer(ABC):
         if self.lr_scheduler and self.lr_sch_step_on_batch:
             if isinstance(self.lr_scheduler, ReduceLROnPlateau):
                 # If user chose per-step plateau (unusual), feed the current step loss
-                metric = float(step_loss) if step_loss is not None else None
+                metric = float(train_snapshot['Train/Loss'])
                 if metric is not None:
                     self.lr_scheduler.step(metric)
             else:
@@ -478,8 +442,16 @@ class BaseClassificationTrainer(ABC):
             # Checkpoint on step frequency
             if self._should_checkpoint_now():
                 self.save_full_checkpoint(self.checkpoint_dir / 'resume_ckp.pth')
+
+        if self.log_comet and self.iteration_mode:
+            self.comet_experiment.log_metrics(train_snapshot, step=self.global_step)
     
-    def after_epoch_end(self, *, epoch_train_stats: dict | None = None, epoch_train_loss: float | None = None) -> None:
+    def after_epoch_end(
+        self,
+        *,
+        epoch_train_stats: dict | None = None,
+        epoch_train_loss: float | None = None
+    ) -> None:
         """
         Call this exactly once at the end of an epoch (base.fit does this).
         Handles:
@@ -509,6 +481,34 @@ class BaseClassificationTrainer(ABC):
                         self.lr_scheduler.step(metric)
                 else:
                     self.lr_scheduler.step()
+                    
+        if self.log_comet:
+            self.comet_experiment.log_metrics(epoch_train_stats, epoch=self.epoch)
+    
+    def evaluate(self, set: str = 'Val') -> dict:
+        """
+        Public-facing evaluation method.
+        """
+        self.model.eval()
+        self.model.reset_metrics()
+        
+        if set == 'Train':
+            dataloader = self.train_dataloader
+        elif set == 'Val':
+            dataloader = self.val_dataloader
+        elif set == 'Test':
+            dataloader = self.test_dataloader
+        else:
+            raise ValueError("Invalid set specified. Choose 'Train', 'Val', or 'Test'.")
+        
+        if dataloader == None or len(dataloader) == 0:
+            raise ValueError(f'The {set} set chosen for validation steps is empty.')
+        
+        metrics = self._evaluate_set(dataloader)
+        
+        # Add the set name prefix to the metrics
+        return {f"{set}/{k}": v for k, v in metrics.items()}    
+    
     
     
     def _compute_total_steps(self) -> int:

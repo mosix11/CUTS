@@ -68,17 +68,16 @@ class StandardTrainer(BaseClassificationTrainer):
             
             # Tell the base: a gradient step happened (centralized per-step logic)
             self.after_optimizer_step(
-                step_loss=loss.detach().cpu().item(),
                 train_snapshot={
-                    'Train/Loss': epoch_train_loss.avg if epoch_train_loss.count > 0 else float(loss.detach().cpu().item()),
+                    'Train/Loss':float(loss.detach().cpu().item()),
                     'Train/LR': self.optim.param_groups[0]['lr'],
                 }
             )
             
             if self.iteration_mode and isinstance(inner_iter, tqdm):
-                inner_iter.set_postfix_str(f"step={self.global_step}, loss={epoch_train_loss.avg:.4f}")
+                inner_iter.set_postfix_str(f"step={self.global_step}, loss={loss.detach().cpu().item():.4f}")
 
-
+            
             if self.iteration_mode and self.global_step >= self.max_iterations:
                 break
             

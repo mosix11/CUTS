@@ -228,7 +228,7 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         ]
     
     
-    base_dataset, num_classes = dataset_factory.create_dataset(cfg, augmentations)
+    base_dataset, num_classes = dataset_factory.create_dataset(cfg['dataset'], augmentations)
     base_model = model_factory.create_model(cfg['model'], num_classes)
     strategy = cfg['strategy']
     base_dataset.inject_noise(**strategy['noise']['pretraining'])
@@ -518,7 +518,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     gpu = trainer_utils.get_gpu_device()
     
     
-    dataset, num_classes = dataset_factory.create_dataset(cfg)
+    dataset, num_classes = dataset_factory.create_dataset(cfg['dataset'])
     
     base_model = model_factory.create_model(cfg['model'], num_classes)
     

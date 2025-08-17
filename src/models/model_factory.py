@@ -10,7 +10,20 @@ from . import ViT_Small
 from . import TorchvisionModels, TimmModels
 from . import OpenClipImageClassifier, OpenClipMultiHeadImageClassifier
 
-def create_model(cfg, num_classes):
+
+def get_metric(metric_name, num_classes):
+    if metric_name == 'ACC':
+        if num_classes == 2:   
+            return BinaryAccuracy()
+        else:
+            return MulticlassAccuracy(num_classes=num_classes, average='micro')
+    elif metric_name == 'F1':
+        if num_classes == 2:
+            return BinaryF1Score()
+        else:
+            return MulticlassF1Score(num_classes=num_classes, average='micro')
+    else: raise ValueError(f"Invalid metric {metric_name}.")
+def create_model(cfg, num_classes=None):
     model_type = cfg.pop('type')
     loss_fn = cfg['loss_fn']
     if loss_fn == 'MSE':
@@ -28,19 +41,16 @@ def create_model(cfg, num_classes):
     
     if cfg['metrics']:
         metrics = {}
-        for metric_name in cfg['metrics']:
-            if metric_name == 'ACC':
-                if num_classes == 1:   
-                    metrics[metric_name] = BinaryAccuracy()
-                else:
-                    metrics[metric_name] = MulticlassAccuracy(num_classes=num_classes, average='micro')
-            elif metric_name == 'F1':
-                if num_classes == 1:
-                    metrics[metric_name] = BinaryF1Score()
-                else:
-                    metrics[metric_name] = MulticlassF1Score(num_classes=num_classes, average='micro')
-                    
-            else: raise ValueError(f"Invalid metric {metric_name}.")
+        if num_classes:
+            for metric_name in cfg['metrics']:    
+                metrics[metric_name] = get_metric(metric_name, num_classes)
+        elif 'heads_cfg' in cfg:
+            for head_cfg in cfg['heads_cfg']:
+                head_name, head_out_dim = head_cfg['head_name'], head_cfg['head_out_dim']
+                metrics[head_name] = {}
+                for metric_name in cfg['metrics']:
+                    metrics[head_name][metric_name] = get_metric(metric_name, num_classes=head_out_dim)   
+            
         cfg['metrics'] = metrics
 
     if model_type == 'fc1':
@@ -103,8 +113,8 @@ def create_model(cfg, num_classes):
         
     elif model_type.startswith('open_clip'):
         model_type = model_type.removeprefix('open_clip_')
-        if model_type.starts_with('multi_head'):
-            model_type = model_type.removeprefix('multi_head')
+        if model_type.startswith('multi_head'):
+            model_type = model_type.removeprefix('multi_head_')
             model = OpenClipMultiHeadImageClassifier(
                 model_type=model_type,
                 **cfg

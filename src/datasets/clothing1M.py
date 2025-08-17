@@ -88,7 +88,7 @@ class Clothing1M(BaseClassificationDataset):
         self.train_transforms = train_transforms
         self.val_transforms = val_transforms
         
-        if (train_transforms or val_transforms) and (augmentations != None or len(augmentations) != 0):
+        if (train_transforms or val_transforms) and (augmentations != None):
             raise ValueError('You should either pass augmentations, or train and validation transforms.')
         
         super().__init__(

@@ -3,6 +3,7 @@ import torch
 import open_clip
 import torch.nn as nn
 import torch.nn.functional as F
+import torchmetrics
 from . import BaseClassificationModel
 
 from pathlib import Path
@@ -98,6 +99,8 @@ class OpenClipImageClassifier(BaseClassificationModel):
     def get_val_transforms(self):
         return self.image_encoder.val_preprocess
     
+    def get_head_weights(self):
+        return self.classifier_head.state_dict()
         
     def load_head(self, state_dict):
         self.classifier_head.load_state_dict(state_dict)
@@ -138,18 +141,36 @@ class OpenClipImageClassifier(BaseClassificationModel):
                                       
                         
                         
-                        
-class OpenClipMultiHeadImageClassifier(BaseClassificationModel):
+from torch.amp import autocast
+                 
+class OpenClipMultiHeadImageClassifier(nn.Module):
     
     def __init__(
         self,
         model_type:str = None,
         pt_weights:str = None,
-        heads_cfg:dict = None,
+        heads_cfg:list = None,
         loss_fn:nn.Module = None,
         metrics:dict = None
     ):
-        super().__init__(loss_fn=loss_fn, metrics=metrics)
+        super().__init__()
+        
+        if loss_fn is None:
+            raise RuntimeError('The loss function must be specified for training/validation.')
+        self.loss_fn = loss_fn
+        
+        
+        self.metrics = nn.ModuleDict()
+        if metrics:
+            for head_cfg in heads_cfg:
+                head_name, head_out_dim = head_cfg['head_name'], head_cfg['head_out_dim']
+                self.metrics[head_name] = nn.ModuleDict()
+                for name, metric_instance in metrics[head_name].items():
+                    if not isinstance(metric_instance, torchmetrics.Metric):
+                        raise TypeError(f"Metric '{name}' must be an instance of torchmetrics.Metric.")
+                    self.metrics[head_name][name] = metric_instance
+                
+        
         
         self.model_type = model_type
         self.pt_weights = pt_weights
@@ -158,13 +179,13 @@ class OpenClipMultiHeadImageClassifier(BaseClassificationModel):
         self.image_encoder = OpenClipImageEncoder(model_name=model_type, pt_weights=pt_weights, keep_lang=False)
         
         self.classifier_heads = nn.ModuleDict()
-        for head_name, head_out_dim in heads_cfg.items():
+        for head_cfg in heads_cfg:
+            head_name, head_out_dim = head_cfg['head_name'], head_cfg['head_out_dim']
             self.classifier_heads[head_name] = nn.Linear(self.image_encoder.feature_dim, head_out_dim)
         
         # By default, the first head is activated
         self.active_head = next(iter(self.classifier_heads.keys()))
 
-    
     
     def forward(self, x):
         ftrs = self.image_encoder(x)
@@ -174,7 +195,60 @@ class OpenClipMultiHeadImageClassifier(BaseClassificationModel):
         return logits
     
     
-    def acitve_head(self, head_name:str):
+    def training_step(self, x, y, use_amp=False, return_preds=False):
+        """Performs a single training step."""
+        with autocast('cuda', enabled=use_amp):
+            preds = self(x) 
+            loss = self.loss_fn(preds, y)
+
+        if self.metrics:
+            for name, metric in self.metrics[self.active_head].items():
+                metric.update(preds.detach(), y.detach()) 
+
+        if return_preds:
+            return loss, preds
+        else:
+            return loss
+
+
+    @torch.no_grad()
+    def validation_step(self, x, y, use_amp=False, return_preds=False):
+        """Performs a single validation step (no gradient computation)."""
+        
+        with autocast('cuda', enabled=use_amp):
+            preds = self(x)
+            loss = self.loss_fn(preds, y)
+
+        if self.metrics:
+            for name, metric in self.metrics[self.active_head].items():
+                metric.update(preds.detach(), y.detach())
+
+        if return_preds:
+            return loss, preds
+        else:
+            return loss
+
+    @torch.no_grad()
+    def predict(self, x):
+        """Performs inference (prediction) without gradient computation."""
+        preds = self(x)
+        return preds
+
+    def compute_metrics(self):
+        """Computes and returns the current metric results."""
+        results = {}
+        if self.metrics:
+            for name, metric in self.metrics[self.active_head].items():
+                results[name] = metric.compute().cpu().item()
+        return results
+
+    def reset_metrics(self):
+        """Resets all tracked metrics."""
+        if self.metrics:
+            for name, metric in self.metrics[self.active_head].items():
+                metric.reset()
+    
+    def activate_head(self, head_name:str):
         if head_name not in self.classifier_heads:
             raise ValueError('The specified head name is not in the classifier heads.')
         self.active_head = head_name
@@ -185,6 +259,9 @@ class OpenClipMultiHeadImageClassifier(BaseClassificationModel):
     def get_val_transforms(self):
         return self.image_encoder.val_preprocess
     
+    
+    def get_head_weights(self, head_name):
+        return self.classifier_heads[head_name].state_dict()
     
     def load_heads(self, state_dicts):
         for head_name, state_dict in state_dicts.items():
@@ -239,3 +316,7 @@ class OpenClipMultiHeadImageClassifier(BaseClassificationModel):
                         
     def get_identifier(self):
         return 'Open Clip Image Classifer' + self.model_type
+    
+    def _count_trainable_parameters(self):
+        """Counts and returns the total number of trainable parameters in the model."""
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)
