@@ -39,7 +39,8 @@ class BaseClassificationTrainer(ABC):
         self,
         outputs_dir: Path = Path("./outputs"),
         dotenv_path: Path = Path("./.env"),
-        max_epochs: int = 400,
+        max_epochs: int = None,
+        max_iterations: int = None,
         optimizer_cfg: dict = {
                 'type': 'adamw',
                 'lr': 1e-4,
@@ -52,8 +53,6 @@ class BaseClassificationTrainer(ABC):
         early_stopping: bool = False,
         run_on_gpu: bool = True,
         use_amp: bool = True,
-        train_in_eval_mode:bool = False,
-        batch_prog: bool = False,
         log_comet: bool = False,
         comet_api_key: str = "",
         comet_project_name: str = None,
@@ -92,9 +91,19 @@ class BaseClassificationTrainer(ABC):
         self.run_on_gpu = run_on_gpu
         self.use_amp = use_amp
 
-        self.train_in_eval_mode = train_in_eval_mode
+
 
         self.max_epochs = max_epochs
+        self.max_iterations = max_iterations 
+        
+        if (self.max_epochs is not None and self.max_epochs > 0) and (self.max_iterations is not None and self.max_iterations > 0):
+            raise ValueError("Only one of max_epochs or max_iterations can be set at a time.")
+        if (self.max_epochs is None or self.max_epochs <= 0) and (self.max_iterations is None or self.max_iterations <= 0):
+            raise ValueError("Set either max_epochs (>0) or max_iterations (>0).")
+        
+        self.iteration_mode = self.max_iterations is not None and self.max_iterations > 0  
+
+        
         self.optimizer_cfg = optimizer_cfg
         self.lr_schedule_cfg = lr_schedule_cfg
 
@@ -115,7 +124,6 @@ class BaseClassificationTrainer(ABC):
         self.early_stopping = early_stopping
         
 
-        self.batch_prog = batch_prog
         self.log_comet = log_comet
         self.comet_api_key = comet_api_key
         if log_comet and not comet_api_key:
@@ -126,11 +134,34 @@ class BaseClassificationTrainer(ABC):
         if log_comet and comet_project_name is None:
             raise RuntimeError('When CometML logging is active, the `comet_project_name` must be specified.')
         self.model_log_call = model_log_call
-            
-
-        self.accumulate_low_loss = False
-        self.accumulate_high_loss = False
+          
+          
+                
+    @abstractmethod
+    def _fit_epoch(self) -> dict:
+        """
+        Runs a single training epoch.
+        This method MUST be implemented by subclasses.
         
+        Returns:
+            dict: A dictionary of training metrics for the epoch (e.g., {'Train/Loss': 0.1, 'Train/ACC': 0.95}).
+        """
+        pass
+            
+    @abstractmethod
+    def _evaluate_set(self, dataloader) -> dict:
+        """
+        Evaluates the model on a given dataloader (e.g., validation or test).
+        This method MUST be implemented by subclasses.
+
+        Args:
+            dataloader (DataLoader): The dataloader to evaluate on.
+
+        Returns:
+            dict: A dictionary of evaluation metrics (e.g., {'Val/Loss': 0.2, 'Val/ACC': 0.9}).
+        """
+        pass
+      
         
     def setup_data_loaders(self, dataset):
         self.dataset = dataset
@@ -162,77 +193,80 @@ class BaseClassificationTrainer(ABC):
     def configure_optimizers(self, optim_state_dict=None, last_epoch=-1, last_gradient_step=-1):
         optim_cfg = copy.deepcopy(self.optimizer_cfg)
         del optim_cfg['type']
-        if self.optimizer_cfg['type'] == "adamw":
-            
-            optim = AdamW(
-                params=self.model.parameters(),
-                **optim_cfg
-            )
 
-        elif self.optimizer_cfg['type'] == "adam":
-            optim = Adam(
-                params=self.model.parameters(),
-                **optim_cfg
-            )
-        elif self.optimizer_cfg['type'] == "sgd":
-            optim = SGD(
-                params=self.model.parameters(),
-                **optim_cfg
-            )
+        opt_type = self.optimizer_cfg['type'].lower()
+        if opt_type == "adamw":
+            optim = AdamW(params=self.model.parameters(), **optim_cfg)
+        elif opt_type == "adam":
+            optim = Adam(params=self.model.parameters(), **optim_cfg)
+        elif opt_type == "sgd":
+            optim = SGD(params=self.model.parameters(), **optim_cfg)
         else:
-            raise RuntimeError("Invalide optimizer type")
+            raise RuntimeError("Invalid optimizer type")
         if optim_state_dict:
             optim.load_state_dict(optim_state_dict)
         
+        
+        self.lr_scheduler = None
+        self.lr_sch_step_on_batch = False 
 
         if self.lr_schedule_cfg:
             lr_sch_cfg = copy.deepcopy(self.lr_schedule_cfg)
-            del lr_sch_cfg['type']
-            self.lr_sch_step_on_batch = False
-            if self.lr_schedule_cfg['type'] == 'step':
+            sch_type = lr_sch_cfg.pop('type')
+            update_on = lr_sch_cfg.pop('update_on', 'epoch')  # 'gradient_step' or 'epoch'
+            self.lr_sch_step_on_batch = (update_on == 'gradient_step')
+
+            # Choose which 'last_*' marker to use
+            restore_pos = last_gradient_step if self.lr_sch_step_on_batch else last_epoch
+
+            if sch_type == 'step':
                 self.lr_scheduler = MultiStepLR(
                     optim,
                     **lr_sch_cfg,
-                    last_epoch=last_epoch
+                    last_epoch=restore_pos
                 )
-                
-            elif self.lr_schedule_cfg['type'] == 'isqrt':
+            elif sch_type == 'isqrt':
                 self.lr_scheduler = InverseSquareRootLR(
                     optim,
                     **lr_sch_cfg,
-                    last_epoch=last_gradient_step
+                    last_epoch=restore_pos
                 )
-                self.lr_sch_step_on_batch = True
-            elif self.lr_schedule_cfg['type'] == 'plat':
+            elif sch_type == 'plat':
                 self.lr_scheduler = ReduceLROnPlateau(
                     optim,
                     **lr_sch_cfg,
                 )
-            elif self.lr_schedule_cfg['type'] == 'cosann':
+            elif sch_type == 'cosann':
                 self.lr_scheduler = CosineAnnealingLR(
                     optim,
                     **lr_sch_cfg,
-                    last_epoch=last_epoch
+                    last_epoch=restore_pos
                 )
-            elif self.lr_schedule_cfg['type'] == 'cosann_warmup':
+            elif sch_type == 'cosann_warmup':
                 self.lr_scheduler = CosineAnnealingWithWarmup(
                     optim,
                     **lr_sch_cfg,
-                    last_epoch=last_epoch
+                    last_epoch=restore_pos
                 )
-            elif self.lr_schedule_cfg['type'] == 'onecycle':
-                self.lr_scheduler = OneCycleLR(
-                    optim,
-                    total_steps=self.max_epochs*len(self.train_dataloader),
-                    **lr_sch_cfg,
-                    last_epoch=last_epoch
-                )
-                self.lr_sch_step_on_batch = True
-        else: self.lr_scheduler = None
+            elif sch_type == 'onecycle':
+                # OneCycleLR is *designed* to step per batch.
+                if self.lr_sch_step_on_batch:
+                    total_steps = self._compute_total_steps()
+                    self.lr_scheduler = OneCycleLR(
+                        optim,
+                        total_steps=total_steps,
+                        **lr_sch_cfg,
+                        last_epoch=restore_pos
+                    )
+                else:
+                    raise ValueError('OneCycleLR is designed to be updated every gradient step. So set `update_on=\'gradient_step\'`.')
+            else:
+                raise ValueError(f"Unknown scheduler type: {sch_type}")
+
+        self.optim = optim
 
         # if self.early_stopping:
         #     self.early_stopping = nn_utils.EarlyStopping(patience=8, min_delta=0.001, mode='max', verbose=False)
-        self.optim = optim
         
         
         
@@ -259,6 +293,8 @@ class BaseClassificationTrainer(ABC):
             'model_state': self.model.state_dict(),
             'optim_state': self.optim.state_dict(),
             'epoch': self.epoch+1,
+            'global_step': self.global_step,
+            'iteration_mode': self.iteration_mode,
         }
         if self.log_comet:
             save_dict['exp_key'] = self.comet_experiment.get_key()
@@ -267,10 +303,13 @@ class BaseClassificationTrainer(ABC):
         torch.save(save_dict, path)
         
     def load_full_checkpoint(self, path):
-        checkpoint = torch.load(path)
+        checkpoint = torch.load(path, map_location=self.cpu)
         self.prepare_model(checkpoint["model_state"])
+        self.iteration_mode = checkpoint.get('iteration_mode', False)
+        self.global_step = checkpoint.get('global_step', 0)
+        
         self.configure_optimizers(
-            checkpoint["optim_state"], last_epoch=checkpoint["epoch"]
+            checkpoint["optim_state"], last_epoch=checkpoint["epoch"], last_gradient_step=self.global_step 
         )
         self.epoch = checkpoint["epoch"]
         if self.log_comet:
@@ -280,21 +319,8 @@ class BaseClassificationTrainer(ABC):
             self.best_model_perf = checkpoint['best_prf']
             
             
-            
-            
-            
-            
-    @abstractmethod
-    def _fit_epoch(self) -> dict:
-        """
-        Runs a single training epoch.
-        This method MUST be implemented by subclasses.
-        
-        Returns:
-            dict: A dictionary of training metrics for the epoch (e.g., {'Train/Loss': 0.1, 'Train/ACC': 0.95}).
-        """
-        pass
-            
+                 
+
             
             
     def fit(self, model, dataset, resume=False):
@@ -317,61 +343,47 @@ class BaseClassificationTrainer(ABC):
             if self.log_comet:
                 self.configure_logger()
             self.epoch = 0
+            self.global_step = 0   
 
         self.grad_scaler = GradScaler("cuda", enabled=self.use_amp)
         self.early_stopping_activated = False
-        
-        if model.loss_fn.reduction != 'none' and (self.accumulate_low_loss or self.accumulate_high_loss):
-            raise RuntimeError('In order to accumulate samples with low or high loss in a subset, the reduction type of the loss function should be set to `none`.')
             
-            
-        # Whether to log the progress for each batch or for each epoch
-        if self.batch_prog:
-            pbar = range(self.epoch, self.max_epochs)
+        if self.iteration_mode:
+            outer_iterable = range(self.epoch, 10**12)  # effectively unbounded; we'll break on max_iterations
         else:
-            pbar = tqdm(range(self.epoch, self.max_epochs), total=self.max_epochs)
+            outer_iterable = tqdm(range(self.epoch, self.max_epochs), total=self.max_epochs)
+
+
             
-        for self.epoch in pbar:
-            if isinstance(pbar, tqdm):
-                pbar.set_description(f"Processing Training Epoch {self.epoch + 1}/{self.max_epochs}")
+        for self.epoch in outer_iterable:
+            if (not self.iteration_mode) and isinstance(outer_iterable, tqdm):
+                outer_iterable.set_description(f"Processing Training Epoch {self.epoch + 1}/{self.max_epochs}")
                 
             if self.early_stopping and self.early_stopping_activated: break
 
-            # 1. Call the abstract training method (implemented by subclass)
-            if self.train_in_eval_mode:
-                self.model.eval()
-            else:
-                self.model.train()
+            # Call the abstract training method (implemented by subclass)
             statistics = self._fit_epoch()
             
-            if self.accumulate_low_loss:
-                self.check_and_save_low_loss_buffers()
-            if self.accumulate_high_loss:
-                self.check_and_save_high_loss_buffers()
             
             if self.model_log_call:
                 model_logs = self.model.log_stats()
                 statistics.update(model_logs)
             
-            # 2. Call the abstract evaluation method (implemented by subclass)
-            if self.validation_freq > 0 and (self.epoch + 1) % self.validation_freq == 0:
-                val_stats = self.evaluate(set='Val')
-                statistics.update(val_stats)
-
-                # 3. Handle saving best model (generic logic)
-                if self.save_best_model and val_stats['Val/ACC'] > self.best_model_perf.get('Val/ACC', 0):
-                    self.best_model_perf = {**statistics, 'epoch': self.epoch}
-                    self.save_full_checkpoint(self.checkpoint_dir / 'best_ckp.pth')
             
-            # 4. Handle logging, checkpointing, etc. (generic logic)
-            if self.checkpoint_freq > 0 and (self.epoch+1) % self.checkpoint_freq == 0:
-                self.save_full_checkpoint(self.checkpoint_dir / 'resume_ckp.pth')
-                # self.save_full_checkpoint(self.checkpoint_dir / f'ckp_{self.epoch+1}.pth')
-            
-            
+            self.after_epoch_end(
+                epoch_train_stats=statistics,
+                epoch_train_loss=statistics.get('Train/Loss') if isinstance(statistics, dict) else None
+            )
+                        
             
             if self.log_comet:
-                self.comet_experiment.log_metrics(statistics, step=self.epoch)
+                comet_step = (self.global_step if self.iteration_mode else self.epoch)
+                self.comet_experiment.log_metrics(statistics, step=comet_step)
+                
+           
+            if self.iteration_mode and self.global_step >= self.max_iterations:
+                break
+
 
         # Final evaluation, saving, etc.
         final_results = {}
@@ -406,19 +418,7 @@ class BaseClassificationTrainer(ABC):
             
             
             
-    @abstractmethod
-    def _evaluate_set(self, dataloader) -> dict:
-        """
-        Evaluates the model on a given dataloader (e.g., validation or test).
-        This method MUST be implemented by subclasses.
-
-        Args:
-            dataloader (DataLoader): The dataloader to evaluate on.
-
-        Returns:
-            dict: A dictionary of evaluation metrics (e.g., {'Val/Loss': 0.2, 'Val/ACC': 0.9}).
-        """
-        pass
+    
         
     def evaluate(self, set: str = 'Val') -> dict:
         """
@@ -439,147 +439,142 @@ class BaseClassificationTrainer(ABC):
         metrics = self._evaluate_set(dataloader)
         
         # Add the set name prefix to the metrics
-        return {f"{set}/{k}": v for k, v in metrics.items()}
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-    def activate_low_loss_samples_buffer(self, consistency_window: int = 5, consistency_threshold: float = 0.8):
-        if not hasattr(self, 'train_dataloader'):
-            raise RuntimeError("Please call `setup_data_loaders` before activating the buffers.")
-        
-        self.accumulate_low_loss = True
-        self.low_loss_consistency_window = consistency_window
-        self.low_loss_consistency_threshold = consistency_threshold
-        
-        # Set up dynamic percentage targets
-        self.low_loss_percentages = [p / 100.0 for p in range(5, 100, 5)] # 0.05, 0.10, ... 0.95
-        self.current_low_loss_perc_index = 0
-        
-        available_classes = self.dataset.get_available_classes()
-        self.num_classes = len(available_classes)
-        self.num_train_samples = len(self.train_dataloader.dataset)
-        print(len(self.train_dataloader.dataset))
-        
-        self.low_loss_sample_indices = {i: set() for i in available_classes}
-        self.low_loss_history = {i: collections.deque(maxlen=self.low_loss_consistency_window) for i in range(self.num_train_samples)}
-        print("Low-loss sample buffer activated. Will save indices at 5% increments.")
+        return {f"{set}/{k}": v for k, v in metrics.items()}    
+    
+    
+    def after_optimizer_step(
+        self,
+        *,
+        step_loss: float | None = None,
+        train_snapshot: dict | None = None
+    ) -> None:
+        """
+        Call this exactly once after each optimizer.step().
+        Handles:
+        - Incrementing global_step
+        - Stepping per-step schedulers (including ReduceLROnPlateau with step metric)
+        - Iteration-mode validation and checkpoint triggers
+        """
+        # 1) Count step
+        self.global_step += 1
 
-    def activate_high_loss_samples_buffer(self, consistency_window: int = 5, consistency_threshold: float = 0.8):
-        if not hasattr(self, 'train_dataloader'):
-            raise RuntimeError("Please call `setup_data_loaders` before activating the buffers.")
-            
-        self.accumulate_high_loss = True
-        self.high_loss_consistency_window = consistency_window
-        self.high_loss_consistency_threshold = consistency_threshold
-
-        # Set up dynamic percentage targets
-        self.high_loss_percentages = [p / 100.0 for p in range(5, 100, 5)]
-        self.current_high_loss_perc_index = 0
-        
-        available_classes = self.dataset.get_available_classes()
-        self.num_classes = len(available_classes)
-        self.num_train_samples = len(self.train_dataloader.dataset)
-        
-        self.high_loss_sample_indices = {i: set() for i in available_classes}
-        self.high_loss_history = {i: collections.deque(maxlen=self.high_loss_consistency_window) for i in range(self.num_train_samples)}
-        print("High-loss sample buffer activated. Will save indices at 5% increments.")
-
-    def check_and_save_low_loss_buffers(self):
-        # Loop as long as we might be able to save the next tier in the same epoch
-        while self.current_low_loss_perc_index < len(self.low_loss_percentages):
-            current_target_perc = self.low_loss_percentages[self.current_low_loss_perc_index]
-            target_size_per_class = int((self.num_train_samples * current_target_perc) / self.num_classes)
-
-            # Check if the current target is met
-            all_classes_met = True
-            for class_idx in self.low_loss_sample_indices:
-                if len(self.low_loss_sample_indices[class_idx]) < target_size_per_class:
-                    all_classes_met = False
-                    break
-            
-            if all_classes_met:
-                # If met, save the indices for this percentage and move to the next target
-                self.save_low_loss_indices(current_target_perc)
-                self.current_low_loss_perc_index += 1
+        # 2) LR scheduler (per-step)
+        if self.lr_scheduler and self.lr_sch_step_on_batch:
+            if isinstance(self.lr_scheduler, ReduceLROnPlateau):
+                # If user chose per-step plateau (unusual), feed the current step loss
+                metric = float(step_loss) if step_loss is not None else None
+                if metric is not None:
+                    self.lr_scheduler.step(metric)
             else:
-                # If not met, stop checking for this epoch
-                break
-        
-        # Deactivate if all targets are completed
-        if self.current_low_loss_perc_index >= len(self.low_loss_percentages):
-            print("All low-loss percentage targets have been met and saved.")
-            self.accumulate_low_loss = False
+                self.lr_scheduler.step()
 
-    def check_and_save_high_loss_buffers(self):
-        while self.current_high_loss_perc_index < len(self.high_loss_percentages):
-            current_target_perc = self.high_loss_percentages[self.current_high_loss_perc_index]
-            target_size_per_class = int((self.num_train_samples * current_target_perc) / self.num_classes)
-            
-            all_classes_met = True
-            for class_idx in self.high_loss_sample_indices:
-                if len(self.high_loss_sample_indices[class_idx]) < target_size_per_class:
-                    all_classes_met = False
-                    break
-            
-            if all_classes_met:
-                self.save_high_loss_indices(current_target_perc)
-                self.current_high_loss_perc_index += 1
-            else:
-                break
+        # 3) Iteration-mode triggers
+        if self.iteration_mode:
+            # Validation on step frequency
+            if self._should_validate_now():
+                val_stats = self.evaluate(set='Val')
+                self._check_update_best_and_save(val_stats, train_snapshot)
+
+            # Checkpoint on step frequency
+            if self._should_checkpoint_now():
+                self.save_full_checkpoint(self.checkpoint_dir / 'resume_ckp.pth')
+    
+    def after_epoch_end(self, *, epoch_train_stats: dict | None = None, epoch_train_loss: float | None = None) -> None:
+        """
+        Call this exactly once at the end of an epoch (base.fit does this).
+        Handles:
+        - Epoch-mode validation / best saving / checkpointing
+        - Epoch-mode LR scheduler stepping (including ReduceLROnPlateau)
+        """
+        # Epoch-mode triggers only
+        if not self.iteration_mode:
+            # Validation on epoch frequency
+            if self._should_validate_now():
+                val_stats = self.evaluate(set='Val')
+                self._check_update_best_and_save(val_stats, epoch_train_stats)
+
+            # Checkpoint on epoch frequency
+            if self._should_checkpoint_now():
+                self.save_full_checkpoint(self.checkpoint_dir / 'resume_ckp.pth')
+
+            # LR scheduler (per-epoch)
+            if self.lr_scheduler and not self.lr_sch_step_on_batch:
+                if isinstance(self.lr_scheduler, ReduceLROnPlateau):
+                    metric = None
+                    if epoch_train_loss is not None:
+                        metric = float(epoch_train_loss)
+                    elif epoch_train_stats is not None:
+                        metric = epoch_train_stats.get('Train/Loss', None)
+                    if metric is not None:
+                        self.lr_scheduler.step(metric)
+                else:
+                    self.lr_scheduler.step()
+    
+    
+    def _compute_total_steps(self) -> int:
+        """
+        Total optimizer steps the scheduler should expect.
+        - Iteration mode: exactly max_iterations
+        - Epoch mode: max_epochs * len(train_dataloader)
+        """
+        if self.iteration_mode:
+            return self.max_iterations
+        return self.max_epochs * self.num_train_batches
+
+    def _should_validate_now(self) -> bool:
+        """
+        Decide when to run validation based on mode:
+        - Epoch mode: unchanged — every `validation_freq` epochs
+        - Iteration mode: interpret `validation_freq` as steps
+        """
+        if not (self.validation_freq and self.validation_freq > 0):
+            return False
+
+        if self.iteration_mode:
+            return self.global_step > 0 and (self.global_step % self.validation_freq == 0)
+        else:
+            # epoch-based behavior (called once per epoch)
+            return (self.epoch + 1) % self.validation_freq == 0
+
+    def _should_checkpoint_now(self) -> bool:
+        """
+        - Epoch mode: unchanged — every `checkpoint_freq` epochs
+        - Iteration mode: interpret `checkpoint_freq` as steps
+        """
+        if not (self.checkpoint_freq and self.checkpoint_freq > 0):
+            return False
+
+        if self.iteration_mode:
+            return self.global_step > 0 and (self.global_step % self.checkpoint_freq == 0)
+        else:
+            return (self.epoch + 1) % self.checkpoint_freq == 0
+        
+        
+        
+    def _merge_train_snapshot(self, val_stats: dict, train_snapshot: dict | None) -> dict:
+        merged = {}
+        if train_snapshot:
+            merged.update(train_snapshot)
+        merged.update(val_stats)
+        return merged
+    
+    def _check_update_best_and_save(self, val_stats: dict, train_snapshot: dict | None):
+        """
+        Update best snapshot on Val/ACC and save 'best_ckp.pth' if improved.
+        """
+        if not self.save_best_model:
+            return
+        new_acc = val_stats.get('Val/ACC', None)
+        if new_acc is None:
+            return
+        old_acc = self.best_model_perf.get('Val/ACC', 0)
+        if new_acc > old_acc:
+            merged = self._merge_train_snapshot(val_stats, train_snapshot)
+            # add identifiers
+            merged['epoch'] = getattr(self, 'epoch', 0)
+            merged['global_step'] = getattr(self, 'global_step', 0)
+            self.best_model_perf = merged
+            self.save_full_checkpoint(self.checkpoint_dir / 'best_ckp.pth')
                 
-        if self.current_high_loss_perc_index >= len(self.high_loss_percentages):
-            print("All high-loss percentage targets have been met and saved.")
-            self.accumulate_high_loss = False
-
-    def save_low_loss_indices(self, percentage: float):
-        if not hasattr(self, 'low_loss_sample_indices'):
-            print("Low-loss buffer was not activated. Nothing to save.")
-            return
-        
-        output_path = self.log_dir / f'low_loss_indices_{percentage:.2f}.pkl'
-        
-        # Calculate the exact number of samples needed per class and slice the list.
-        target_size_per_class = int((self.num_train_samples * percentage) / self.num_classes)
-
-        indices_to_save = {
-            class_idx: sorted(list(idx_set))[:target_size_per_class] # Slice the list here
-            for class_idx, idx_set in self.low_loss_sample_indices.items()
-        }
-
-        with open(output_path, 'wb') as f:
-            pickle.dump(indices_to_save, f)
             
-        total_saved = sum(len(v) for v in indices_to_save.values())
-        # Improved percentage formatting in the print statement
-        # print(f"✅ Saved low-loss indices for {total_saved} samples ({percentage:.2%}) to: {output_path}")
-
-
-    def save_high_loss_indices(self, percentage: float):
-        if not hasattr(self, 'high_loss_sample_indices'):
-            print("High-loss buffer was not activated. Nothing to save.")
-            return
-
-        output_path = self.log_dir / f'high_loss_indices_{percentage:.2f}.pkl'
-
-        # Calculate the exact number of samples needed per class and slice the list.
-        target_size_per_class = int((self.num_train_samples * percentage) / self.num_classes)
-        
-        indices_to_save = {
-            class_idx: sorted(list(idx_set))[:target_size_per_class] # Slice the list here
-            for class_idx, idx_set in self.high_loss_sample_indices.items()
-        }
-
-        with open(output_path, 'wb') as f:
-            pickle.dump(indices_to_save, f)
-
-        total_saved = sum(len(v) for v in indices_to_save.values())
-        # Improved percentage formatting in the print statement
-        # print(f"✅ Saved high-loss indices for {total_saved} samples ({percentage:.2%}) to: {output_path}")
+            

@@ -38,57 +38,22 @@ class StandardTrainer(BaseClassificationTrainer):
         """
         epoch_train_loss = misc_utils.AverageMeter()
 
-        
-        if self.batch_prog:
-            pbar = tqdm(
+        inner_iter = enumerate(self.train_dataloader)
+        if self.iteration_mode:
+            inner_iter = tqdm(
                 enumerate(self.train_dataloader),
                 total=self.num_train_batches,
-                desc="Processing Training Epoch {}".format(self.epoch + 1),
+                desc=f"Epoch {self.epoch + 1} — steps",
             )
-        else:
-            pbar = enumerate(self.train_dataloader)
-        
-        for i, batch in pbar:
+
+        for i, batch in inner_iter:
             batch = self.prepare_batch(batch)
             input_batch, target_batch, idxs, is_noisy  = self.unpack_batch(batch)
             
             self.optim.zero_grad()
                     
                 
-            if self.accumulate_low_loss or self.accumulate_high_loss:
-                loss, predictions = self.model.training_step(input_batch, target_batch, self.use_amp, return_preds=True)
-                
-                is_correct = (predictions.argmax(dim=-1) == target_batch)
-
-                for j in range(len(idxs)):
-                    sample_idx = idxs[j].item()
-                    sample_target = target_batch[j].item()
-                    sample_was_correct = is_correct[j].item()
-
-
-                    # Handle low loss (correctly classified) samples
-                    if self.accumulate_low_loss:
-                        self.low_loss_history[sample_idx].append(sample_was_correct)
-                        history = self.low_loss_history[sample_idx]
-                        if len(history) == self.low_loss_consistency_window:
-                            consistency_score = sum(history) / len(history)
-                            if consistency_score >= self.low_loss_consistency_threshold:
-                                self.low_loss_sample_indices[sample_target].add(sample_idx)
-
-                    # Handle low loss (correctly classified) samples
-                    if self.accumulate_high_loss:
-                        self.high_loss_history[sample_idx].append(not sample_was_correct)
-                        history = self.high_loss_history[sample_idx]
-                        if len(history) == self.high_loss_consistency_window:
-                            consistency_score = sum(history) / len(history)
-                            if consistency_score >= self.high_loss_consistency_threshold:
-                                self.high_loss_sample_indices[sample_target].add(sample_idx)
-            
-            else:
-                loss = self.model.training_step(input_batch, target_batch, self.use_amp)
-
-            if self.model.loss_fn.reduction == 'none':
-                loss = loss.mean()
+            loss = self.model.training_step(input_batch, target_batch, self.use_amp)
             
             if self.use_amp:
                 self.grad_scaler.scale(loss).backward()
@@ -98,15 +63,26 @@ class StandardTrainer(BaseClassificationTrainer):
                 loss.backward()
                 self.optim.step()
                 
-            if self.lr_scheduler and self.lr_sch_step_on_batch:
-                self.lr_scheduler.step()
-                
+
             epoch_train_loss.update(loss.detach().cpu().item(), n=input_batch.shape[0])
             
-        
+            # Tell the base: a gradient step happened (centralized per-step logic)
+            self.after_optimizer_step(
+                step_loss=loss.detach().cpu().item(),
+                train_snapshot={
+                    'Train/Loss': epoch_train_loss.avg if epoch_train_loss.count > 0 else float(loss.detach().cpu().item()),
+                    'Train/LR': self.optim.param_groups[0]['lr'],
+                }
+            )
             
-        if self.lr_scheduler and not self.lr_sch_step_on_batch:
-            self.lr_scheduler.step()
+            if self.iteration_mode and isinstance(inner_iter, tqdm):
+                inner_iter.set_postfix_str(f"step={self.global_step}, loss={epoch_train_loss.avg:.4f}")
+
+
+            if self.iteration_mode and self.global_step >= self.max_iterations:
+                break
+            
+            
 
         metrics_results = self.model.compute_metrics()
         self.model.reset_metrics()

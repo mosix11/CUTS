@@ -1,6 +1,7 @@
 from .trainer_gs import TrainerGS
 from .base_trainer import BaseClassificationTrainer
-from .standard_trainer import StandardTrainer
-from .etd_trainer import ETDTrainer
+from .trainer_standard import StandardTrainer
+from .trainer_ranked_loss_monitor import TrainerRLS
+from .trainer_etd import ETDTrainer
 
 from . import utils

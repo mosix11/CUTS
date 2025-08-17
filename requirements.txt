@@ -12,6 +12,6 @@ ray[tune]
 PyYaml
 seaborn
 timm
-thop
 einops
 openxlab
+open_clip_torch

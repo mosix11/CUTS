@@ -9,6 +9,7 @@ from .vit_small import ViT_Small
 from .cnn_etd import CNN5_ETD
 from .torchvision_models import TorchvisionModels
 from .timm_models import TimmModels
+from .open_clip_models import OpenClipImageClassifier, OpenClipMultiHeadImageClassifier
 
 from .task_vectors import TaskVector
 from .loss_functions import CompoundLoss

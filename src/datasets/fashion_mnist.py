@@ -1,4 +1,5 @@
 import torch
+import torchvision as tv
 from torchvision import datasets
 import torchvision.transforms.v2 as transforms
 from torch.utils.data import Dataset, DataLoader, random_split, Subset
@@ -22,6 +23,8 @@ class FashionMNIST(BaseClassificationDataset):
         normalize_imgs: bool = False,
         flatten: bool = False,
         augmentations: Union[list, None] = None,
+        train_transforms: Union[tv.transforms.Compose, transforms.Compose] = None,
+        val_transforms: Union[tv.transforms.Compose, transforms.Compose] = None,
         **kwargs
     ) -> None:
         self.img_size = img_size
@@ -29,6 +32,12 @@ class FashionMNIST(BaseClassificationDataset):
         self.normalize_imgs = normalize_imgs
         self.flatten = flatten
         self.augmentations = [] if augmentations == None else augmentations
+        
+        self.train_transforms = train_transforms
+        self.val_transforms = val_transforms
+        
+        if (train_transforms or val_transforms) and (augmentations != None or len(augmentations) != 0):
+            raise ValueError('You should either pass augmentations, or train and validation transforms.')
         
         data_dir.mkdir(exist_ok=True, parents=True)
         dataset_dir = data_dir / 'FashionMNIST'
@@ -52,6 +61,10 @@ class FashionMNIST(BaseClassificationDataset):
 
 
     def get_transforms(self, train=True):
+        if self.train_transforms and train:
+            return self.train_transforms
+        elif self.val_transforms and not train:
+            return self.val_transforms
         
         trnsfrms = []
         if self.img_size != (28, 28):

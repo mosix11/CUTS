@@ -1,7 +1,7 @@
 import comet_ml
 from src.datasets import dataset_factory
 from src.models import model_factory, TaskVector, weight_norm_analysis
-from src.trainers import StandardTrainer, TrainerRLS, utils as trainer_utils
+from src.trainers import StandardTrainer, utils as trainer_utils
 import matplotlib.pyplot as plt
 import seaborn as sns
 from src.utils import misc_utils
@@ -250,7 +250,7 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         plots_dir.mkdir(exist_ok=True, parents=True)
         
         
-        
+
         trainer = StandardTrainer(
             outputs_dir=outputs_dir,
             **cfg['trainer']['pretraining'],
@@ -286,12 +286,7 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         plots_dir = experiment_dir / Path("plots")
         plots_dir.mkdir(exist_ok=True, parents=True)
         
-        
-        
-        trainer_cls = StandardTrainer
-        if strategy['finetuning_set'] == 'LowLoss': trainer_cls = TrainerRLS
-        
-        trainer = trainer_cls(
+        trainer = StandardTrainer(
             outputs_dir=outputs_dir,
             **cfg['trainer']['pretraining'],
             exp_name=experiment_name,
@@ -304,7 +299,6 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
                 consistency_window=5,
                 consistency_threshold=0.8
             )
-            
 
         results = trainer.fit(model, dataset, resume=False)
         
@@ -900,34 +894,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         json.dump(results_dict, json_file, indent=4)
     generate_latex_table_from_results(results_dict, results_dirs['metrics'] / 'results_tex.txt')
     
-    # otrh_tvs, shrd_tvs = TaskVector.decompose_task_vectors_SVD(ft_tvs_list)
-    
-    # orth_task_sim = []
-    # for i in range(len(ft_tvs_list)):
-    #     anchor_tv = otrh_tvs[i]
-    #     orth_task_sim.append([])
-    #     for j in range(len(ft_tvs_list)):
-    #         other_tv = otrh_tvs[j]
-    #         cos_sim = anchor_tv.cosine_similarity_flatten(other_tv)
-    #         orth_task_sim[i].append(cos_sim)
-    # orth_task_sim = np.array(orth_task_sim)
-    
-    # shrd_tvs_sim = []
-    # for i in range(len(ft_tvs_list)):
-    #     anchor_tv = shrd_tvs[i]
-    #     shrd_tvs_sim.append([])
-    #     for j in range(len(ft_tvs_list)):
-    #         other_tv = shrd_tvs[j]
-    #         cos_sim = anchor_tv.cosine_similarity_flatten(other_tv)
-    #         shrd_tvs_sim[i].append(cos_sim)
-    # shrd_tvs_sim = np.array(shrd_tvs_sim)
-    
-    
-    
-    # misc_utils.plot_confusion_matrix(cm=orth_task_sim, class_names=class_names, filepath=None, show=True)
-    # misc_utils.plot_confusion_matrix(cm=shrd_tvs_sim, class_names=class_names, filepath=None, show=True)
-    
-    
+
 
 
 if __name__ == "__main__":
@@ -956,15 +923,15 @@ if __name__ == "__main__":
 
     dotenv.load_dotenv(".env")
     
-    cfg_path = Path('configs/single_experiment/pretrain_on_noisy') / f"{args.config}.yaml"
+    cfg_path = Path('configs/single_experiment/closed_vocab_TA') / f"{args.config}.yaml"
 
     if not cfg_path.exists(): raise RuntimeError('The specified config file does not exist.')
     with open(cfg_path, 'r') as file:
         cfg = yaml.full_load(file)
 
-    outputs_dir = Path("outputs/single_experiment/pretrain_on_noisy").absolute()
+    outputs_dir = Path("outputs/single_experiment/closed_vocab_TA").absolute()
     outputs_dir.mkdir(exist_ok=True, parents=True)
-    results_dir = Path("results/single_experiment/pretrain_on_noisy").absolute()
+    results_dir = Path("results/single_experiment/closed_vocab_TA").absolute()
     results_dir.mkdir(exist_ok=True, parents=True)
 
     if args.tv:

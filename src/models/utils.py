@@ -65,3 +65,5 @@ def lazy_layer_initialization(model, dummy_input, init_method=None):
     model(*dummy_input)
     if init_method is not None:
         model.apply(init_method)
+        
+        

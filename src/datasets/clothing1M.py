@@ -1,4 +1,5 @@
 import torch
+import torchvision as tv
 import torchvision.transforms.v2 as transforms
 from torchvision import datasets
 from torch.utils.data import Dataset, ConcatDataset
@@ -59,6 +60,8 @@ class Clothing1M(BaseClassificationDataset):
         normalize_imgs: bool = False,
         flatten: bool = False,
         augmentations: Union[list, None] = None,
+        train_transforms: Union[tv.transforms.Compose, transforms.Compose] = None,
+        val_transforms: Union[tv.transforms.Compose, transforms.Compose] = None,
         **kwargs
     ) -> None:
         
@@ -82,6 +85,12 @@ class Clothing1M(BaseClassificationDataset):
         self.flatten = flatten
         self.augmentations = [] if augmentations == None else augmentations
         
+        self.train_transforms = train_transforms
+        self.val_transforms = val_transforms
+        
+        if (train_transforms or val_transforms) and (augmentations != None or len(augmentations) != 0):
+            raise ValueError('You should either pass augmentations, or train and validation transforms.')
+        
         super().__init__(
             dataset_name='Clothing1M',
             dataset_dir=dataset_dir,
@@ -101,6 +110,11 @@ class Clothing1M(BaseClassificationDataset):
         return Clothing1MDataset(root_dir=self.test_dir, transform=self.get_transforms(train=False))
 
     def get_transforms(self, train=True):
+        if self.train_transforms and train:
+            return self.train_transforms
+        elif self.val_transforms and not train:
+            return self.val_transforms
+        
         trnsfrms = []
         trnsfrms.append(transforms.Resize((256, 256)))
         if train:

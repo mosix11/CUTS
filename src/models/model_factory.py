@@ -8,6 +8,7 @@ from . import PostActResNet9_ETD
 from . import CNN5_ETD
 from . import ViT_Small
 from . import TorchvisionModels, TimmModels
+from . import OpenClipImageClassifier, OpenClipMultiHeadImageClassifier
 
 def create_model(cfg, num_classes):
     model_type = cfg.pop('type')
@@ -99,6 +100,20 @@ def create_model(cfg, num_classes):
             model_type=model_type,
             **cfg
         )
+        
+    elif model_type.startswith('open_clip'):
+        model_type = model_type.removeprefix('open_clip_')
+        if model_type.starts_with('multi_head'):
+            model_type = model_type.removeprefix('multi_head')
+            model = OpenClipMultiHeadImageClassifier(
+                model_type=model_type,
+                **cfg
+            )
+        else:
+            model = OpenClipImageClassifier(
+                model_type=model_type,
+                **cfg
+            )
     
     else: raise ValueError(f"Invalid model type {model_type}.")
     

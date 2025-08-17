@@ -1,7 +1,7 @@
 import comet_ml
 from src.datasets import dataset_factory
 from src.models import model_factory, TaskVector, weight_norm_analysis
-from src.trainers import StandardTrainer, utils as trainer_utils
+from src.trainers import StandardTrainer, TrainerRLS,  utils as trainer_utils
 import matplotlib.pyplot as plt
 import seaborn as sns
 from src.utils import misc_utils
@@ -98,7 +98,10 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         plots_dir = experiment_dir / Path("plots")
         plots_dir.mkdir(exist_ok=True, parents=True)
         
-        trainer = StandardTrainer(
+        trainer_cls = StandardTrainer
+        if strategy['finetuning_set'] == 'LowLoss': trainer_cls = TrainerRLS
+        
+        trainer = trainer_cls(
             outputs_dir=outputs_dir,
             **cfg['trainer']['pretraining'],
             exp_name=experiment_name,
