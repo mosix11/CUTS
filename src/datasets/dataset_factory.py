@@ -30,27 +30,27 @@ def create_dataset(cfg, augmentations=None):
             **cfg_cpy
         )
     elif dataset_name == 'mog':
-        num_classes = cfg_cpy['num_classes']
+        num_classes = cfg_cpy.pop('num_classes')
         dataset = MoGSynthetic(
             **cfg_cpy
         )
     elif dataset_name == 'clothing1M':
-        num_classes = cfg_cpy['num_classes']
+        num_classes = cfg_cpy.pop('num_classes')
         dataset = Clothing1M(
             **cfg_cpy
         )
     elif dataset_name == 'kmnist':
-        num_classes = cfg_cpy['num_classes']
+        num_classes = cfg_cpy.pop('num_classes')
         dataset = KMNIST(
             **cfg_cpy
         )
     elif dataset_name == 'food101':
-        num_classes = cfg_cpy['num_classes']
+        num_classes = cfg_cpy.pop('num_classes')
         dataset = Food101(
             **cfg_cpy
         )
     elif dataset_name == 'flowers102':
-        num_classes = cfg_cpy['num_classes']
+        num_classes = cfg_cpy.pop('num_classes')
         dataset = Flowers102(
             **cfg_cpy
         )
