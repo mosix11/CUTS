@@ -81,6 +81,8 @@ def linear_probe_heads(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name
         dataset_cfg['val_transforms'] = model.get_val_transforms()
         dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
         
+        model.activate_head(head_name=head_cfg['head_name'])
+        
         experiment_name = f"{cfg_name}/{dataset_cfg['name']}/head_probe"
         experiment_dir = outputs_dir / f"{cfg_name}/{dataset_cfg['name']}"
         
