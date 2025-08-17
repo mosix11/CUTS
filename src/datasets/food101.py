@@ -44,13 +44,13 @@ class Food101(BaseClassificationDataset):
 
 
     def load_train_set(self):
-        return datasets.Food101(root=self.dataset_dir, train=True, transform=self.get_transforms(train=True), download=True)
+        return datasets.Food101(root=self.dataset_dir, split="train", transform=self.get_transforms(train=True), download=True)
     
     def load_validation_set(self):
         return None
     
     def load_test_set(self):
-        return datasets.Food101(root=self.dataset_dir, train=False, transform=self.get_transforms(train=False), download=True)
+        return datasets.Food101(root=self.dataset_dir, split="test", transform=self.get_transforms(train=False), download=True)
 
     def get_transforms(self, train=True):
         if self.train_transforms and train:
