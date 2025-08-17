@@ -6,6 +6,10 @@ from .fashion_mnist import FashionMNIST
 from .clothing1M import Clothing1M
 from .mog_synthetic import MoGSynthetic
 from .dummy_datasets import DummyClassificationDataset
+from .kmnist import KMNIST
+from .food101 import Food101
+from .flower102 import Flowers102
+
 from . import dataset_wrappers
 from . import dataset_factory
 

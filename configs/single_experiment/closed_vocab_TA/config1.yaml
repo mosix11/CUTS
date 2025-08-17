@@ -34,6 +34,31 @@ datasets:
     num_workers: 8
     seed: *dataset_seed
 
+  - name: "food101"
+    num_classes: 101
+    img_size: [224, 224]
+    batch_size: 128
+    valset_ratio: 0.0
+    num_workers: 8
+    seed: *dataset_seed
+
+  - name: "flowers102"
+    num_classes: 102
+    img_size: [224, 224]
+    batch_size: 128
+    valset_ratio: 0.0
+    num_workers: 8
+    seed: *dataset_seed
+
+  - name: "kmnist"
+    num_classes: 10
+    img_size: [224, 224]
+    batch_size: 128
+    valset_ratio: 0.0
+    num_workers: 8
+    seed: *dataset_seed
+
+
 model:
   type: 'open_clip_multi_head_ViT-B-16'
   pt_weights: 'datacomp_xl_s13b_b90k'
@@ -46,7 +71,13 @@ model:
       head_out_dim: 10
     - head_name: 'cifar100'
       head_out_dim: 100
-    
+    - head_name: 'food101'
+      head_out_dim: 101
+    - head_name: 'food102'
+      head_out_dim: 102
+    - head_name: 'kmnist'
+      head_out_dim: 10
+
   loss_fn: 'CE'
   metrics: ['ACC', 'F1']
 
