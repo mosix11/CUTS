@@ -4,7 +4,7 @@
 import torch
 import torch.nn.functional as F
 from torch import nn
-from . import BaseClassificationModel
+from . import BaseModel
 
 from einops import rearrange, repeat
 from einops.layers.torch import Rearrange
@@ -100,7 +100,7 @@ class SPT(nn.Module):
         x_with_shifts = torch.cat((x, *shifted_x), dim = 1)
         return self.to_patch_tokens(x_with_shifts)
 
-class ViT_Small(BaseClassificationModel):
+class ViT_Small(BaseModel):
     def __init__(
         self,
         *,

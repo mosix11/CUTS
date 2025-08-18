@@ -1,13 +1,13 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from . import BaseClassificationModel
+from . import BaseModel
 
 class Flatten(nn.Module):
     def forward(self, x): return x.view(x.size(0), x.size(1))
 
 
-class CNN5(BaseClassificationModel):
+class CNN5(BaseModel):
     
     def __init__(
         self,

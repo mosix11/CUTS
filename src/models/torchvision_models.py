@@ -2,11 +2,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
-from . import BaseClassificationModel
+from . import BaseModel
 
 from typing import Union, List
 
-class TorchvisionModels(BaseClassificationModel):
+class TorchvisionModels(BaseModel):
     
     def __init__(
         self,

@@ -2,7 +2,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from . import BaseClassificationModel
+from . import BaseModel
 
 def conv3x3(in_planes, out_planes, stride=1):
     """3x3 convolution with padding"""
@@ -88,7 +88,7 @@ class Bottleneck(nn.Module):
         return out
 
 # General Post-Activation ResNet Class (ResNet V1)
-class PostActResNet(BaseClassificationModel):
+class PostActResNet(BaseModel):
     """
     General Post-Activation ResNet model implementation (ResNet V1).
     It takes a 'block' type (BasicBlock or Bottleneck) and a list of 'num_blocks'

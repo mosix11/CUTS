@@ -184,7 +184,7 @@ class Flowers102(BaseClassificationDataset):
         ]
 
     def get_identifier(self):
-        identifier = 'food101|'
+        identifier = 'flowers102|'
         # identifier += f'ln{self.label_noise}|'
         identifier += 'aug|' if len(self.augmentations) > 0 else 'noaug|'
         identifier += f'subsample{self.subsample_size}' if self.subsample_size != (-1, -1) else 'full'

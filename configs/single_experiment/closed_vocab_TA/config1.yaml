@@ -73,7 +73,7 @@ model:
       head_out_dim: 100
     - head_name: 'food101'
       head_out_dim: 101
-    - head_name: 'food102'
+    - head_name: 'flowers102'
       head_out_dim: 102
     - head_name: 'kmnist'
       head_out_dim: 10

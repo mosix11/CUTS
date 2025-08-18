@@ -10,7 +10,7 @@ from pathlib import Path
 
 from typing import Union, List
 
-class OpenClipImageEncoder(torch.nn.Module):
+class OpenClipImageEncoderModule(nn.Module):
     def __init__(
         self,
         model_name:str,
@@ -46,9 +46,17 @@ class OpenClipImageEncoder(torch.nn.Module):
                     delattr(self.model, attr)
             setattr(self.model, "encode_text", None)
 
+
+
     def forward(self, images):
         return self.model.encode_image(images)
 
+
+    @torch.no_grad()
+    def predict(self, x):
+        """Performs inference (prediction) without gradient computation."""
+        preds = self(x)
+        return preds
 
     # @classmethod
     # def load(cls, model_name:str, filename:Path):
@@ -59,6 +67,9 @@ class OpenClipImageEncoder(torch.nn.Module):
     #     model = cls(model_name)
     #     model.load_state_dict(state_dict)
     #     return model
+
+
+class OpenClipImageEncoder()
 
 class OpenClipImageClassifier(BaseClassificationModel):
     
@@ -76,7 +87,7 @@ class OpenClipImageClassifier(BaseClassificationModel):
         self.pt_weights = pt_weights
         self.pretrained = True if pt_weights else False
         
-        self.image_encoder = OpenClipImageEncoder(model_name=model_type, pt_weights=pt_weights, keep_lang=False)
+        self.image_encoder = OpenClipImageEncoderModule(model_name=model_type, pt_weights=pt_weights, keep_lang=False)
         
         self.classifier_head = nn.Linear(self.image_encoder.feature_dim, num_classes)
         
@@ -176,7 +187,7 @@ class OpenClipMultiHeadImageClassifier(nn.Module):
         self.pt_weights = pt_weights
         self.pretrained = True if pt_weights else False
         
-        self.image_encoder = OpenClipImageEncoder(model_name=model_type, pt_weights=pt_weights, keep_lang=False)
+        self.image_encoder = OpenClipImageEncoderModule(model_name=model_type, pt_weights=pt_weights, keep_lang=False)
         
         self.classifier_heads = nn.ModuleDict()
         for head_cfg in heads_cfg:
@@ -234,6 +245,13 @@ class OpenClipMultiHeadImageClassifier(nn.Module):
         preds = self(x)
         return preds
 
+
+    @torch.no_grad()
+    def get_features(self, x):
+        """Returns the features extracted by the image encoder."""
+        ftrs = self.image_encoder(x)
+        return ftrs
+
     def compute_metrics(self):
         """Computes and returns the current metric results."""
         results = {}
@@ -255,6 +273,9 @@ class OpenClipMultiHeadImageClassifier(nn.Module):
         
     def get_active_head(self):
         return self.classifier_heads[self.activate_head]
+    
+    def get_image_encoder(self):
+        return self.image_encoder
     
     def get_train_transforms(self):
         return self.image_encoder.train_preprocess

@@ -1,4 +1,4 @@
-from .base_classification_model import BaseClassificationModel
+from .base_model import BaseModel
 from .fc1 import FC1
 from .fcN import FCN
 from .cnn import CNN5

@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
 from torch.amp import autocast
+from . import BaseModel
 
 import timm
 

@@ -1,10 +1,10 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from . import BaseClassificationModel
+from . import BaseModel
 
 
-class FC1(BaseClassificationModel):
+class FC1(BaseModel):
     
     def __init__(
         self,

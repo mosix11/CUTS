@@ -7,9 +7,9 @@ from abc import ABC, abstractmethod
 
 
 
-class BaseClassificationModel(nn.Module, ABC): 
+class BaseModel(nn.Module, ABC): 
     """
-    Abstract Base Class for classification models, providing common
+    Abstract Base Class for models, providing common
     training, validation, prediction, and metric handling functionalities.
     """
     def __init__(self, loss_fn=None, metrics: dict = None):

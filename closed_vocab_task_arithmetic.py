@@ -26,6 +26,7 @@ from tqdm import tqdm
 from collections import OrderedDict
 import re
 
+from src.trainers import knn_eval
 from helper_funcs import evaluate_model, eval_model_on_clean_noise_splits, search_optimal_coefficient, get_confusion_matrix, row_normalize
 
 def eval_model_on_tvs(model, taskvectors, results_dict, cfg, dataset, num_classes, device):
@@ -66,6 +67,32 @@ def eval_model_on_tvs(model, taskvectors, results_dict, cfg, dataset, num_classe
         
     return results    
 
+
+def do_knn_on_image_encoder(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
+    model = model_factory.create_model(cfg['model'])
+    model.freeze_encoder()
+    
+    feature_extractor = model.get_image_encoder()
+    
+    for head_cfg, dataset_cfg in zip(cfg['model']['heads_cfg'], cfg['datasets']):
+        print(head_cfg['head_name'])
+        continue
+        dataset_cfg['train_transforms'] = model.get_train_transforms()
+        dataset_cfg['val_transforms'] = model.get_val_transforms()
+        dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
+        
+        metrics = knn_eval(
+            feature_extractor=feature_extractor,
+            train_dl=dataset.get_train_dataloader(),
+            test_dl=dataset.get_test_dataloader(),
+            k=20,
+            weighted=True,
+            normalize=True,
+            batch_size_predict=2048,
+            device=trainer_utils.get_gpu_device()
+        )
+        
+        print(f"kNN Performance on {head_cfg['head_name']}:", metrics)
 
 def linear_probe_heads(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     cfg['trainer']['linear_probing']['comet_api_key'] = os.getenv("COMET_API_KEY")
@@ -577,6 +604,14 @@ if __name__ == "__main__":
         type=str,
     )
     
+    
+    parser.add_argument(
+        "-k",
+        "--knn",
+        help="Perform kNN on the image encoder.",
+        action="store_true",
+    )
+    
     parser.add_argument(
         "-l",
         "--linprobe",
@@ -612,6 +647,9 @@ if __name__ == "__main__":
     results_dir = Path("results/single_experiment/closed_vocab_TA").absolute()
     results_dir.mkdir(exist_ok=True, parents=True)
 
+
+    if args.knn:
+        do_knn_on_image_encoder(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)
     if args.linprobe:
         linear_probe_heads(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)
     if args.finetune:
