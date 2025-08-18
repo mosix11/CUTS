@@ -70,17 +70,16 @@ def eval_model_on_tvs(model, taskvectors, results_dict, cfg, dataset, num_classe
 
 def do_knn_on_image_encoder(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     model = model_factory.create_model(cfg['model'])
-    model.freeze_encoder()
+    model.freeze()
+    model.deactivate_projector()
     
-    feature_extractor = model.get_image_encoder()
-    
-    for head_cfg, dataset_cfg in zip(cfg['model']['heads_cfg'], cfg['datasets']):
+    for dataset_cfg in cfg['datasets']:
         dataset_cfg['train_transforms'] = model.get_train_transforms()
         dataset_cfg['val_transforms'] = model.get_val_transforms()
         dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
         
         metrics = knn_eval(
-            feature_extractor=feature_extractor,
+            feature_extractor=model,
             train_dl=dataset.get_train_dataloader(),
             test_dl=dataset.get_test_dataloader(),
             k=20,
@@ -90,7 +89,7 @@ def do_knn_on_image_encoder(outputs_dir: Path, results_dir: Path, cfg: dict, cfg
             device=trainer_utils.get_gpu_device()
         )
         
-        print(f"kNN Performance on {head_cfg['head_name']}:", metrics)
+        print(f"kNN Performance on {dataset['name']}:", metrics)
 
 def finetune_models_SCL(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     cfg['trainer']['finetuning']['comet_api_key'] = os.getenv("COMET_API_KEY")
@@ -130,18 +129,18 @@ def finetune_models_SCL(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_nam
         
         results = trainer.fit(model, dataset, resume=False)
         
-        model.deactivate_projector()
-        metrics = knn_eval(
-            feature_extractor=model,
-            train_dl=dataset.get_train_dataloader(),
-            test_dl=dataset.get_test_dataloader(),
-            k=20,
-            weighted=True,
-            normalize=True,
-            batch_size_predict=2048,
-            device=trainer_utils.get_gpu_device()
-        )
-        print(f'KNN Evaluation on {dataset_cfg['name']}: ', metrics)
+        # model.deactivate_projector()
+        # metrics = knn_eval(
+        #     feature_extractor=model,
+        #     train_dl=dataset.get_train_dataloader(),
+        #     test_dl=dataset.get_test_dataloader(),
+        #     k=20,
+        #     weighted=True,
+        #     normalize=True,
+        #     batch_size_predict=2048,
+        #     device=trainer_utils.get_gpu_device()
+        # )
+        # print(f'KNN Evaluation on {dataset_cfg['name']}: ', metrics)
         torch.save(model.state_dict(), weights_dir / Path("ft_weights.pth"))
         
 
