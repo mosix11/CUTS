@@ -8,7 +8,7 @@ from .mog_synthetic import MoGSynthetic
 from .dummy_datasets import DummyClassificationDataset
 from .kmnist import KMNIST
 from .food101 import Food101
-from .flower102 import Flowers102
+from .flowers102 import Flowers102
 
 from . import dataset_wrappers
 from . import dataset_factory

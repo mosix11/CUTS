@@ -149,6 +149,9 @@ class NoisyClassificationDataset(Dataset):
 
         else:
             warnings.warn("Base dataset has no .targets attribute. Extracting labels by iterating, which can be slow.")
+            # TODO: Teset this, this might have some problems since datasets here most
+            # probably are subclasses of `DatasetWithIndex` and will return three values
+            # when iterated over!
             base_labels = torch.tensor([label for _, label in base_dataset], dtype=torch.long)
 
         if not indices_chain:

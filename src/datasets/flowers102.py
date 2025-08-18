@@ -47,7 +47,7 @@ class Flowers102(BaseClassificationDataset):
         return datasets.Flowers102(root=self.dataset_dir, split="train", transform=self.get_transforms(train=True), download=True)
     
     def load_validation_set(self):
-        return None
+        return datasets.Flowers102(root=self.dataset_dir, split="val",   transform=self.get_transforms(train=True), download=True)
     
     def load_test_set(self):
         return datasets.Flowers102(root=self.dataset_dir, split="test", transform=self.get_transforms(train=False), download=True)

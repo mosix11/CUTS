@@ -11,15 +11,15 @@ datasets:
     seed: *dataset_seed
 
   - name: "fashion_mnist"
-    num_classes: 128
+    num_classes: 10
     img_size: [224, 224]
-    batch_size: 64
+    batch_size: 128
     valset_ratio: 0.0
     num_workers: 8
     seed: *dataset_seed
 
   - name: "cifar10"
-    num_classes: 128
+    num_classes: 10
     img_size: [224, 224]
     batch_size: 128
     valset_ratio: 0.0

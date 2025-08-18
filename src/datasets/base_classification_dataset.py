@@ -4,6 +4,7 @@ import torchvision.transforms.v2 as transforms
 from torch.utils.data import Dataset, DataLoader, random_split, Subset
 
 from .dataset_wrappers import DatasetWithIndex, LabelRemapper, NoisyClassificationDataset, BinarizedClassificationDataset
+from .custom_samplers import ClassBalancedBatchSampler
 
 import os
 from pathlib import Path
@@ -19,6 +20,7 @@ class BaseClassificationDataset(ABC):
         dataset_dir:Path = None,
         num_classes:int = None,
         batch_size: int = 256,
+        use_balanced_batch_sampler:bool = False,
         subsample_size: Union[tuple, list] = (-1, -1),
         class_subset: list = [],
         remap_labels: bool = False,
@@ -37,6 +39,7 @@ class BaseClassificationDataset(ABC):
         self.dataset_name = dataset_name
         
         self.batch_size = batch_size
+        self.use_balanced_batch_sampler = use_balanced_batch_sampler
         self.num_workers = num_workers
         self.subsample_size = subsample_size
         self.class_subset = sorted(class_subset) if class_subset else None
@@ -297,22 +300,50 @@ class BaseClassificationDataset(ABC):
         self.testset = test_dataset
         self.heldout_set = heldout_set
         
-        self.train_loader = self._build_dataloader(self.trainset, shuffle=True)
+        self.train_loader = self._build_dataloader(self.trainset, shuffle=True, use_balanced_batch_sampler=True if self.use_balanced_batch_sampler else False)
         self.val_loader = self._build_dataloader(self.valset) if self.valset else None
         self.test_loader = self._build_dataloader(self.testset)
         self.heldout_loader = self._build_dataloader(self.heldout_set) if self.heldout_set else None
         
-    def _build_dataloader(self, dataset, shuffle=False):
+    def _build_dataloader(self, dataset, shuffle=False, use_balanced_batch_sampler=False):
         if not dataset or len(dataset) == 0:
             return None
-        return DataLoader(
-            dataset,
-            batch_size=self.batch_size,
-            shuffle=shuffle,
-            num_workers=self.num_workers,
-            pin_memory=True,
-            generator=self.generator,
-        )
+        
+        if use_balanced_batch_sampler:
+            print('using balanced batch sampler.')
+            # x, y, idx for each sample
+            labels = torch.tensor([label for _, label, _ in dataset], dtype=torch.long)
+            samples_per_class = 4
+            assert self.batch_size % samples_per_class == 0, \
+                f"batch_size ({self.batch_size}) must be divisible by samples_per_class ({samples_per_class})"
+            classes_per_batch = self.batch_size // samples_per_class  # int
+            assert classes_per_batch > 0
+            sampler = ClassBalancedBatchSampler(
+                labels=labels,
+                classes_per_batch=classes_per_batch,
+                samples_per_class=samples_per_class,
+                num_batches=len(dataset) // self.batch_size,     # or set an explicit number per epoch
+                replacement=True,     # safer if some classes are tiny
+                drop_last=True,
+                generator=self.generator
+            )
+            return DataLoader(
+                dataset,
+                batch_sampler=sampler,
+                num_workers=self.num_workers,
+                pin_memory=True,
+                generator=self.generator,
+            )
+        
+        else:
+            return DataLoader(
+                dataset,
+                batch_size=self.batch_size,
+                shuffle=shuffle,
+                num_workers=self.num_workers,
+                pin_memory=True,
+                generator=self.generator,
+            )
         
     def _get_balanced_subset(self, dataset: Dataset, total_size: int, class_subset: list, generator: torch.Generator) -> Subset:
         num_classes = len(class_subset)

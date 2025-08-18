@@ -133,8 +133,8 @@ def create_model(cfg, num_classes=None):
                 model_type=model_type,
                 **cfg
             )
-        elif model_type.startswith('img_encoder'):
-            model_type = model_type.removeprefix('img_encoder_')
+        elif model_type.startswith('encoder'):
+            model_type = model_type.removeprefix('encoder_')
             model = OpenClipImageEncoder(
                 model_type=model_type,
                 **cfg

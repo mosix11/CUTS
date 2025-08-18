@@ -1,5 +1,5 @@
 import comet_ml
-from src.datasets import dataset_factory
+from src.datasets import dataset_factory, dataset_wrappers
 from src.models import model_factory, TaskVector, weight_norm_analysis
 from src.trainers import StandardTrainer, utils as trainer_utils
 import matplotlib.pyplot as plt
@@ -23,7 +23,7 @@ import numpy as np
 from torchmetrics import ConfusionMatrix
 import json
 from tqdm import tqdm
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 import re
 
 from src.trainers import knn_eval
@@ -94,6 +94,9 @@ def do_knn_on_image_encoder(outputs_dir: Path, results_dir: Path, cfg: dict, cfg
         
         print(f"kNN Performance on {head_cfg['head_name']}:", metrics)
 
+
+
+
 def linear_probe_heads(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     cfg['trainer']['linear_probing']['comet_api_key'] = os.getenv("COMET_API_KEY")
     # cfg['trainer']['finetuning']['comet_api_key'] = os.getenv("COMET_API_KEY")
@@ -140,6 +143,54 @@ def linear_probe_heads(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name
         #     show=False,
         # )
     
+
+
+
+def finetune_models_SCL(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
+    cfg['trainer']['finetuning']['comet_api_key'] = os.getenv("COMET_API_KEY")
+    
+    model = model_factory.create_model(cfg['model'])
+    # pretrained_weights = model.state_dict()
+    
+    for dataset_cfg in cfg['datasets']:
+        dataset_cfg['train_transforms'] = model.get_train_transforms()
+        dataset_cfg['val_transforms'] = model.get_val_transforms()
+        dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
+        
+        # train_loader = dataset.get_train_dataloader()
+
+        # for i in range(4):
+            
+        #     for b_idx, batch in enumerate(train_loader):
+        #         batch_stats = defaultdict(int)
+        #         x, y, idx = batch
+        #         for label in y:
+        #             batch_stats[label.item()] +=1
+        #         print(batch_stats)
+            
+        # exit()
+        
+        experiment_name = f"{cfg_name}/{dataset_cfg['name']}/finetune"
+        experiment_dir = outputs_dir / f"{cfg_name}/{dataset_cfg['name']}"
+        
+        weights_dir = experiment_dir / Path("weights")
+        weights_dir.mkdir(exist_ok=True, parents=True)
+        
+        plots_dir = experiment_dir / Path("plots")
+        plots_dir.mkdir(exist_ok=True, parents=True)
+        
+        if weights_dir.joinpath("ft_weights.pth").exists():
+            continue
+        
+        trainer = StandardTrainer(
+            outputs_dir=outputs_dir,
+            **cfg['trainer']['finetuning'],
+            exp_name=experiment_name,
+            exp_tags=None,
+        )
+        
+        results = trainer.fit(model, dataset, resume=False)
+        torch.save(model.state_dict(), weights_dir / Path("ft_weights.pth"))
 
 def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     cfg['trainer']['finetuning']['comet_api_key'] = os.getenv("COMET_API_KEY")
@@ -653,6 +704,7 @@ if __name__ == "__main__":
     if args.linprobe:
         linear_probe_heads(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)
     if args.finetune:
-        finetune_models(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)
+        # finetune_models(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)
+        finetune_models_SCL(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)
     if args.tv:
         apply_tv(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)
