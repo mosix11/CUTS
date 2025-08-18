@@ -8,7 +8,9 @@ from . import PostActResNet9_ETD
 from . import CNN5_ETD
 from . import ViT_Small
 from . import TorchvisionModels, TimmModels
-from . import OpenClipImageClassifier, OpenClipMultiHeadImageClassifier
+from . import OpenClipImageEncoder, OpenClipImageClassifier, OpenClipMultiHeadImageClassifier
+
+from .loss_functions import SupervisedContrastiveLoss, CompoundLoss
 
 
 def get_metric(metric_name, num_classes):
@@ -25,18 +27,24 @@ def get_metric(metric_name, num_classes):
     else: raise ValueError(f"Invalid metric {metric_name}.")
 def create_model(cfg, num_classes=None):
     model_type = cfg.pop('type')
-    loss_fn = cfg['loss_fn']
-    if loss_fn == 'MSE':
+    loss_fn_cfg = cfg['loss_fn']
+    loss_fn_type = loss_fn_cfg.pop('type')
+    if loss_fn_type == 'MSE':
         cfg['loss_fn'] = torch.nn.MSELoss()
-    elif loss_fn == 'MSE-NR':
+    elif loss_fn_type == 'MSE-NR':
         cfg['loss_fn'] = torch.nn.MSELoss(reduction='none')
-    elif loss_fn == 'CE':
+    elif loss_fn_type == 'CE':
         cfg['loss_fn'] = torch.nn.CrossEntropyLoss()
-    elif loss_fn == 'CE-NR':
+    elif loss_fn_type == 'CE-NR':
         cfg['loss_fn'] = torch.nn.CrossEntropyLoss(reduction='none')
-    elif loss_fn == 'BCE':
+    elif loss_fn_type == 'BCE':
         cfg['loss_fn'] = torch.nn.BCEWithLogitsLoss()
-    else: raise ValueError(f"Invalid loss function {cfg['loss_fn']}.")
+    elif loss_fn_type == 'SCL':
+        cfg['loss_fn'] = SupervisedContrastiveLoss(
+            **loss_fn_cfg
+        )
+        
+    else: raise ValueError(f"Invalid loss function {cfg['loss_fn']['type']}.")
     
     
     if cfg['metrics']:
@@ -119,8 +127,15 @@ def create_model(cfg, num_classes=None):
                 model_type=model_type,
                 **cfg
             )
-        else:
+        elif model_type.startswith('single_head'):
+            model_type = model_type.removeprefix('single_head_')
             model = OpenClipImageClassifier(
+                model_type=model_type,
+                **cfg
+            )
+        elif model_type.startswith('img_encoder'):
+            model_type = model_type.removeprefix('img_encoder_')
+            model = OpenClipImageEncoder(
                 model_type=model_type,
                 **cfg
             )

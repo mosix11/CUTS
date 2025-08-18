@@ -4,7 +4,8 @@ import open_clip
 import torch.nn as nn
 import torch.nn.functional as F
 import torchmetrics
-from . import BaseClassificationModel
+from torch.amp import autocast
+from . import BaseModel
 
 from pathlib import Path
 
@@ -51,13 +52,6 @@ class OpenClipImageEncoderModule(nn.Module):
     def forward(self, images):
         return self.model.encode_image(images)
 
-
-    @torch.no_grad()
-    def predict(self, x):
-        """Performs inference (prediction) without gradient computation."""
-        preds = self(x)
-        return preds
-
     # @classmethod
     # def load(cls, model_name:str, filename:Path):
     #     print(f"Loading image encoder from {filename}")
@@ -69,9 +63,70 @@ class OpenClipImageEncoderModule(nn.Module):
     #     return model
 
 
-class OpenClipImageEncoder()
+class OpenClipImageEncoder(BaseModel):
+    def __init__(
+        self,
+        model_type:str = None,
+        pt_weights:str = None,
+        loss_fn:nn.Module = None,
+        metrics:dict = None
+    ):
+        super().__init__(loss_fn=loss_fn, metrics=metrics)
+        
+        self.model_type = model_type
+        self.pt_weights = pt_weights
+        self.pretrained = True if pt_weights else False
+        
+        self.image_encoder = OpenClipImageEncoderModule(model_name=model_type, pt_weights=pt_weights, keep_lang=False)
+        
+    def forward(self, x):
+        ftrs = self.image_encoder(x)
+        return ftrs
+    
+    @torch.no_grad()
+    def predict(self, x):
+        """Performs inference (prediction) without gradient computation."""
+        preds = self(x)
+        return preds
+    
+    def get_train_transforms(self):
+        return self.image_encoder.train_preprocess
+    
+    def get_val_transforms(self):
+        return self.image_encoder.val_preprocess
+    
+    def get_identifier(self):
+        return 'Open Clip Image Encoder ' + self.model_type
+    
+    
+    def freeze(self):
+        for p in self.image_encoder.parameters():
+            p.requires_grad_(False)
 
-class OpenClipImageClassifier(BaseClassificationModel):
+    def unfreeze(self, top_n_blocks=None):
+        if top_n_blocks is None:
+            for p in self.image_encoder.parameters():
+                p.requires_grad_(True)
+        else:
+            # works for ViTs with .visual.transformer.resblocks
+            blocks = getattr(self.image_encoder.model.visual.transformer, "resblocks", None)
+            if blocks is None:
+                for p in self.image_encoder.parameters():
+                    p.requires_grad_(True)
+                return
+            for p in self.image_encoder.parameters():
+                p.requires_grad_(False)
+            for blk in blocks[-top_n_blocks:]:
+                for p in blk.parameters():
+                    p.requires_grad_(True)
+            # always unfreeze final norm/proj
+            for attr in ["ln_post","proj","ln_pre"]:
+                mod = getattr(self.image_encoder.model.visual, attr, None)
+                if mod is not None:
+                    for p in mod.parameters():
+                        p.requires_grad_(True)
+
+class OpenClipImageClassifier(BaseModel):
     
     def __init__(
         self,
@@ -152,7 +207,7 @@ class OpenClipImageClassifier(BaseClassificationModel):
                                       
                         
                         
-from torch.amp import autocast
+
                  
 class OpenClipMultiHeadImageClassifier(nn.Module):
     

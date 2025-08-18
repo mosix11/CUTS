@@ -60,7 +60,7 @@ datasets:
 
 
 model:
-  type: 'open_clip_multi_head_ViT-B-16'
+  type: 'open_clip_encoder_ViT-B-16'
   pt_weights: 'datacomp_xl_s13b_b90k'
   heads_cfg:
     - head_name: 'mnist'
@@ -79,7 +79,11 @@ model:
       head_out_dim: 10
 
   loss_fn:
-    type: 'CE'
+    type: 'SCL'
+    tau: 0.07
+    normalize: True
+    reduction: 'mean'
+    ignore_index: null
   metrics: ['ACC', 'F1']
 
 

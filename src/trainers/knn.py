@@ -25,12 +25,13 @@ def extract_features(
     feature_extractor.to(device)
     feature_extractor.eval()
     feats, labels = [], []
+    
     for batch in tqdm(dataloader, desc="Extracting features", leave=False):
         
         batch = prepare_batch(batch, device)
         x, y = batch[:2]
         
-        z = feature_extractor.predict(x)      # shape (B, D)
+        z = feature_extractor(x)      # shape (B, D)
         if normalize:
             z = F.normalize(z, dim=1)    # cosine-friendly
         feats.append(z.detach().cpu())
