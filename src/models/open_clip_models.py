@@ -252,6 +252,9 @@ class OpenClipMultiHeadImageClassifier(nn.Module):
         if head_name not in self.classifier_heads:
             raise ValueError('The specified head name is not in the classifier heads.')
         self.active_head = head_name
+        
+    def get_active_head(self):
+        return self.classifier_heads[self.activate_head]
     
     def get_train_transforms(self):
         return self.image_encoder.train_preprocess
@@ -263,6 +266,9 @@ class OpenClipMultiHeadImageClassifier(nn.Module):
     def get_head_weights(self, head_name):
         return self.classifier_heads[head_name].state_dict()
     
+    def get_encoder_weights(self):
+        return self.image_encoder.state_dict()
+    
     def load_heads(self, state_dicts):
         for head_name, state_dict in state_dicts.items():
             if head_name not in self.classifier_heads:
@@ -270,12 +276,19 @@ class OpenClipMultiHeadImageClassifier(nn.Module):
             else:
                 self.classifier_heads[head_name].load_state_dict(state_dict)
         
+    def load_encoder(self, state_dict):
+        self.image_encoder.load_state_dict(state_dict)
+        
     def freeze_head(self, head_name:Union[str, List[str]]):
         if isinstance(head_name, List):
             for hn in head_name:
                 self.classifier_heads[hn].requires_grad_(False)
         elif isinstance(head_name, str):
             self.classifier_heads[hn].requires_grad_(False)
+    
+    def freeze_all_heads(self):
+        for _, cls_head in self.classifier_heads.items():
+            cls_head.requires_grad_(False)
         
     def unfreeze_head(self, head_name:Union[str, List[str]]):
         if isinstance(head_name, List):
@@ -283,6 +296,10 @@ class OpenClipMultiHeadImageClassifier(nn.Module):
                 self.classifier_heads[hn].requires_grad_(True)
         elif isinstance(head_name, str):
             self.classifier_heads[hn].requires_grad_(True)
+            
+    def unfreeze_all_heads(self):
+        for _, cls_head in self.classifier_heads.items():
+            cls_head.requires_grad_(True)
             
     
     def freeze_encoder(self):
