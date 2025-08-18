@@ -61,7 +61,7 @@ class BaseModel(nn.Module, ABC):
         with autocast('cuda', enabled=use_amp):
             preds = self(x) 
             loss = self.loss_fn(preds, y)
-
+            
         if self.metrics:
             for name, metric in self.metrics.items():
                 metric.update(preds.detach(), y.detach()) 

@@ -68,6 +68,8 @@ class OpenClipImageEncoder(BaseModel):
         self,
         model_type:str = None,
         pt_weights:str = None,
+        mlp_proj:bool = False,
+        proj_dim:int = None,
         loss_fn:nn.Module = None,
         metrics:dict = None
     ):
@@ -78,16 +80,42 @@ class OpenClipImageEncoder(BaseModel):
         self.pretrained = True if pt_weights else False
         
         self.image_encoder = OpenClipImageEncoderModule(model_name=model_type, pt_weights=pt_weights, keep_lang=False)
+        self.feature_dim = self.image_encoder.feature_dim
+        self.mlp_proj = mlp_proj
+        
+        if mlp_proj:
+            self.proj_dim = proj_dim
+            self.projector = nn.Sequential(
+                nn.Linear(self.feature_dim, self.feature_dim),
+                nn.ReLU(inplace=True),
+                nn.Linear(self.feature_dim, proj_dim)
+            )
         
     def forward(self, x):
         ftrs = self.image_encoder(x)
+        if self.mlp_proj:
+            ftrs = self.projector(ftrs)
         return ftrs
     
     @torch.no_grad()
     def predict(self, x):
         """Performs inference (prediction) without gradient computation."""
-        preds = self(x)
+        preds = self.image_encoder(x)
         return preds
+    
+    def deactivate_projector(self, remove=False):
+        self.mlp_proj = False
+        if remove:
+            del self.projector
+    
+    def activate_projector(self, reinitialize=False):
+        self.mlp_proj = True
+        if reinitialize:
+            self.projector = nn.Sequential(
+                nn.Linear(self.feature_dim, self.feature_dim),
+                nn.ReLU(inplace=True),
+                nn.Linear(self.feature_dim, self.proj_dim)
+            )
     
     def get_train_transforms(self):
         return self.image_encoder.train_preprocess

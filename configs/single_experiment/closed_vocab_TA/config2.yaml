@@ -70,7 +70,8 @@ datasets:
 model:
   type: 'open_clip_encoder_ViT-B-16'
   pt_weights: 'datacomp_xl_s13b_b90k'
-
+  mlp_proj: True
+  proj_dim: 128
   loss_fn:
     type: 'SCL'
     tau: 0.07

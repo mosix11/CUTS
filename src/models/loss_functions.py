@@ -5,7 +5,7 @@ import torch.nn.functional as F
 
 class SupervisedContrastiveLoss(nn.Module):
     """
-    Supervised Contrastive Loss (head-free, cosine by default).
+    Supervised Contrastive Loss.
 
     For each anchor i, the loss averages the log-probability of selecting any
     same-label sample j (j != i) among all non-self samples in the batch:
@@ -36,75 +36,86 @@ class SupervisedContrastiveLoss(nn.Module):
     def __init__(self, tau: float = 0.07, normalize: bool = True,
                  reduction: str = "mean", ignore_index: int | None = None):
         super().__init__()
-        assert reduction in {"mean", "sum", "none"}
+        if reduction not in {"mean", "sum", "none"}:
+            raise ValueError("reduction must be 'mean' | 'sum' | 'none'")
         self.tau = tau
         self.normalize = normalize
         self.reduction = reduction
         self.ignore_index = ignore_index
 
     def forward(self, z: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
-        """
-        z: (B, d) embeddings from encoder
-        y: (B,) integer labels
-        """
         if z.ndim != 2:
             raise ValueError(f"z must be (B, d), got {tuple(z.shape)}")
         if y.ndim != 1 or y.shape[0] != z.shape[0]:
             raise ValueError("y must be (B,) and match z.shape[0]")
+        if not torch.isfinite(z).all():
+            raise ValueError("Input embeddings contain NaN/Inf")
 
         B = z.size(0)
+        if B < 2:
+            return z.new_zeros((), requires_grad=True)
 
-        # Optional L2-normalization → cosine similarity with z @ z.T
         if self.normalize:
-            z = F.normalize(z, dim=1)
+            z = F.normalize(z, dim=1, eps=1e-12)
 
-        # Pairwise similarities (cosine if normalized), scaled by temperature
-        logits = (z @ z.t()) / self.tau
-        # Remove self-contrast from denominator
-        logits = logits.clone()  # avoid in-place on potential views
-        logits.fill_diagonal_(-float("inf"))
+        # Pairwise logits
+        logits = (z @ z.t()) / self.tau  # (B, B)
 
-        # Build positive mask: same labels, excluding self
-        y_i = y.view(-1, 1)
-        mask_pos = (y_i == y_i.t())
+        # Masks
+        device = z.device
+        eye = torch.eye(B, dtype=torch.bool, device=device)
+        y_col = y.view(-1, 1)
+        mask_pos = (y_col == y_col.t())
+        mask_pos.fill_diagonal_(False)  # j != i
 
-        # Handle ignore_index: exclude anchors/positives with ignored label
         if self.ignore_index is not None:
-            valid_labels = (y != self.ignore_index)
-            # anchors must be valid; positives must be valid too
-            mask_pos = mask_pos & valid_labels.view(-1, 1) & valid_labels.view(1, -1)
+            valid = (y != self.ignore_index)
+            # positives require both sides valid
+            mask_pos &= valid.view(-1, 1) & valid.view(1, -1)
+            # denominator: for anchor i, allow only columns j that are valid and j != i
+            denom_mask = (~eye) & valid.view(1, -1)
+        else:
+            denom_mask = ~eye  # all non-self
 
-        # Exclude self-pairs explicitly (already removed by diagonal, but keep mask consistent)
-        mask_pos.fill_diagonal_(False)
+        # If an anchor has no admissible denominator entries, skip it later
+        has_den = denom_mask.any(dim=1)
 
-        # Log-softmax row-wise over all non-self entries (denominator)
-        # log_prob[i, j] = log p(j | i)
-        log_den = torch.logsumexp(logits, dim=1, keepdim=True)  # (B, 1)
-        log_prob = logits - log_den                             # (B, B)
+        # Mask out disallowed columns in the denominator
+        masked_logits = logits.masked_fill(~denom_mask, float("-inf"))
 
-        # Count positives per anchor; anchors with zero positives will be skipped
-        pos_counts = mask_pos.sum(dim=1)  # (B,)
+        # Row-wise logsumexp (finite if has_den[i] is True; -inf otherwise)
+        log_den = torch.logsumexp(masked_logits, dim=1, keepdim=True)
+        log_prob = masked_logits - log_den
+
+        # For rows with no denominator, zero them out to avoid NaNs propagating
+        if not has_den.all():
+            log_prob = torch.where(has_den.view(-1, 1), log_prob, torch.zeros_like(log_prob))
+
+        # Positives must be part of the denominator set too
+        valid_pos_mask = mask_pos & denom_mask
+
+        # Count positives per anchor and mark anchors that actually have positives
+        pos_counts = valid_pos_mask.sum(dim=1)  # (B,)
         has_pos = pos_counts > 0
 
-        # Sum log-probs over positives and average per anchor
-        # per_anchor[i] = -(1/|P(i)|) * sum_{j in P(i)} log_prob[i, j]
-        sum_pos = (log_prob * mask_pos).sum(dim=1)                       # (B,)
-        per_anchor = -(sum_pos / pos_counts.clamp_min(1))                # (B,)
+        # Sum log-probs over positives (avoid 0 * -inf → NaN)
+        sum_pos = log_prob.masked_fill(~valid_pos_mask, 0.0).sum(dim=1)
+        per_anchor = -(sum_pos / pos_counts.clamp_min(1))
 
         if self.reduction == "none":
-            # For anchors with no positives, set loss to 0 (or you could set NaN)
-            out = per_anchor.clone()
-            out[~has_pos] = 0.0
+            out = per_anchor
+            # zero-out anchors without denom or positives
+            out = out.masked_fill(~(has_den & has_pos), 0.0)
             return out
 
-        if not has_pos.any():
-            # No valid anchors (e.g., batch has only unique labels) → return 0
-            return z.new_tensor(0.0, requires_grad=True)
+        valid_anchors = has_den & has_pos
+        if not valid_anchors.any():
+            return z.new_zeros((), requires_grad=True)
 
         if self.reduction == "mean":
-            return per_anchor[has_pos].mean()
-        else:  # 'sum'
-            return per_anchor[has_pos].sum()
+            return per_anchor[valid_anchors].mean()
+        else:
+            return per_anchor[valid_anchors].sum()
 
 
 class CompoundLoss(nn.Module):
