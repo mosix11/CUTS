@@ -75,14 +75,13 @@ def do_knn_on_image_encoder(outputs_dir: Path, results_dir: Path, cfg: dict, cfg
     pretrained_weights = model.state_dict()
     
     for dataset_cfg in cfg['datasets']:
-        if dataset_cfg['name'] != 'stanford_cars':
+        if dataset_cfg['name'] != 'eurosat':
             continue
         # For knn we apply the inference transformations for both
         # training samples and test samples.
         dataset_cfg['train_transforms'] = model.get_val_transforms()
         dataset_cfg['val_transforms'] = model.get_val_transforms()
         dataset_cfg['use_balanced_batch_sampler'] = False
-        print(dataset_cfg)
         dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
         
         model.load_state_dict(pretrained_weights)
@@ -160,21 +159,11 @@ def finetune_models_SCL(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_nam
         )
         
         results = trainer.fit(model, dataset, resume=False)
-        
-        # model.deactivate_projector()
-        # metrics = knn_eval(
-        #     feature_extractor=model,
-        #     train_dl=dataset.get_train_dataloader(),
-        #     test_dl=dataset.get_test_dataloader(),
-        #     k=20,
-        #     weighted=True,
-        #     normalize=True,
-        #     batch_size_predict=2048,
-        #     device=trainer_utils.get_gpu_device()
-        # )
-        # print(f'KNN Evaluation on {dataset_cfg['name']}: ', metrics)
         torch.save(model.state_dict(), weights_dir / Path("ft_weights.pth"))
         
+
+
+
 
 
 def linear_probe_heads(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
@@ -277,8 +266,51 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
         results = trainer.fit(model, dataset, resume=False)
         torch.save(model.get_encoder_weights(), weights_dir / Path("ft_weights.pth"))
             
-            
+
 def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
+    training_seed = cfg['training_seed']
+    if training_seed:
+        random.seed(training_seed)
+        np.random.seed(training_seed)
+        torch.manual_seed(training_seed)
+        torch.cuda.manual_seed_all(training_seed)
+    torch.backends.cudnn.enabled = True
+    torch.backends.cudnn.benchmark = False
+    os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
+    torch.use_deterministic_algorithms(True) 
+    torch.set_float32_matmul_precision("high")
+    
+    cpu = trainer_utils.get_cpu_device()
+    gpu = trainer_utils.get_gpu_device()
+    
+    
+    model = model_factory.create_model(cfg['model'])
+    model.deactivate_projector(remove=True)
+    pt_weights = model.state_dict()
+    # print([key for key in list(pt_weights.keys()) if 'image_encoder' not in key])
+    
+    ft_weights = OrderedDict()
+    for dataset_cfg in cfg['datasets']:
+        experiment_dir = outputs_dir / f"{cfg_name}/{dataset_cfg['name']}"
+        weights_dir = experiment_dir / Path("weights")
+
+        
+        if not weights_dir.joinpath("ft_weights.pth").exists():
+            raise RuntimeError(f'The finetuned weights for {dataset_cfg['name']} task was not found!')
+        model.load_state_dict(torch.load(weights_dir / 'ft_weights.pth', map_location=torch.device('cpu')), strict=False)
+        ft_weights[dataset_cfg['name']] = model.state_dict()
+        # print(len(list(pt_weights.keys())))
+        # print(len(list(ft_weights[dataset_cfg['name']].keys())))
+
+    
+        
+    task_vectors = OrderedDict()
+    for task_name, finetuend_weights in ft_weights.items():
+        task_vectors[task_name] = TaskVector(pt_weights, finetuend_weights)
+
+    
+            
+def apply_tvs(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     training_seed = cfg['training_seed']
     if training_seed:
         random.seed(training_seed)
