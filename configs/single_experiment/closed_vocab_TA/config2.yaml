@@ -7,7 +7,7 @@ datasets:
     num_classes: 10
     img_size: [224, 224]
     batch_size: 512
-    use_balanced_batch_sampler: False
+    use_balanced_batch_sampler: True
     valset_ratio: 0.0
     num_workers: 12
     seed: *dataset_seed
@@ -16,7 +16,7 @@ datasets:
     num_classes: 10
     img_size: [224, 224]
     batch_size: 512
-    use_balanced_batch_sampler: False
+    use_balanced_batch_sampler: True
     valset_ratio: 0.0
     num_workers: 12
     seed: *dataset_seed
@@ -25,7 +25,7 @@ datasets:
     num_classes: 10
     img_size: [224, 224]
     batch_size: 512
-    use_balanced_batch_sampler: False
+    use_balanced_batch_sampler: True
     valset_ratio: 0.0
     num_workers: 12
     seed: *dataset_seed
@@ -34,7 +34,16 @@ datasets:
     num_classes: 100
     img_size: [224, 224]
     batch_size: 512
-    use_balanced_batch_sampler: False
+    use_balanced_batch_sampler: True
+    valset_ratio: 0.0
+    num_workers: 12
+    seed: *dataset_seed
+
+  - name: "svhn"
+    num_classes: 10
+    img_size: [224, 224]
+    batch_size: 512
+    use_balanced_batch_sampler: True
     valset_ratio: 0.0
     num_workers: 12
     seed: *dataset_seed
@@ -43,7 +52,7 @@ datasets:
     num_classes: 101
     img_size: [224, 224]
     batch_size: 512
-    use_balanced_batch_sampler: False
+    use_balanced_batch_sampler: True
     valset_ratio: 0.0
     num_workers: 12
     seed: *dataset_seed
@@ -52,7 +61,7 @@ datasets:
     num_classes: 102
     img_size: [224, 224]
     batch_size: 512
-    use_balanced_batch_sampler: False
+    use_balanced_batch_sampler: True
     valset_ratio: 0.0
     num_workers: 12
     seed: *dataset_seed
@@ -61,7 +70,7 @@ datasets:
     num_classes: 10
     img_size: [224, 224]
     batch_size: 512
-    use_balanced_batch_sampler: False
+    use_balanced_batch_sampler: True
     valset_ratio: 0.0
     num_workers: 12
     seed: *dataset_seed

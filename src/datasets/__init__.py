@@ -13,6 +13,7 @@ from .country211 import Country211
 from .emnist import EMNIST
 from .oxfordpet import OxfordIIITPet
 from .pcam import PCAM
+from .svhn import SVHN
 from . import dataset_wrappers
 from . import dataset_factory
 

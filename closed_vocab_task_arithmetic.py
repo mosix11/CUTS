@@ -75,8 +75,6 @@ def do_knn_on_image_encoder(outputs_dir: Path, results_dir: Path, cfg: dict, cfg
     pretrained_weights = model.state_dict()
     
     for dataset_cfg in cfg['datasets']:
-        if dataset_cfg['name'] != 'cifar100':
-            continue
         # For knn we apply the inference transformations for both
         # training samples and test samples.
         dataset_cfg['train_transforms'] = model.get_val_transforms()
@@ -124,15 +122,6 @@ def finetune_models_SCL(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_nam
     pretrained_weights = model.state_dict()
     
     for dataset_cfg in cfg['datasets']:
-        dataset_cfg['train_transforms'] = model.get_train_transforms()
-        dataset_cfg['val_transforms'] = model.get_val_transforms()
-        dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
-        
-        model.load_state_dict(pretrained_weights)
-        # TODO: The following operation might not be needed since we
-        # are loading the state dict of the full model (including MLP head)
-        # from the pretrained initial weights.
-        # model.activate_projector(reinitialize=True)
         
         experiment_name = f"{cfg_name}/{dataset_cfg['name']}/finetune"
         experiment_dir = outputs_dir / f"{cfg_name}/{dataset_cfg['name']}"
@@ -145,6 +134,18 @@ def finetune_models_SCL(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_nam
         
         if weights_dir.joinpath("ft_weights.pth").exists():
             continue
+        
+        dataset_cfg['train_transforms'] = model.get_train_transforms()
+        dataset_cfg['val_transforms'] = model.get_val_transforms()
+        dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
+        
+        model.load_state_dict(pretrained_weights)
+        # TODO: The following operation might not be needed since we
+        # are loading the state dict of the full model (including MLP head)
+        # from the pretrained initial weights.
+        # model.activate_projector(reinitialize=True)
+        
+        
         
         trainer = StandardTrainer(
             outputs_dir=outputs_dir,
