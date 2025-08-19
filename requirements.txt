@@ -8,6 +8,7 @@ tqdm
 requests
 colorama
 comet_ml
+kaggle
 python-dotenv
 ray[tune]
 PyYaml

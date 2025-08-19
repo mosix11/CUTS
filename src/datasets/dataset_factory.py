@@ -1,5 +1,5 @@
 from . import CIFAR10, CIFAR100, MNIST, FashionMNIST, MoGSynthetic, DummyClassificationDataset, Clothing1M
-from . import KMNIST, Food101, Flowers102, Country211, EMNIST, OxfordIIITPet, PCAM, SVHN
+from . import KMNIST, Food101, Flowers102, Country211, EMNIST, OxfordIIITPet, PCAM, SVHN, StanfordCars
 import copy
 
 def create_dataset(cfg, augmentations=None):
@@ -77,6 +77,11 @@ def create_dataset(cfg, augmentations=None):
     elif dataset_name == 'pcam':
         num_classes = cfg_cpy.pop('num_classes')
         dataset = PCAM(
+            **cfg_cpy
+        )
+    elif dataset_name == 'stanford_cars':
+        num_classes = cfg_cpy.pop('num_classes')
+        dataset = StanfordCars(
             **cfg_cpy
         )
     elif dataset_name == 'dummy_class':

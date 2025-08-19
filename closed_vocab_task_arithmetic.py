@@ -75,6 +75,8 @@ def do_knn_on_image_encoder(outputs_dir: Path, results_dir: Path, cfg: dict, cfg
     pretrained_weights = model.state_dict()
     
     for dataset_cfg in cfg['datasets']:
+        if dataset_cfg['name'] != 'svhn':
+            continue
         # For knn we apply the inference transformations for both
         # training samples and test samples.
         dataset_cfg['train_transforms'] = model.get_val_transforms()
