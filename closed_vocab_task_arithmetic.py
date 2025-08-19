@@ -71,8 +71,8 @@ def eval_model_on_tvs(model, taskvectors, results_dict, cfg, dataset, num_classe
 def do_knn_on_image_encoder(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     model = model_factory.create_model(cfg['model'])
     model.freeze()
-    model.deactivate_projector()
-    pretrained_weights = model.state_dict()
+    model.deactivate_projector(remove=True)
+    pretrained_weights = copy.deepcopy(model.state_dict())
     
     for dataset_cfg in cfg['datasets']:
         if dataset_cfg['name'] != 'eurosat':
@@ -84,7 +84,7 @@ def do_knn_on_image_encoder(outputs_dir: Path, results_dir: Path, cfg: dict, cfg
         dataset_cfg['use_balanced_batch_sampler'] = False
         dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
         
-        model.load_state_dict(pretrained_weights)
+        model.load_state_dict(pretrained_weights, strict=False)
         metrics = knn_eval(
             feature_extractor=model,
             train_dl=dataset.get_train_dataloader(),
@@ -103,7 +103,7 @@ def do_knn_on_image_encoder(outputs_dir: Path, results_dir: Path, cfg: dict, cfg
         weights_dir = experiment_dir / Path("weights")
         
         ft_weights = torch.load(weights_dir / 'ft_weights.pth', map_location=torch.device('cpu'))
-        model.load_state_dict(ft_weights)
+        model.load_state_dict(ft_weights, strict=False)
         metrics = knn_eval(
             feature_extractor=model,
             train_dl=dataset.get_train_dataloader(),
@@ -122,7 +122,7 @@ def finetune_models_SCL(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_nam
     cfg['trainer']['finetuning']['comet_api_key'] = os.getenv("COMET_API_KEY")
     
     model = model_factory.create_model(cfg['model'])
-    pretrained_weights = model.state_dict()
+    pretrained_weights = copy.deepcopy(model.state_dict())
     
     for dataset_cfg in cfg['datasets']:
         
@@ -148,8 +148,6 @@ def finetune_models_SCL(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_nam
         # are loading the state dict of the full model (including MLP head)
         # from the pretrained initial weights.
         # model.activate_projector(reinitialize=True)
-        
-        
         
         trainer = StandardTrainer(
             outputs_dir=outputs_dir,
@@ -283,11 +281,14 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     cpu = trainer_utils.get_cpu_device()
     gpu = trainer_utils.get_gpu_device()
     
+    results_dir = results_dir / cfg_name
+    results_dir.mkdir(exist_ok=True, parents=True)
+    
     
     model = model_factory.create_model(cfg['model'])
     model.deactivate_projector(remove=True)
     pt_weights = model.state_dict()
-    # print([key for key in list(pt_weights.keys()) if 'image_encoder' not in key])
+
     
     ft_weights = OrderedDict()
     for dataset_cfg in cfg['datasets']:
@@ -299,16 +300,130 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             raise RuntimeError(f'The finetuned weights for {dataset_cfg['name']} task was not found!')
         model.load_state_dict(torch.load(weights_dir / 'ft_weights.pth', map_location=torch.device('cpu')), strict=False)
         ft_weights[dataset_cfg['name']] = model.state_dict()
-        # print(len(list(pt_weights.keys())))
-        # print(len(list(ft_weights[dataset_cfg['name']].keys())))
 
-    
-        
+            
     task_vectors = OrderedDict()
     for task_name, finetuend_weights in ft_weights.items():
         task_vectors[task_name] = TaskVector(pt_weights, finetuend_weights)
+        
 
+    for tv in task_vectors.values():
+        print(tv.norm())
+    exit()
+    sum_TV = TaskVector.sum(task_vectors)
+    avg_TV = TaskVector.mean(task_vectors)
     
+    
+    
+    
+    ft_tvs_list = list(task_vectors.values())
+    tv_names = list(task_vectors.keys())
+    ft_tvs_list.extend([sum_TV, avg_TV])
+    tv_names.extend(['Sum TV', 'Avg TV'])
+    
+    task_sim = []
+    for i in range(len(ft_tvs_list)):
+        anchor_tv = ft_tvs_list[i]
+        task_sim.append([])
+        for j in range(len(ft_tvs_list)):
+            other_tv = ft_tvs_list[j]
+            cos_sim = anchor_tv.cosine_similarity_flatten(other_tv)
+            task_sim[i].append(cos_sim)
+    task_sim = np.array(task_sim)
+    
+    misc_utils.plot_confusion_matrix(
+        title='Task Vector Similarity Matrix',
+        cm=task_sim,
+        class_names=tv_names,
+        color_map='vlag',
+        color_bar=True,
+        vmin= -1.0,
+        vmax= 1.0,
+        x_label='Task Vectors',
+        y_label='Task Vectors',
+        tick_label_font_size=6,
+        filepath=results_dir / 'task_similarities.png',
+        show=False
+    )
+    exit()
+    
+    results = OrderedDict()
+            
+    for dataset_cfg in cfg['datasets']:
+        task_name = dataset_cfg['name']
+        results[task_name] = OrderedDict()
+        
+        dataset_cfg['train_transforms'] = model.get_val_transforms()
+        dataset_cfg['val_transforms'] = model.get_val_transforms()
+        dataset_cfg['use_balanced_batch_sampler'] = False
+        dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
+        
+        model.load_state_dict(pt_weights)
+        pt_metrics = knn_eval(
+            feature_extractor=model,
+            train_dl=dataset.get_train_dataloader(),
+            test_dl=dataset.get_test_dataloader(),
+            k=20,
+            weighted=True,
+            normalize=True,
+            batch_size_predict=2048,
+            device=trainer_utils.get_gpu_device()
+        )
+        
+        results[task_name]['Pretrain'] = pt_metrics
+        print(f"{task_name} kNN Performance with pretrained:", pt_metrics)
+        
+       
+        model.load_state_dict(ft_weights[task_name])
+        ft_metrics = knn_eval(
+            feature_extractor=model,
+            train_dl=dataset.get_train_dataloader(),
+            test_dl=dataset.get_test_dataloader(),
+            k=20,
+            weighted=True,
+            normalize=True,
+            batch_size_predict=2048,
+            device=trainer_utils.get_gpu_device()
+        )
+        
+        results[task_name]['Finetuned'] = ft_metrics
+        print(f"{dataset_cfg['name']} kNN Performance with finetuned:", ft_metrics)
+        
+        model.load_state_dict(pt_weights)
+        sum_TV.apply_to(model, scaling_coef=1.0)
+        
+        sum_metrics = knn_eval(
+            feature_extractor=model,
+            train_dl=dataset.get_train_dataloader(),
+            test_dl=dataset.get_test_dataloader(),
+            k=20,
+            weighted=True,
+            normalize=True,
+            batch_size_predict=2048,
+            device=trainer_utils.get_gpu_device()
+        )
+        
+        results[task_name]['MTV Sum'] = sum_metrics
+        print(f"{dataset_cfg['name']} kNN Performance with sum tv:", sum_metrics)
+        
+        
+        model.load_state_dict(pt_weights)
+        avg_TV.apply_to(model, scaling_coef=1.0)
+        
+        avg_metrics = knn_eval(
+            feature_extractor=model,
+            train_dl=dataset.get_train_dataloader(),
+            test_dl=dataset.get_test_dataloader(),
+            k=20,
+            weighted=True,
+            normalize=True,
+            batch_size_predict=2048,
+            device=trainer_utils.get_gpu_device()
+        )
+        
+        results[task_name]['MTV Avg'] = avg_metrics
+        print(f"{dataset_cfg['name']} kNN Performance with avg tv:", avg_metrics)
+        
             
 def apply_tvs(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     training_seed = cfg['training_seed']

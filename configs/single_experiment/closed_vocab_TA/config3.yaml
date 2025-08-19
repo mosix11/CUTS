@@ -102,18 +102,10 @@ datasets:
     num_workers: 12
     seed: *dataset_seed
 
-  # - name: "country211"
-  #   num_classes: 211
-  #   img_size: [224, 224]
-  #   batch_size: 512
-  #   use_balanced_batch_sampler: True
-  #   valset_ratio: 0.0
-  #   num_workers: 12
-  #   seed: *dataset_seed
 
 model:
   type: 'open_clip_encoder_ViT-B-16'
-  pt_weights: 'datacomp_xl_s13b_b90k'
+  pt_weights: 'openai'
   mlp_proj: True
   proj_dim: 128
   loss_fn:
