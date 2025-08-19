@@ -72,12 +72,18 @@ def do_knn_on_image_encoder(outputs_dir: Path, results_dir: Path, cfg: dict, cfg
     model = model_factory.create_model(cfg['model'])
     model.freeze()
     model.deactivate_projector()
+    pretrained_weights = model.state_dict()
     
     for dataset_cfg in cfg['datasets']:
-        dataset_cfg['train_transforms'] = model.get_train_transforms()
+        if dataset_cfg['name'] != 'cifar100':
+            continue
+        # For knn we apply the inference transformations for both
+        # training samples and test samples.
+        dataset_cfg['train_transforms'] = model.get_val_transforms()
         dataset_cfg['val_transforms'] = model.get_val_transforms()
         dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
         
+        model.load_state_dict(pretrained_weights)
         metrics = knn_eval(
             feature_extractor=model,
             train_dl=dataset.get_train_dataloader(),
@@ -89,8 +95,28 @@ def do_knn_on_image_encoder(outputs_dir: Path, results_dir: Path, cfg: dict, cfg
             device=trainer_utils.get_gpu_device()
         )
         
-        print(f"kNN Performance on {dataset['name']}:", metrics)
+        print(f"{dataset_cfg['name']} kNN Performance with pretrained:", metrics)
 
+        
+        experiment_dir = outputs_dir / f"{cfg_name}/{dataset_cfg['name']}"
+        weights_dir = experiment_dir / Path("weights")
+        
+        ft_weights = torch.load(weights_dir / 'ft_weights.pth', map_location=torch.device('cpu'))
+        model.load_state_dict(ft_weights)
+        metrics = knn_eval(
+            feature_extractor=model,
+            train_dl=dataset.get_train_dataloader(),
+            test_dl=dataset.get_test_dataloader(),
+            k=20,
+            weighted=True,
+            normalize=True,
+            batch_size_predict=2048,
+            device=trainer_utils.get_gpu_device()
+        )
+        
+        print(f"{dataset_cfg['name']} kNN Performance with finetuned:", metrics)
+        
+        
 def finetune_models_SCL(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     cfg['trainer']['finetuning']['comet_api_key'] = os.getenv("COMET_API_KEY")
     

@@ -1,5 +1,5 @@
 from . import CIFAR10, CIFAR100, MNIST, FashionMNIST, MoGSynthetic, DummyClassificationDataset, Clothing1M
-from . import KMNIST, Food101, Flowers102
+from . import KMNIST, Food101, Flowers102, Country211, EMNIST, OxfordIIITPet, PCAM
 import copy
 
 def create_dataset(cfg, augmentations=None):
@@ -52,6 +52,26 @@ def create_dataset(cfg, augmentations=None):
     elif dataset_name == 'flowers102':
         num_classes = cfg_cpy.pop('num_classes')
         dataset = Flowers102(
+            **cfg_cpy
+        )
+    elif dataset_name == 'country211':
+        num_classes = cfg_cpy.pop('num_classes')
+        dataset = Country211(
+            **cfg_cpy
+        )
+    elif dataset_name == 'emnist':
+        num_classes = cfg_cpy.pop('num_classes')
+        dataset = EMNIST(
+            **cfg_cpy
+        )
+    elif dataset_name == 'oxfordpet':
+        num_classes = cfg_cpy.pop('num_classes')
+        dataset = OxfordIIITPet(
+            **cfg_cpy
+        )
+    elif dataset_name == 'pcam':
+        num_classes = cfg_cpy.pop('num_classes')
+        dataset = PCAM(
             **cfg_cpy
         )
     elif dataset_name == 'dummy_class':

@@ -9,7 +9,10 @@ from .dummy_datasets import DummyClassificationDataset
 from .kmnist import KMNIST
 from .food101 import Food101
 from .flowers102 import Flowers102
-
+from .country211 import Country211
+from .emnist import EMNIST
+from .oxfordpet import OxfordIIITPet
+from .pcam import PCAM
 from . import dataset_wrappers
 from . import dataset_factory
 
