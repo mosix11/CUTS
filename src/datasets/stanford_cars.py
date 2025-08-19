@@ -6,6 +6,7 @@ from .base_classification_dataset import BaseClassificationDataset
 from typing import Tuple, List, Union, Dict
 from pathlib import Path
 
+
 class StanfordCars(BaseClassificationDataset):
     def __init__(
         self,
@@ -41,16 +42,18 @@ class StanfordCars(BaseClassificationDataset):
             num_classes=196,
             **kwargs,  
         )
+        
+        
 
 
     def load_train_set(self):
-        return datasets.StanfordCars(root=self.dataset_dir, split="train", transform=self.get_transforms(train=True), download=True)
+        return datasets.StanfordCars(root=self.dataset_dir, split="train", transform=self.get_transforms(train=True), download=False)
     
     def load_validation_set(self):
         return None
     
     def load_test_set(self):
-        return datasets.StanfordCars(root=self.dataset_dir, split="test", transform=self.get_transforms(train=False), download=True)
+        return datasets.StanfordCars(root=self.dataset_dir, split="test", transform=self.get_transforms(train=False), download=False)
 
     def get_transforms(self, train=True):
         if self.train_transforms and train:
