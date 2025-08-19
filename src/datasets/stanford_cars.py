@@ -73,7 +73,7 @@ class StanfordCars(BaseClassificationDataset):
             transforms.ToDtype(torch.float32, scale=True),
         ])
         if self.normalize_imgs:
-            mean, std = ((0.5,), (0.5,)) if self.grayscale else ((0.4377, 0.4438, 0.4728), (0.1980, 0.2010, 0.1970))
+            mean, std = ((0.5,), (0.5,)) if self.grayscale else ((0.4707, 0.4601, 0.4549), (0.2660, 0.2658, 0.2750))
             trnsfrms.append(transforms.Normalize(mean, std))
         if self.flatten:
             trnsfrms.append(transforms.Lambda(lambda x: torch.flatten(x)))

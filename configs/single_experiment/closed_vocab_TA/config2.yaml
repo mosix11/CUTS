@@ -93,6 +93,15 @@ datasets:
     num_workers: 12
     seed: *dataset_seed
 
+  - name: "eurosat"
+    num_classes: 10
+    img_size: [224, 224]
+    batch_size: 512
+    use_balanced_batch_sampler: True
+    valset_ratio: 0.0
+    num_workers: 12
+    seed: *dataset_seed
+
 
 model:
   type: 'open_clip_encoder_ViT-B-16'

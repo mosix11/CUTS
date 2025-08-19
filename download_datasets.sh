@@ -7,6 +7,7 @@ mkdir data; cd data
 # export KAGGLE_KEY=<your kaggle key>
 
 mkdir StanfordCars; cd StanfordCars
-kaggle datasets download -d emanuelriquelmem/stanford-cars-pytorch
+# one other option emanuelriquelmem/stanford-cars-pytorch
+kaggle datasets download -d rickyyyyyyy/torchvision-stanford-cars
 7z x stanford-cars-pytorch.zip
 rm stanford-cars-pytorch.zip

@@ -15,6 +15,7 @@ from .oxfordpet import OxfordIIITPet
 from .pcam import PCAM
 from .svhn import SVHN
 from .stanford_cars import StanfordCars
+from .eurosat import EuroSAT
 from . import dataset_wrappers
 from . import dataset_factory
 
