@@ -75,12 +75,14 @@ def do_knn_on_image_encoder(outputs_dir: Path, results_dir: Path, cfg: dict, cfg
     pretrained_weights = model.state_dict()
     
     for dataset_cfg in cfg['datasets']:
-        if dataset_cfg['name'] != 'svhn':
+        if dataset_cfg['name'] != 'stanford_cars':
             continue
         # For knn we apply the inference transformations for both
         # training samples and test samples.
         dataset_cfg['train_transforms'] = model.get_val_transforms()
         dataset_cfg['val_transforms'] = model.get_val_transforms()
+        dataset_cfg['use_balanced_batch_sampler'] = False
+        print(dataset_cfg)
         dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
         
         model.load_state_dict(pretrained_weights)
@@ -141,7 +143,6 @@ def finetune_models_SCL(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_nam
         dataset_cfg['val_transforms'] = model.get_val_transforms()
         dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
         
-        continue
         
         model.load_state_dict(pretrained_weights)
         # TODO: The following operation might not be needed since we
