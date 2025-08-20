@@ -75,8 +75,6 @@ def do_knn_on_image_encoder(outputs_dir: Path, results_dir: Path, cfg: dict, cfg
     pretrained_weights = copy.deepcopy(model.state_dict())
     
     for dataset_cfg in cfg['datasets']:
-        if dataset_cfg['name'] != 'eurosat':
-            continue
         # For knn we apply the inference transformations for both
         # training samples and test samples.
         dataset_cfg['train_transforms'] = model.get_val_transforms()
@@ -84,7 +82,7 @@ def do_knn_on_image_encoder(outputs_dir: Path, results_dir: Path, cfg: dict, cfg
         dataset_cfg['use_balanced_batch_sampler'] = False
         dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
         
-        model.load_state_dict(pretrained_weights, strict=False)
+        model.load_state_dict(pretrained_weights)
         metrics = knn_eval(
             feature_extractor=model,
             train_dl=dataset.get_train_dataloader(),
@@ -287,7 +285,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     model = model_factory.create_model(cfg['model'])
     model.deactivate_projector(remove=True)
-    pt_weights = model.state_dict()
+    pt_weights = copy.deepcopy(model.state_dict())
 
     
     ft_weights = OrderedDict()
@@ -299,17 +297,13 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         if not weights_dir.joinpath("ft_weights.pth").exists():
             raise RuntimeError(f'The finetuned weights for {dataset_cfg['name']} task was not found!')
         model.load_state_dict(torch.load(weights_dir / 'ft_weights.pth', map_location=torch.device('cpu')), strict=False)
-        ft_weights[dataset_cfg['name']] = model.state_dict()
+        ft_weights[dataset_cfg['name']] = copy.deepcopy(model.state_dict())
 
             
     task_vectors = OrderedDict()
     for task_name, finetuend_weights in ft_weights.items():
         task_vectors[task_name] = TaskVector(pt_weights, finetuend_weights)
-        
 
-    for tv in task_vectors.values():
-        print(tv.norm())
-    exit()
     sum_TV = TaskVector.sum(task_vectors)
     avg_TV = TaskVector.mean(task_vectors)
     
@@ -345,7 +339,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         filepath=results_dir / 'task_similarities.png',
         show=False
     )
-    exit()
+
     
     results = OrderedDict()
             
@@ -367,7 +361,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             weighted=True,
             normalize=True,
             batch_size_predict=2048,
-            device=trainer_utils.get_gpu_device()
+            device=gpu
         )
         
         results[task_name]['Pretrain'] = pt_metrics
@@ -383,7 +377,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             weighted=True,
             normalize=True,
             batch_size_predict=2048,
-            device=trainer_utils.get_gpu_device()
+            device=gpu
         )
         
         results[task_name]['Finetuned'] = ft_metrics
@@ -400,7 +394,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             weighted=True,
             normalize=True,
             batch_size_predict=2048,
-            device=trainer_utils.get_gpu_device()
+            device=gpu
         )
         
         results[task_name]['MTV Sum'] = sum_metrics
@@ -418,12 +412,15 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             weighted=True,
             normalize=True,
             batch_size_predict=2048,
-            device=trainer_utils.get_gpu_device()
+            device=gpu
         )
         
         results[task_name]['MTV Avg'] = avg_metrics
         print(f"{dataset_cfg['name']} kNN Performance with avg tv:", avg_metrics)
         
+    
+    with open(results_dir / 'metrics.json' , 'w') as json_file:
+        json.dump(results, json_file, indent=4)
             
 def apply_tvs(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     training_seed = cfg['training_seed']

@@ -25,7 +25,6 @@ class TaskVector:
                     if pretrained_state_dict[key].dtype not in [torch.float32, torch.float16, torch.bfloat16]:
                         print(f"Warning: key {key} is being skipped due to dtype {pretrained_state_dict[key].dtype}.")
                         continue  # Skip non-float entries
-                    print(key, finetuned_state_dict[key].sum(), pretrained_state_dict[key].sum())
                     self.vector[key] = finetuned_state_dict[key].to('cpu') - pretrained_state_dict[key].to('cpu')
     
 
