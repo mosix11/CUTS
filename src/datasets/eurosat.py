@@ -56,6 +56,7 @@ class EuroSAT(BaseClassificationDataset):
     def load_train_set(self):
         train_idx, _ = self._get_split_indices()
         base = self._base_dataset(transform=self.get_transforms(train=True))
+        self._class_names = base.classes
         return Subset(base, train_idx)
 
     def load_validation_set(self):
@@ -93,8 +94,7 @@ class EuroSAT(BaseClassificationDataset):
         return transforms.Compose(trnsfrms)
 
     def get_class_names(self):
-        return ['AnnualCrop', 'Forest', 'HerbaceousVegetation', 'Highway', 'Industrial',
-                'Pasture', 'PermanentCrop', 'Residential', 'River', 'SeaLake']
+        return self._class_names 
 
     def get_identifier(self):
         identifier = 'eurosat|'

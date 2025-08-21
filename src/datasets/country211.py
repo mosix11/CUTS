@@ -44,7 +44,9 @@ class Country211(BaseClassificationDataset):
 
 
     def load_train_set(self):
-        return datasets.Country211(root=self.dataset_dir, split="train", transform=self.get_transforms(train=True), download=True)
+        trainset = datasets.Country211(root=self.dataset_dir, split="train", transform=self.get_transforms(train=True), download=True)
+        self._class_names = trainset.classes
+        return trainset
     
     def load_validation_set(self):
         return datasets.Country211(root=self.dataset_dir, split="valid",   transform=self.get_transforms(train=True), download=True)
@@ -78,7 +80,7 @@ class Country211(BaseClassificationDataset):
 
 
     def get_class_names(self):
-        return self.get_trainset().classes
+        return self._class_names
 
     def get_identifier(self):
         identifier = 'country211|'

@@ -51,7 +51,9 @@ class CIFAR100(BaseClassificationDataset):
         )
         
     def load_train_set(self):
-        return datasets.CIFAR100(root=self.dataset_dir, train=True, transform=self.get_transforms(train=True), download=True)
+        trainset = datasets.CIFAR100(root=self.dataset_dir, train=True, transform=self.get_transforms(train=True), download=True)
+        self._class_names = trainset.classes
+        return trainset
     
     def load_validation_set(self):
         return None
@@ -84,19 +86,7 @@ class CIFAR100(BaseClassificationDataset):
         return transforms.Compose(trnsfrms)
 
     def get_class_names(self):
-        return [
-            "apple", "aquarium_fish", "baby", "bear", "beaver", "bed", "bee", "beetle", "bicycle", "bottle",
-            "bowl", "boy", "bridge", "bus", "butterfly", "camel", "can", "castle", "caterpillar", "cattle",
-            "chair", "chimpanzee", "clock", "cloud", "cockroach", "couch", "crab", "crocodile", "cup", "dinosaur",
-            "dolphin", "elephant", "flatfish", "forest", "fox", "girl", "hamster", "house", "kangaroo", "keyboard",
-            "lamp", "lawn_mower", "leopard", "lion", "lizard", "lobster", "man", "maple_tree", "motorcycle", "mountain",
-            "mouse", "mushroom", "oak_tree", "orange", "orchid", "otter", "palm_tree", "pear", "pickup_truck", "pine_tree",
-            "plain", "plate", "poppy", "porcupine", "possum", "rabbit", "raccoon", "ray", "road", "rocket",
-            "rose", "sea", "seal", "shark", "shrew", "skunk", "skyscraper", "snail", "snake", "spider",
-            "squirrel", "streetcar", "sunflower", "sweet_pepper", "table", "tank", "telephone", "television", "tiger", "tractor",
-            "train", "trout", "tulip", "turtle", "wardrobe", "whale", "willow_tree", "wolf", "woman", "worm"
-        ]
-
+        return self._class_names
 
     def get_identifier(self):
         identifier = 'cifar100|'

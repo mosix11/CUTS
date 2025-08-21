@@ -42,6 +42,7 @@ class KMNIST(BaseClassificationDataset):
         dataset_dir = data_dir / 'KMNIST'
         dataset_dir.mkdir(exist_ok=True, parents=True)
         
+        
         super().__init__(
             dataset_name='KMNIST',
             dataset_dir=dataset_dir,
@@ -50,7 +51,9 @@ class KMNIST(BaseClassificationDataset):
         )
 
     def load_train_set(self):
-        return datasets.KMNIST(root=self.dataset_dir, train=True, transform=self.get_transforms(train=True), download=True)
+        trainset = datasets.KMNIST(root=self.dataset_dir, train=True, transform=self.get_transforms(train=True), download=True)
+        self._class_names = trainset.classes
+        return trainset
     
     def load_validation_set(self):
         return None
@@ -85,7 +88,7 @@ class KMNIST(BaseClassificationDataset):
         
 
     def get_class_names(self):
-        return ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]
+        return self._class_names
     
     def get_identifier(self):
         identifier = 'kmnist|'

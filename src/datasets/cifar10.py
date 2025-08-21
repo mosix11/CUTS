@@ -44,7 +44,9 @@ class CIFAR10(BaseClassificationDataset):
 
 
     def load_train_set(self):
-        return datasets.CIFAR10(root=self.dataset_dir, train=True, transform=self.get_transforms(train=True), download=True)
+        trainset = datasets.CIFAR10(root=self.dataset_dir, train=True, transform=self.get_transforms(train=True), download=True)
+        self._class_names = trainset.classes
+        return trainset
     
     def load_validation_set(self):
         return None
@@ -78,18 +80,7 @@ class CIFAR10(BaseClassificationDataset):
 
 
     def get_class_names(self):
-        return [
-            "airplane",
-            "automobile",
-            "bird",
-            "cat",
-            "deer",
-            "dog",
-            "frog",
-            "horse",
-            "ship",
-            "truck"
-        ]
+        return self._class_names 
 
     def get_identifier(self):
         identifier = 'cifar10|'

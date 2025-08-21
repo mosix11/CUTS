@@ -52,7 +52,8 @@ model:
   type: 'torchvision_resnet18'
   pt_weights: null
   num_classes: *num_classes
-  loss_fn: 'CE-NR'
+  loss_fn:
+    type: 'CE-NR'
   metrics: ['ACC', 'F1']
 
 trainer:

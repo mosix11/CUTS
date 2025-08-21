@@ -325,32 +325,21 @@ def linear_probe_heads(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name
 def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     cfg['trainer']['finetuning']['comet_api_key'] = os.getenv("COMET_API_KEY")
 
-    
-    model = model_factory.create_model(cfg['model'])
-    pretrained_weights = model.get_encoder_weights()
-    
-    heads_weights = OrderedDict()
-    for head_cfg, dataset_cfg in zip(cfg['model']['heads_cfg'], cfg['datasets']):
-        experiment_dir = outputs_dir / f"{cfg_name}/{dataset_cfg['name']}"
-        head_weights = torch.load(experiment_dir / 'weights/head_weights.pth', map_location=torch.device('cpu'))
-        heads_weights[head_cfg['head_name']] = head_weights
-    
-    model.load_heads(heads_weights)
-    model.freeze_all_heads()
-    
-    for head_cfg, dataset_cfg in zip(cfg['model']['heads_cfg'], cfg['datasets']):
-        
-        dataset_cfg['train_transforms'] = model.get_train_transforms()
-        dataset_cfg['val_transforms'] = model.get_val_transforms()
-        dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
-        
-        model.load_encoder(pretrained_weights)
+    model_ds_cfgs = OrderedDict()
+    for ds_cfg in cfg['datasets']:
+        tmp_ds, _ = dataset_factory.create_dataset(ds_cfg)
+        model_ds_cfgs[ds_cfg['name']] = copy.deepcopy(tmp_ds.get_class_names())
 
-        model.activate_head(head_name=head_cfg['head_name'])
-        model.unfreeze_encoder()
+    cfg['model']['datasets_cfgs'] = model_ds_cfgs 
+    model = model_factory.create_model(cfg['model'])
+    model.freeze_all_heads()
+    pt_weights = copy.deepcopy(model.get_encoder_weights())
+    
+    for dataset_cfg in cfg['datasets']:
+        task_name = dataset_cfg['name']
         
-        experiment_name = f"{cfg_name}/{dataset_cfg['name']}/finetune"
-        experiment_dir = outputs_dir / f"{cfg_name}/{dataset_cfg['name']}"
+        experiment_name = f"{cfg_name}/{task_name}/finetune"
+        experiment_dir = outputs_dir / f"{cfg_name}/{task_name}"
         
         weights_dir = experiment_dir / Path("weights")
         weights_dir.mkdir(exist_ok=True, parents=True)
@@ -360,6 +349,15 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
         
         if weights_dir.joinpath("ft_weights.pth").exists():
             continue
+        
+        dataset_cfg['train_transforms'] = model.get_train_transforms()
+        dataset_cfg['val_transforms'] = model.get_val_transforms()
+        dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
+        
+        model.load_encoder(pt_weights)
+
+        model.activate_head(head_name=task_name)
+        model.unfreeze_encoder()
         
         trainer = StandardTrainer(
             outputs_dir=outputs_dir,
@@ -940,6 +938,13 @@ def apply_tvs(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
 
 
 if __name__ == "__main__":
+    
+
+    os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
+    torch.backends.cudnn.enabled = True
+    torch.backends.cudnn.benchmark = False
+    torch.use_deterministic_algorithms(True) 
+    torch.set_float32_matmul_precision("high")
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -957,14 +962,6 @@ if __name__ == "__main__":
         action="store_true",
     )
     
-
-    
-    parser.add_argument(
-        "-l",
-        "--linprobe",
-        help="Train heads by linear probing.",
-        action="store_true",
-    )
     
     parser.add_argument(
         "-f",
@@ -998,11 +995,8 @@ if __name__ == "__main__":
     if args.evaluate:
         eval_knn_ncm(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)
         
-        
-    if args.linprobe:
-        linear_probe_heads(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)
     if args.finetune:
         # finetune_models(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)
-        finetune_models_SCL(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)
+        finetune_models(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)
     if args.tv:
         apply_tv(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)

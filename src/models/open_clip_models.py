@@ -6,10 +6,12 @@ import torch.nn.functional as F
 import torchmetrics
 from torch.amp import autocast
 from . import BaseModel
-
+from ..datasets import get_clip_templates
+from ..trainers import utils as trainer_utils
 from pathlib import Path
+from tqdm import tqdm
 
-from typing import Union, List
+from typing import Union, List, Callable
 
 class OpenClipImageEncoderModule(nn.Module):
     def __init__(
@@ -52,16 +54,13 @@ class OpenClipImageEncoderModule(nn.Module):
     def forward(self, images):
         return self.model.encode_image(images)
 
-    # @classmethod
-    # def load(cls, model_name:str, filename:Path):
-    #     print(f"Loading image encoder from {filename}")
-
-    #     state_dict = torch.load(filename, map_location="cpu")
-
-    #     model = cls(model_name)
-    #     model.load_state_dict(state_dict)
-    #     return model
-
+    def remove_text_encoder(self):
+        for attr in ["transformer","token_embedding","positional_embedding",
+                        "ln_final","text_projection","attn_mask","temp_attn_mask","txt_attn_mask"]:
+            if hasattr(self.model, attr):
+                delattr(self.model, attr)
+        setattr(self.model, "encode_text", None)
+        
 
 class OpenClipImageEncoder(BaseModel):
     def __init__(
@@ -154,13 +153,33 @@ class OpenClipImageEncoder(BaseModel):
                     for p in mod.parameters():
                         p.requires_grad_(True)
 
-class OpenClipImageClassifier(BaseModel):
+
+
+class ClassificationHead(torch.nn.Linear):
+    def __init__(self, normalize, weights, biases=None):
+        output_size, input_size = weights.shape
+        super().__init__(input_size, output_size)
+        self.normalize = normalize
+        if weights is not None:
+            self.weight = torch.nn.Parameter(weights.clone())
+        if biases is not None:
+            self.bias = torch.nn.Parameter(biases.clone())
+        else:
+            self.bias = torch.nn.Parameter(torch.zeros_like(self.bias))
+
+    def forward(self, inputs):
+        if self.normalize:
+            inputs = inputs / inputs.norm(dim=-1, keepdim=True)
+        return super().forward(inputs)
+
+
+class OpenClipMultiHeadImageClassifier(BaseModel):
     
     def __init__(
         self,
         model_type:str = None,
         pt_weights:str = None,
-        num_classes:int = None,
+        datasets_cfgs:dict = None,
         loss_fn:nn.Module = None,
         metrics:dict = None
     ):
@@ -170,184 +189,24 @@ class OpenClipImageClassifier(BaseModel):
         self.pt_weights = pt_weights
         self.pretrained = True if pt_weights else False
         
-        self.image_encoder = OpenClipImageEncoderModule(model_name=model_type, pt_weights=pt_weights, keep_lang=False)
-        
-        self.classifier_head = nn.Linear(self.image_encoder.feature_dim, num_classes)
-        
-
-    
-    def forward(self, x):
-        ftrs = self.image_encoder(x)
-        # normalize feature
-        # ftrs = ftrs / ftrs.norm(dim=-1, keepdim=True)
-        logits = self.classifier_head(ftrs)
-        return logits
-    
-    
-    def get_identifier(self):
-        return 'Open Clip Image Classifer' + self.model_type
-    
-    def get_train_transforms(self):
-        return self.image_encoder.train_preprocess
-    
-    def get_val_transforms(self):
-        return self.image_encoder.val_preprocess
-    
-    def get_head_weights(self):
-        return self.classifier_head.state_dict()
-        
-    def load_head(self, state_dict):
-        self.classifier_head.load_state_dict(state_dict)
-        
-    def freeze_head(self):
-        self.classifier_head.requires_grad_(False)
-        
-    def unfreeze_head(self):
-        self.classifier_head.requires_grad_(True)
-    
-    def freeze_encoder(self):
-        for p in self.image_encoder.parameters():
-            p.requires_grad_(False)
-
-    def unfreeze_encoder(self, top_n_blocks=None):
-        if top_n_blocks is None:
-            for p in self.image_encoder.parameters():
-                p.requires_grad_(True)
-        else:
-            # works for ViTs with .visual.transformer.resblocks
-            blocks = getattr(self.image_encoder.model.visual.transformer, "resblocks", None)
-            if blocks is None:
-                for p in self.image_encoder.parameters():
-                    p.requires_grad_(True)
-                return
-            for p in self.image_encoder.parameters():
-                p.requires_grad_(False)
-            for blk in blocks[-top_n_blocks:]:
-                for p in blk.parameters():
-                    p.requires_grad_(True)
-            # always unfreeze final norm/proj
-            for attr in ["ln_post","proj","ln_pre"]:
-                mod = getattr(self.image_encoder.model.visual, attr, None)
-                if mod is not None:
-                    for p in mod.parameters():
-                        p.requires_grad_(True)
-                        
-                                      
-                        
-                        
-
-                 
-class OpenClipMultiHeadImageClassifier(nn.Module):
-    
-    def __init__(
-        self,
-        model_type:str = None,
-        pt_weights:str = None,
-        heads_cfg:list = None,
-        loss_fn:nn.Module = None,
-        metrics:dict = None
-    ):
-        super().__init__()
-        
-        if loss_fn is None:
-            raise RuntimeError('The loss function must be specified for training/validation.')
-        self.loss_fn = loss_fn
-        
-        
-        self.metrics = nn.ModuleDict()
-        if metrics:
-            for head_cfg in heads_cfg:
-                head_name, head_out_dim = head_cfg['head_name'], head_cfg['head_out_dim']
-                self.metrics[head_name] = nn.ModuleDict()
-                for name, metric_instance in metrics[head_name].items():
-                    if not isinstance(metric_instance, torchmetrics.Metric):
-                        raise TypeError(f"Metric '{name}' must be an instance of torchmetrics.Metric.")
-                    self.metrics[head_name][name] = metric_instance
-                
-        
-        
-        self.model_type = model_type
-        self.pt_weights = pt_weights
-        self.pretrained = True if pt_weights else False
-        
-        self.image_encoder = OpenClipImageEncoderModule(model_name=model_type, pt_weights=pt_weights, keep_lang=False)
+        self.image_encoder = OpenClipImageEncoderModule(model_name=model_type, pt_weights=pt_weights, keep_lang=True)
         
         self.classifier_heads = nn.ModuleDict()
-        for head_cfg in heads_cfg:
-            head_name, head_out_dim = head_cfg['head_name'], head_cfg['head_out_dim']
-            self.classifier_heads[head_name] = nn.Linear(self.image_encoder.feature_dim, head_out_dim)
-        
+        for dataset_name, class_names in datasets_cfgs.items():
+            self.classifier_heads[dataset_name] = _build_classification_head(self.image_encoder.model, dataset_name, class_names, trainer_utils.get_gpu_device())
+            
+        self.image_encoder.remove_text_encoder()
         # By default, the first head is activated
         self.active_head = next(iter(self.classifier_heads.keys()))
-
+        
+        # By default all heads are frozen.
+        self.freeze_all_heads()
     
     def forward(self, x):
         ftrs = self.image_encoder(x)
-        # normalize feature
-        # ftrs = ftrs / ftrs.norm(dim=-1, keepdim=True)
         logits = self.classifier_heads[self.active_head](ftrs)
         return logits
     
-    
-    def training_step(self, x, y, use_amp=False, return_preds=False):
-        """Performs a single training step."""
-        with autocast('cuda', enabled=use_amp):
-            preds = self(x) 
-            loss = self.loss_fn(preds, y)
-
-        if self.metrics:
-            for name, metric in self.metrics[self.active_head].items():
-                metric.update(preds.detach(), y.detach()) 
-
-        if return_preds:
-            return loss, preds
-        else:
-            return loss
-
-
-    @torch.no_grad()
-    def validation_step(self, x, y, use_amp=False, return_preds=False):
-        """Performs a single validation step (no gradient computation)."""
-        
-        with autocast('cuda', enabled=use_amp):
-            preds = self(x)
-            loss = self.loss_fn(preds, y)
-
-        if self.metrics:
-            for name, metric in self.metrics[self.active_head].items():
-                metric.update(preds.detach(), y.detach())
-
-        if return_preds:
-            return loss, preds
-        else:
-            return loss
-
-    @torch.no_grad()
-    def predict(self, x):
-        """Performs inference (prediction) without gradient computation."""
-        preds = self(x)
-        return preds
-
-
-    @torch.no_grad()
-    def get_features(self, x):
-        """Returns the features extracted by the image encoder."""
-        ftrs = self.image_encoder(x)
-        return ftrs
-
-    def compute_metrics(self):
-        """Computes and returns the current metric results."""
-        results = {}
-        if self.metrics:
-            for name, metric in self.metrics[self.active_head].items():
-                results[name] = metric.compute().cpu().item()
-        return results
-
-    def reset_metrics(self):
-        """Resets all tracked metrics."""
-        if self.metrics:
-            for name, metric in self.metrics[self.active_head].items():
-                metric.reset()
     
     def activate_head(self, head_name:str):
         if head_name not in self.classifier_heads:
@@ -441,3 +300,55 @@ class OpenClipMultiHeadImageClassifier(nn.Module):
     def _count_trainable_parameters(self):
         """Counts and returns the total number of trainable parameters in the model."""
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
+                                      
+                        
+    
+    
+def _build_classification_head(
+    model: nn.Module, dataset_name: str, class_names: List[str], device: torch.device
+) -> ClassificationHead:
+    """
+    Builds a classification head for a given model and dataset.
+
+    Args:
+        model (nn.Module): The model to use for text encoding.
+        dataset_name (str): The name of the dataset to use for zero-shot classification.
+        class_names (str): List of class names.
+        device (torch.device): The device to use for computation.
+
+    Returns:
+        A ClassificationHead object with normalized weights for zero-shot classification.
+    """
+    template = get_clip_templates(dataset_name)
+
+    logit_scale = model.logit_scale
+    model.eval()
+    model.to(device)
+
+    print(f"Building classification head for {dataset_name}.")
+    with torch.no_grad():
+        zeroshot_weights = []
+        for classname in tqdm(class_names, bar_format="{l_bar}{bar:10}{r_bar}{bar:-10b}"):
+            texts = []
+            for t in template:
+                texts.append(t(classname))
+            texts = open_clip.tokenize(texts).to(device)  # tokenize
+            embeddings = model.encode_text(texts)  # embed with text encoder
+            embeddings /= embeddings.norm(dim=-1, keepdim=True)
+
+            embeddings = embeddings.mean(dim=0, keepdim=True)
+            embeddings /= embeddings.norm()
+
+            zeroshot_weights.append(embeddings)
+
+        zeroshot_weights = torch.stack(zeroshot_weights, dim=0).to(device)
+        zeroshot_weights = torch.transpose(zeroshot_weights, 0, 2)
+
+        zeroshot_weights *= logit_scale.exp()
+
+        zeroshot_weights = zeroshot_weights.squeeze().float()
+        zeroshot_weights = torch.transpose(zeroshot_weights, 0, 1)
+
+    print(f"zeroshot shape, P{zeroshot_weights.shape}")
+    classification_head = ClassificationHead(normalize=True, weights=zeroshot_weights)
+    return classification_head

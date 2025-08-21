@@ -19,4 +19,6 @@ from .eurosat import EuroSAT
 from . import dataset_wrappers
 from . import dataset_factory
 
+from .clip_templates import get_clip_templates
+
 from . import utils

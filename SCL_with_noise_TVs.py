@@ -255,6 +255,14 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     results_dir = results_dir / cfg_name
     results_dir.mkdir(exist_ok=True, parents=True)
     
+    # results_dirs = {}
+    # results_dirs['cms'] = results_dir / 'confusion_mats'
+    # results_dirs['W_norms'] = results_dir / 'weight_norms'
+    # results_dirs['TV_norms'] = results_dir / 'TV_norms'
+    # results_dirs['metrics'] = results_dir / 'metrics'    
+    # for dir in results_dirs.values():
+    #     dir.mkdir(exist_ok=True, parents=True)
+    
     
     model = model_factory.create_model(cfg['model'])
     model.deactivate_projector(remove=True)
@@ -282,7 +290,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
 
     sum_clean_noise_TV = TaskVector.sum([task_vectors['clean'] + task_vectors['noise']])
     avg_clean_noise_TV = TaskVector.mean([task_vectors['clean'] + task_vectors['noise']])
-    goal_TV = task_vectors['mix'] - task_vectors['noise'].prune_small_weights(rate=0.95)
+    goal_TV = task_vectors['mix'] - (task_vectors['noise'] * 0.5)
     
     
     
@@ -329,7 +337,11 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     dataset.inject_noise(**noise_cfg)
     
-    goal_TV.apply_to(model, scaling_coef=1.0)
+    # task_vectors['mix'].apply_to(model, scaling_coef=1.0)
+    # task_vectors['noise'].apply_to(model, scaling_coef=-0.5)
+    avg_clean_noise_TV.apply_to(model, scaling_coef=1.0)
+    
+    # goal_TV.apply_to(model, scaling_coef=1.0)
     
     
     ft_metrics = knn_ncm_eval(
@@ -758,6 +770,12 @@ def apply_tvs(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
 
 
 if __name__ == "__main__":
+    
+    os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
+    torch.backends.cudnn.enabled = True
+    torch.backends.cudnn.benchmark = False
+    torch.use_deterministic_algorithms(True) 
+    torch.set_float32_matmul_precision("high")
 
     parser = argparse.ArgumentParser()
     parser.add_argument(

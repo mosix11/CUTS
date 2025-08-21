@@ -78,7 +78,11 @@ class PCAM(BaseClassificationDataset):
 
 
     def get_class_names(self):
-        return ['normal', 'tumor']
+        # return ['normal', 'tumor']
+        return [
+            "lymph node",
+            "lymph node containing metastatic tumor tissue",
+        ]
 
     def get_identifier(self):
         identifier = 'pcam|'

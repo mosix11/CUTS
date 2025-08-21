@@ -8,7 +8,7 @@ from . import PostActResNet9_ETD
 from . import CNN5_ETD
 from . import ViT_Small
 from . import TorchvisionModels, TimmModels
-from . import OpenClipImageEncoder, OpenClipImageClassifier, OpenClipMultiHeadImageClassifier
+from . import OpenClipImageEncoder, OpenClipMultiHeadImageClassifier
 
 from .loss_functions import SupervisedContrastiveLoss, CompoundLoss
 
@@ -121,15 +121,9 @@ def create_model(cfg, num_classes=None):
         
     elif model_type.startswith('open_clip'):
         model_type = model_type.removeprefix('open_clip_')
-        if model_type.startswith('multi_head'):
-            model_type = model_type.removeprefix('multi_head_')
+        if model_type.startswith('multihead'):
+            model_type = model_type.removeprefix('multihead_')
             model = OpenClipMultiHeadImageClassifier(
-                model_type=model_type,
-                **cfg
-            )
-        elif model_type.startswith('single_head'):
-            model_type = model_type.removeprefix('single_head_')
-            model = OpenClipImageClassifier(
                 model_type=model_type,
                 **cfg
             )

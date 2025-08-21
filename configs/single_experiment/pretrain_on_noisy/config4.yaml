@@ -57,7 +57,8 @@ model:
   init_channels: 64
   num_classes: *num_classes
   img_size: [32, 32]
-  loss_fn: 'CE-NR'
+  loss_fn:
+    type: 'CE-NR'
   metrics: ['ACC', 'F1']
 
 

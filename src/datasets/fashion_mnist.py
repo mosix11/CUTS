@@ -51,7 +51,9 @@ class FashionMNIST(BaseClassificationDataset):
         )
 
     def load_train_set(self):
-        return datasets.FashionMNIST(root=self.dataset_dir, train=True, transform=self.get_transforms(train=True), download=True)
+        trainset = datasets.FashionMNIST(root=self.dataset_dir, train=True, transform=self.get_transforms(train=True), download=True)
+        self._class_names = trainset.classes
+        return trainset
     
     def load_validation_set(self):
         return None
@@ -86,18 +88,7 @@ class FashionMNIST(BaseClassificationDataset):
         
         
     def get_class_names(self):
-        return [
-            "T-shirt/top",
-            "Trouser",
-            "Pullover",
-            "Dress",
-            "Coat",
-            "Sandal",
-            "Shirt",
-            "Sneaker",
-            "Bag",
-            "Ankle boot"
-        ]
+        return self._class_names
 
     
     def get_identifier(self):

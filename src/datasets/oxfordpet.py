@@ -35,6 +35,7 @@ class OxfordIIITPet(BaseClassificationDataset):
         dataset_dir = data_dir / 'OxfordIIITPet'
         dataset_dir.mkdir(exist_ok=True, parents=True)
         
+        
         super().__init__(
             dataset_name='OxfordIIITPet',
             dataset_dir=dataset_dir,
@@ -44,7 +45,9 @@ class OxfordIIITPet(BaseClassificationDataset):
 
 
     def load_train_set(self):
-        return datasets.OxfordIIITPet(root=self.dataset_dir, split="trainval", target_types="category", transform=self.get_transforms(train=True), download=True)
+        trainset = datasets.OxfordIIITPet(root=self.dataset_dir, split="trainval", target_types="category", transform=self.get_transforms(train=True), download=True)
+        self._class_names = trainset.classes
+        return trainset
     
     def load_validation_set(self):
         return None
@@ -78,16 +81,7 @@ class OxfordIIITPet(BaseClassificationDataset):
 
 
     def get_class_names(self):
-        return ['Abyssinian', 'american_bulldog', 'american_pit_bull_terrier',
-                'basset_hound', 'beagle', 'Bengal', 'Birman', 'Bombay',
-                'boxer', 'British_Shorthair', 'chihuahua', 'Egyptian_Mau',
-                'english_cocker_spaniel', 'english_setter', 'german_shorthaired',
-                'great_pyrenees', 'havanese', 'japanese_chin', 'keeshond',
-                'leonberger', 'Maine_Coon', 'miniature_pinscher', 'newfoundland',
-                'Persian', 'pomeranian', 'pug', 'Ragdoll', 'Russian_Blue',
-                'saint_bernard', 'samoyed', 'scottish_terrier', 'shiba_inu',
-                'Siamese', 'Sphynx', 'staffordshire_bull_terrier',
-                'wheaten_terrier', 'yorkshire_terrier']
+        return self._class_names
 
     def get_identifier(self):
         identifier = 'oxfordIIIpet|'
