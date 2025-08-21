@@ -312,7 +312,7 @@ class BaseClassificationDataset(ABC):
         if use_balanced_batch_sampler:
             print('using balanced batch sampler.')
             # x, y, idx for each sample
-            labels = torch.tensor([label for _, label, _ in dataset], dtype=torch.long)
+            labels = torch.tensor([sample[1] for sample in dataset], dtype=torch.long)
             samples_per_class = 4
             assert self.batch_size % samples_per_class == 0, \
                 f"batch_size ({self.batch_size}) must be divisible by samples_per_class ({samples_per_class})"
