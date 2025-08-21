@@ -262,31 +262,32 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
 
     
     ft_weights = OrderedDict()
-    for dataset_cfg in cfg['datasets']:
-        experiment_dir = outputs_dir / f"{cfg_name}/{dataset_cfg['name']}"
-        weights_dir = experiment_dir / Path("weights")
-
-        
-        if not weights_dir.joinpath("ft_weights.pth").exists():
-            raise RuntimeError(f'The finetuned weights for {dataset_cfg['name']} task was not found!')
-        model.load_state_dict(torch.load(weights_dir / 'ft_weights.pth', map_location=torch.device('cpu')), strict=False)
-        ft_weights[dataset_cfg['name']] = copy.deepcopy(model.state_dict())
-
+    
+    
+    model.load_state_dict(torch.load(outputs_dir.joinpath(f"{cfg_name}/mix/weights/ft_weights.pth"), map_location=torch.device('cpu')), strict=False)
+    ft_weights['mix'] = copy.deepcopy(model.state_dict())
+    model.load_state_dict(torch.load(outputs_dir.joinpath(f"{cfg_name}/clean/weights/ft_weights.pth"), map_location=torch.device('cpu')), strict=False)
+    ft_weights['clean'] = copy.deepcopy(model.state_dict())
+    model.load_state_dict(torch.load(outputs_dir.joinpath(f"{cfg_name}/noise/weights/ft_weights.pth"), map_location=torch.device('cpu')), strict=False)
+    ft_weights['noise'] = copy.deepcopy(model.state_dict())
+    
+    model.load_state_dict(pt_weights)
+    
+    
             
     task_vectors = OrderedDict()
     for task_name, finetuend_weights in ft_weights.items():
         task_vectors[task_name] = TaskVector(pt_weights, finetuend_weights)
 
-    sum_TV = TaskVector.sum(task_vectors)
-    avg_TV = TaskVector.mean(task_vectors)
-    
+    avg_clean_noise_TV = TaskVector.mean(task_vectors)
+    goal_TV = task_vectors['mix'] - task_vectors['noise']
     
     
     
     ft_tvs_list = list(task_vectors.values())
     tv_names = list(task_vectors.keys())
-    ft_tvs_list.extend([sum_TV, avg_TV])
-    tv_names.extend(['Sum TV', 'Avg TV'])
+    ft_tvs_list.extend([avg_clean_noise_TV, goal_TV])
+    tv_names.extend(['Avg Clean-Noise TV', 'Goal TV'])
     
     task_sim = []
     for i in range(len(ft_tvs_list)):
@@ -312,91 +313,42 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         filepath=results_dir / 'task_similarities.png',
         show=False
     )
-
     
+    
+
     results = OrderedDict()
             
-    for dataset_cfg in cfg['datasets']:
-        task_name = dataset_cfg['name']
-        results[task_name] = OrderedDict()
-        
-        dataset_cfg['train_transforms'] = model.get_val_transforms()
-        dataset_cfg['val_transforms'] = model.get_val_transforms()
-        dataset_cfg['use_balanced_batch_sampler'] = False
-        dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
-        
-        model.load_state_dict(pt_weights)
-        pt_metrics = knn_eval(
-            feature_extractor=model,
-            train_dl=dataset.get_train_dataloader(),
-            test_dl=dataset.get_test_dataloader(),
-            k=20,
-            weighted=True,
-            normalize=True,
-            batch_size_predict=2048,
-            device=gpu
-        )
-        
-        results[task_name]['Pretrain'] = pt_metrics
-        print(f"{task_name} kNN Performance with pretrained:", pt_metrics)
-        
-       
-        model.load_state_dict(ft_weights[task_name])
-        ft_metrics = knn_eval(
-            feature_extractor=model,
-            train_dl=dataset.get_train_dataloader(),
-            test_dl=dataset.get_test_dataloader(),
-            k=20,
-            weighted=True,
-            normalize=True,
-            batch_size_predict=2048,
-            device=gpu
-        )
-        
-        results[task_name]['Finetuned'] = ft_metrics
-        print(f"{dataset_cfg['name']} kNN Performance with finetuned:", ft_metrics)
-        
-        model.load_state_dict(pt_weights)
-        sum_TV.apply_to(model, scaling_coef=1.0)
-        
-        sum_metrics = knn_eval(
-            feature_extractor=model,
-            train_dl=dataset.get_train_dataloader(),
-            test_dl=dataset.get_test_dataloader(),
-            k=20,
-            weighted=True,
-            normalize=True,
-            batch_size_predict=2048,
-            device=gpu
-        )
-        
-        results[task_name]['MTV Sum'] = sum_metrics
-        print(f"{dataset_cfg['name']} kNN Performance with sum tv:", sum_metrics)
-        
-        
-        model.load_state_dict(pt_weights)
-        avg_TV.apply_to(model, scaling_coef=1.0)
-        
-        avg_metrics = knn_eval(
-            feature_extractor=model,
-            train_dl=dataset.get_train_dataloader(),
-            test_dl=dataset.get_test_dataloader(),
-            k=20,
-            weighted=True,
-            normalize=True,
-            batch_size_predict=2048,
-            device=gpu
-        )
-        
-        results[task_name]['MTV Avg'] = avg_metrics
-        print(f"{dataset_cfg['name']} kNN Performance with avg tv:", avg_metrics)
-        
-        print(results)
-        
-        
+    dataset_cfg = cfg['dataset']
+    noise_cfg = dataset_cfg.pop('noise_cfg')
+    dataset_cfg['train_transforms'] = model.get_val_transforms()
+    dataset_cfg['val_transforms'] = model.get_val_transforms()
+    dataset_cfg['use_balanced_batch_sampler'] = False
+    dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
     
-    with open(results_dir / 'metrics.json' , 'w') as json_file:
-        json.dump(results, json_file, indent=4)
+    dataset.inject_noise(**noise_cfg)
+    
+    goal_TV.apply_to(model, scaling_coef=1.0)
+    
+    
+    ft_metrics = knn_ncm_eval(
+        feature_extractor=model,
+        train_dl=dataset.get_train_dataloader(),
+        test_dl=dataset.get_test_dataloader(),
+        normalize=True,
+        # knn
+        k=20,
+        weighted=True,
+        knn_batch_size=2048,
+        #ncm
+        ncm_metric='euclidean',
+        ncm_batch_size=4096,
+        device=trainer_utils.get_gpu_device()
+    )
+    print(ft_metrics)
+
+    
+    # with open(results_dir / 'metrics.json' , 'w') as json_file:
+    #     json.dump(results, json_file, indent=4)
             
 def apply_tvs(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     training_seed = cfg['training_seed']

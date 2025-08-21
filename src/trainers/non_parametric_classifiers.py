@@ -351,6 +351,7 @@ def knn_ncm_eval(
             "k": k,
             "T": T,
             "weighted": weighted,
+            "normalize": normalize
         },
         "ncm": {
             "top1_acc": ncm_acc,
@@ -359,5 +360,4 @@ def knn_ncm_eval(
             "num_classes_in_train": int(classes.numel()),
             "class_counts": {int(c): int(n) for c, n in zip(classes, counts)},
         },
-        "shared": {"normalize": normalize},
     }
