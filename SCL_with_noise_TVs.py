@@ -130,6 +130,7 @@ def finetune_models_SCL(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_nam
     base_dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
     
     base_dataset.inject_noise(**noise_cfg)
+    base_dataset.reset_train_dl()
     
     if not outputs_dir.joinpath(f"{cfg_name}/mix/weights/model_weights.pth").exists():
         dataset = copy.deepcopy(base_dataset)

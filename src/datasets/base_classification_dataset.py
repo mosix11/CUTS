@@ -112,7 +112,7 @@ class BaseClassificationDataset(ABC):
         return self.train_loader
     
     def reset_train_dl(self):
-        self.train_loader = self._build_dataloader(self.trainset, shuffle=True)
+        self.train_loader = self._build_dataloader(self.trainset, shuffle=True, use_balanced_batch_sampler=True if self.use_balanced_batch_sampler else False)
 
     def get_val_dataloader(self):
         return self.val_loader
@@ -129,7 +129,7 @@ class BaseClassificationDataset(ABC):
     
     def set_trainset(self, set, shuffle=False):
         self.trainset = set
-        self.train_loader = self._build_dataloader(self.trainset, shuffle=shuffle)
+        self.train_loader = self._build_dataloader(self.trainset, shuffle=shuffle, use_balanced_batch_sampler=True if self.use_balanced_batch_sampler else False)
     
     def get_valset(self):
         return self.valset
@@ -174,12 +174,12 @@ class BaseClassificationDataset(ABC):
         self._set_set(set, dataset)
     
     def replace_heldout_as_train_dl(self):
-        self.train_loader = self._build_dataloader(self.heldout_set, shuffle=True)
+        self.train_loader = self._build_dataloader(self.heldout_set, shuffle=True, use_balanced_batch_sampler=True if self.use_balanced_batch_sampler else False)
     
     
     def change_batch_size(self, batch_size:int):
         self.batch_size = batch_size
-        self.train_loader = self._build_dataloader(self.trainset, shuffle=True)
+        self.train_loader = self._build_dataloader(self.trainset, shuffle=True, use_balanced_batch_sampler=True if self.use_balanced_batch_sampler else False)
         self.val_loader = self._build_dataloader(self.valset) if self.valset else None
         self.test_loader = self._build_dataloader(self.testset)
         self.heldout_loader = self._build_dataloader(self.heldout_set) if self.heldout_set else None
