@@ -34,16 +34,16 @@ model:
 
 trainer:
   finetuning:
-    max_iterations: 3000
+    max_iterations: 6000
     optimizer_cfg: 
       type: "adamw"
-      lr: 5.0e-6
+      lr: 1.0e-5
       betas: [0.9, 0.999]
     lr_schedule_cfg:
       type: 'cosann_warmup'
       update_on: 'gradient_step'
       warmup_steps: 300
-      T_max: 3000
+      T_max: 6000
       eta_min: 1.0e-7
     early_stopping: False
     validation_freq: -1
@@ -54,4 +54,3 @@ trainer:
     log_comet: True
     comet_project_name: 'closed_vocab_noise_TA'
     seed: *training_seed
-

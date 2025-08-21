@@ -271,6 +271,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     model.load_state_dict(torch.load(outputs_dir.joinpath(f"{cfg_name}/noise/weights/ft_weights.pth"), map_location=torch.device('cpu')), strict=False)
     ft_weights['noise'] = copy.deepcopy(model.state_dict())
     
+    
     model.load_state_dict(pt_weights)
     
     
@@ -279,15 +280,16 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     for task_name, finetuend_weights in ft_weights.items():
         task_vectors[task_name] = TaskVector(pt_weights, finetuend_weights)
 
-    avg_clean_noise_TV = TaskVector.mean(task_vectors)
-    goal_TV = task_vectors['mix'] - task_vectors['noise']
+    sum_clean_noise_TV = TaskVector.sum([task_vectors['clean'] + task_vectors['noise']])
+    avg_clean_noise_TV = TaskVector.mean([task_vectors['clean'] + task_vectors['noise']])
+    goal_TV = task_vectors['mix'] - task_vectors['noise'].prune_small_weights(rate=0.95)
     
     
     
     ft_tvs_list = list(task_vectors.values())
     tv_names = list(task_vectors.keys())
-    ft_tvs_list.extend([avg_clean_noise_TV, goal_TV])
-    tv_names.extend(['Avg Clean-Noise TV', 'Goal TV'])
+    ft_tvs_list.extend([sum_clean_noise_TV, avg_clean_noise_TV, goal_TV])
+    tv_names.extend(['Sum Clean-Noise TV', 'Avg Clean-Noise TV', 'Goal TV'])
     
     task_sim = []
     for i in range(len(ft_tvs_list)):
