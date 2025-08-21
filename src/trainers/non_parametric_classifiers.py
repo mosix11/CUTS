@@ -276,3 +276,88 @@ def ncm_eval(
         "num_classes_in_train": int(classes.numel()),
         "class_counts": {int(c): int(n) for c, n in zip(classes, counts)},
     }
+    
+    
+@torch.no_grad()
+def knn_ncm_eval(
+    feature_extractor: nn.Module,
+    train_dl: DataLoader,
+    test_dl: DataLoader,
+    *,
+    # shared
+    device: torch.device = torch.device("cpu"),
+    normalize: bool = True,
+    # k-NN params
+    k: int = 20,
+    T: float = 0.07,
+    weighted: bool = True,
+    knn_batch_size: int = 2048,
+    # NCM params
+    ncm_metric: str = "cosine",      # 'cosine' or 'euclidean'
+    ncm_batch_size: int = 4096,
+):
+    """
+    Extract features once, then evaluate both k-NN and NCM.
+
+    Returns:
+        {
+          'knn': {'top1_acc': ..., 'k': ..., 'T': ..., 'weighted': ...},
+          'ncm': {
+              'top1_acc': ..., 'metric': ..., 'normalize': ...,
+              'num_classes_in_train': C, 'class_counts': {label: count, ...}
+          },
+          'shared': {'normalize': normalize}
+        }
+    """
+    # 1) Extract features ONCE
+    train_feats, train_labels = extract_features(
+        feature_extractor, train_dl, device=device, normalize=normalize
+    )
+    test_feats, test_labels = extract_features(
+        feature_extractor, test_dl, device=device, normalize=normalize
+    )
+
+    # 2) k-NN on the extracted features
+    knn_preds = knn_predict(
+        query_feats=test_feats,
+        ref_feats=train_feats,
+        ref_labels=train_labels,
+        k=k, T=T, weighted=weighted,
+        batch_size=knn_batch_size,
+        device=device,
+    )
+    knn_acc = (knn_preds == test_labels).float().mean().item() * 100.0
+
+    # 3) NCM on the same features
+    #    If using cosine NCM, keep prototypes normalized; for euclidean, use raw means.
+    proto_norm = (normalize and ncm_metric == "cosine")
+    prototypes, classes, counts = compute_class_prototypes(
+        train_feats, train_labels, normalize=proto_norm
+    )
+    ncm_preds = ncm_predict(
+        query_feats=test_feats,
+        prototypes=prototypes,
+        classes=classes,
+        metric=ncm_metric,
+        batch_size=ncm_batch_size,
+        device=device,
+    )
+    ncm_acc = (ncm_preds == test_labels).float().mean().item() * 100.0
+
+    # 4) Package results
+    return {
+        "knn": {
+            "top1_acc": knn_acc,
+            "k": k,
+            "T": T,
+            "weighted": weighted,
+        },
+        "ncm": {
+            "top1_acc": ncm_acc,
+            "metric": ncm_metric,
+            "normalize": proto_norm,
+            "num_classes_in_train": int(classes.numel()),
+            "class_counts": {int(c): int(n) for c, n in zip(classes, counts)},
+        },
+        "shared": {"normalize": normalize},
+    }

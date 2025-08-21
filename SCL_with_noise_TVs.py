@@ -26,7 +26,7 @@ from tqdm import tqdm
 from collections import OrderedDict, defaultdict
 import re
 
-from src.trainers import knn_eval
+from src.trainers import knn_eval, ncm_eval, knn_ncm_eval
 from helper_funcs import evaluate_model, eval_model_on_clean_noise_splits, search_optimal_coefficient, get_confusion_matrix, row_normalize
 
 def eval_model_on_tvs(model, taskvectors, results_dict, cfg, dataset, num_classes, device):
@@ -68,52 +68,70 @@ def eval_model_on_tvs(model, taskvectors, results_dict, cfg, dataset, num_classe
     return results    
 
 
-def do_knn_on_image_encoder(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
-    model = model_factory.create_model(cfg['model'])
-    model.freeze()
-    model.deactivate_projector(remove=True)
-    pretrained_weights = copy.deepcopy(model.state_dict())
+def eval_knn_ncm(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
+    base_model = model_factory.create_model(cfg['model'])
+    base_model.freeze()
+    base_model.deactivate_projector(remove=True)
+    pretrained_weights = copy.deepcopy(base_model.state_dict())
     
-    for dataset_cfg in cfg['datasets']:
-        # For knn we apply the inference transformations for both
-        # training samples and test samples.
-        dataset_cfg['train_transforms'] = model.get_val_transforms()
-        dataset_cfg['val_transforms'] = model.get_val_transforms()
-        dataset_cfg['use_balanced_batch_sampler'] = False
-        dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
-        
-        model.load_state_dict(pretrained_weights)
-        metrics = knn_eval(
-            feature_extractor=model,
-            train_dl=dataset.get_train_dataloader(),
-            test_dl=dataset.get_test_dataloader(),
-            k=20,
-            weighted=True,
-            normalize=True,
-            batch_size_predict=2048,
-            device=trainer_utils.get_gpu_device()
-        )
-        
-        print(f"{dataset_cfg['name']} kNN Performance with pretrained:", metrics)
+    results_dir = results_dir / cfg_name
+    results_dir.mkdir(exist_ok=True, parents=True)
+    
+    dataset_cfg = cfg['dataset']
+    noise_cfg = dataset_cfg.pop('noise_cfg')
+    dataset_cfg['train_transforms'] = base_model.get_val_transforms()
+    dataset_cfg['val_transforms'] = base_model.get_val_transforms()
+    dataset_cfg['use_balanced_batch_sampler'] = False
+    
+    base_dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
+    
+    base_dataset.inject_noise(**noise_cfg)
+    
+    ft_weights = OrderedDict()
+    ft_weights['mix'] = torch.load(outputs_dir.joinpath(f"{cfg_name}/mix/weights/ft_weights.pth"), map_location=torch.device('cpu'))
+    ft_weights['clean'] = torch.load(outputs_dir.joinpath(f"{cfg_name}/clean/weights/ft_weights.pth"), map_location=torch.device('cpu'))
+    ft_weights['noise'] = torch.load(outputs_dir.joinpath(f"{cfg_name}/noise/weights/ft_weights.pth"), map_location=torch.device('cpu'))
+    
+    results_dict = OrderedDict()
 
-        
-        experiment_dir = outputs_dir / f"{cfg_name}/{dataset_cfg['name']}"
-        weights_dir = experiment_dir / Path("weights")
-        
-        ft_weights = torch.load(weights_dir / 'ft_weights.pth', map_location=torch.device('cpu'))
-        model.load_state_dict(ft_weights, strict=False)
-        metrics = knn_eval(
-            feature_extractor=model,
-            train_dl=dataset.get_train_dataloader(),
-            test_dl=dataset.get_test_dataloader(),
+    pt_metrics = knn_ncm_eval(
+        feature_extractor=base_model,
+        train_dl=base_dataset.get_train_dataloader(),
+        test_dl=base_dataset.get_test_dataloader(),
+        normalize=True,
+        # knn
+        k=20,
+        weighted=True,
+        knn_batch_size=2048,
+        #ncm
+        ncm_metric='euclidean',
+        ncm_batch_size=4096,
+        device=trainer_utils.get_gpu_device()
+    )
+    
+    results_dict['Pretrain'] = pt_metrics
+    
+    for task_name, finetune_weights in ft_weights.items():
+        base_model.load_state_dict(finetune_weights, strict=False)
+        ft_metrics = knn_ncm_eval(
+            feature_extractor=base_model,
+            train_dl=base_dataset.get_train_dataloader(),
+            test_dl=base_dataset.get_test_dataloader(),
+            normalize=True,
+            # knn
             k=20,
             weighted=True,
-            normalize=True,
-            batch_size_predict=2048,
+            knn_batch_size=2048,
+            #ncm
+            ncm_metric='euclidean',
+            ncm_batch_size=4096,
             device=trainer_utils.get_gpu_device()
         )
+        results_dict[task_name] = ft_metrics
         
-        print(f"{dataset_cfg['name']} kNN Performance with finetuned:", metrics)
+    with open(results_dir / 'knn_cnm_metrics.json' , 'w') as json_file:
+        json.dump(results_dict, json_file, indent=4)
+    
         
         
 def finetune_models_SCL(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
@@ -132,7 +150,7 @@ def finetune_models_SCL(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_nam
     base_dataset.inject_noise(**noise_cfg)
     base_dataset.reset_train_dl()
     
-    if not outputs_dir.joinpath(f"{cfg_name}/mix/weights/model_weights.pth").exists():
+    if not outputs_dir.joinpath(f"{cfg_name}/mix/weights/ft_weights.pth").exists():
         dataset = copy.deepcopy(base_dataset)
         model = copy.deepcopy(base_model)
             
@@ -157,7 +175,7 @@ def finetune_models_SCL(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_nam
         torch.save(model.state_dict(), weights_dir / Path("ft_weights.pth"))
         
       
-    if not outputs_dir.joinpath(f"{cfg_name}/clean/weights/model_weights.pth").exists():
+    if not outputs_dir.joinpath(f"{cfg_name}/clean/weights/ft_weights.pth").exists():
         dataset = copy.deepcopy(base_dataset)
         model = copy.deepcopy(base_model)
         
@@ -185,7 +203,7 @@ def finetune_models_SCL(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_nam
         
         
         
-    if not outputs_dir.joinpath(f"{cfg_name}/noise/weights/model_weights.pth").exists():
+    if not outputs_dir.joinpath(f"{cfg_name}/noise/weights/ft_weights.pth").exists():
         dataset = copy.deepcopy(base_dataset)
         model = copy.deepcopy(base_model)  
         
@@ -797,11 +815,12 @@ if __name__ == "__main__":
     
     
     parser.add_argument(
-        "-k",
-        "--knn",
-        help="Perform kNN on the image encoder.",
+        "-e",
+        "--evaluate",
+        help="Perform evaluation on the image encoder.",
         action="store_true",
     )
+    
     
     parser.add_argument(
         "-l",
@@ -839,8 +858,8 @@ if __name__ == "__main__":
     results_dir.mkdir(exist_ok=True, parents=True)
 
 
-    if args.knn:
-        do_knn_on_image_encoder(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)
+    if args.evaluate:
+        eval_knn_ncm(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)
     # if args.linprobe:
     #     linear_probe_heads(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)
     if args.finetune:

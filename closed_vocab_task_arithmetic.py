@@ -26,7 +26,7 @@ from tqdm import tqdm
 from collections import OrderedDict, defaultdict
 import re
 
-from src.trainers import knn_eval, ncm_eval
+from src.trainers import knn_eval, ncm_eval, knn_ncm_eval
 from helper_funcs import evaluate_model, eval_model_on_clean_noise_splits, search_optimal_coefficient, get_confusion_matrix, row_normalize
 
 def eval_model_on_tvs(model, taskvectors, results_dict, cfg, dataset, num_classes, device):
@@ -137,7 +137,7 @@ def do_ncm_on_image_encoder(outputs_dir: Path, results_dir: Path, cfg: dict, cfg
             train_dl=dataset.get_train_dataloader(),
             test_dl=dataset.get_test_dataloader(),
             metric='euclidean',
-            normalize=True,
+            normalize=False,
             batch_size_predict=2048,
             device=trainer_utils.get_gpu_device()
         )
@@ -155,13 +155,75 @@ def do_ncm_on_image_encoder(outputs_dir: Path, results_dir: Path, cfg: dict, cfg
             train_dl=dataset.get_train_dataloader(),
             test_dl=dataset.get_test_dataloader(),
             metric='euclidean',
-            normalize=True,
+            normalize=False,
             batch_size_predict=2048,
             device=trainer_utils.get_gpu_device()
         )
         
         print(f"{dataset_cfg['name']} NCM Performance with finetuned:", metrics)
+   
+def eval_knn_ncm(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
+    model = model_factory.create_model(cfg['model'])
+    model.freeze()
+    model.deactivate_projector(remove=True)
+    pretrained_weights = copy.deepcopy(model.state_dict())
+    
+    results_dir = results_dir / cfg_name
+    results_dir.mkdir(exist_ok=True, parents=True)
+    
+    results_dict = OrderedDict()
+    for dataset_cfg in cfg['datasets']:
+        results_dict[dataset_cfg['name']] = OrderedDict()
+        dataset_cfg['train_transforms'] = model.get_val_transforms()
+        dataset_cfg['val_transforms'] = model.get_val_transforms()
+        dataset_cfg['use_balanced_batch_sampler'] = False
+        dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
         
+        model.load_state_dict(pretrained_weights)
+        pt_metrics = knn_ncm_eval(
+            feature_extractor=model,
+            train_dl=dataset.get_train_dataloader(),
+            test_dl=dataset.get_test_dataloader(),
+            normalize=True,
+            # knn
+            k=20,
+            weighted=True,
+            knn_batch_size=2048,
+            #ncm
+            ncm_metric='euclidean',
+            ncm_batch_size=4096,
+            device=trainer_utils.get_gpu_device()
+        )
+        
+        print(f"{dataset_cfg['name']} Performance with pretrained:", pt_metrics)
+        results_dict[dataset_cfg['name']]['pt'] = pt_metrics
+
+        
+        experiment_dir = outputs_dir / f"{cfg_name}/{dataset_cfg['name']}"
+        weights_dir = experiment_dir / Path("weights")
+        
+        ft_weights = torch.load(weights_dir / 'ft_weights.pth', map_location=torch.device('cpu'))
+        model.load_state_dict(ft_weights, strict=False)
+        ft_metrics = knn_ncm_eval(
+            feature_extractor=model,
+            train_dl=dataset.get_train_dataloader(),
+            test_dl=dataset.get_test_dataloader(),
+            normalize=True,
+            # knn
+            k=20,
+            weighted=True,
+            knn_batch_size=2048,
+            #ncm
+            ncm_metric='euclidean',
+            ncm_batch_size=4096,
+            device=trainer_utils.get_gpu_device()
+        )
+        
+        print(f"{dataset_cfg['name']} Performance with finetuned:", ft_metrics)
+        results_dict[dataset_cfg['name']]['ft'] = ft_metrics
+        
+    with open(results_dir / 'knn_cnm_metrics.json' , 'w') as json_file:
+        json.dump(results_dict, json_file, indent=4)
         
 def finetune_models_SCL(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     cfg['trainer']['finetuning']['comet_api_key'] = os.getenv("COMET_API_KEY")
@@ -889,18 +951,13 @@ if __name__ == "__main__":
     
     
     parser.add_argument(
-        "-k",
-        "--knn",
-        help="Perform kNN on the image encoder.",
+        "-e",
+        "--evaluate",
+        help="Perform evaluation on the image encoder.",
         action="store_true",
     )
     
-    parser.add_argument(
-        "-n",
-        "--ncm",
-        help="Perform NCM on the image encoder.",
-        action="store_true",
-    )
+
     
     parser.add_argument(
         "-l",
@@ -938,11 +995,9 @@ if __name__ == "__main__":
     results_dir.mkdir(exist_ok=True, parents=True)
 
 
-    if args.knn:
-        do_knn_on_image_encoder(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)
+    if args.evaluate:
+        eval_knn_ncm(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)
         
-    if args.ncm:
-        do_ncm_on_image_encoder(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)
         
     if args.linprobe:
         linear_probe_heads(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)
