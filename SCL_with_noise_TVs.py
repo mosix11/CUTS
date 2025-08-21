@@ -826,15 +826,15 @@ if __name__ == "__main__":
 
     dotenv.load_dotenv(".env")
     
-    cfg_path = Path('configs/single_experiment/closed_vocab_TA') / f"{args.config}.yaml"
+    cfg_path = Path('configs/single_experiment/closed_vocab_noise_TA') / f"{args.config}.yaml"
 
     if not cfg_path.exists(): raise RuntimeError('The specified config file does not exist.')
     with open(cfg_path, 'r') as file:
         cfg = yaml.full_load(file)
 
-    outputs_dir = Path("outputs/single_experiment/closed_vocab_TA").absolute()
+    outputs_dir = Path("outputs/single_experiment/closed_vocab_noise_TA").absolute()
     outputs_dir.mkdir(exist_ok=True, parents=True)
-    results_dir = Path("results/single_experiment/closed_vocab_TA").absolute()
+    results_dir = Path("results/single_experiment/closed_vocab_noise_TA").absolute()
     results_dir.mkdir(exist_ok=True, parents=True)
 
 
