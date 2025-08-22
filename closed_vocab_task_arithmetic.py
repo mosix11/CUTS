@@ -405,9 +405,13 @@ def finetune_models_noise(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_n
         plots_dir.mkdir(exist_ok=True, parents=True)
         
         
+        finetuning_cfg = None
+        if 'mix' in cfg['trainer']['finetuning']:
+            finetuning_cfg = cfg['trainer']['finetuning']['mix']
+        else: finetuning_cfg = cfg['trainer']['finetuning']
         trainer = StandardTrainer(
             outputs_dir=outputs_dir,
-            **cfg['trainer']['finetuning'],
+            **finetuning_cfg,
             exp_name=experiment_name,
             exp_tags=None,
         )
@@ -432,9 +436,13 @@ def finetune_models_noise(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_n
         plots_dir = experiment_dir / Path("plots")
         plots_dir.mkdir(exist_ok=True, parents=True)
         
+        finetuning_cfg = None
+        if 'clean' in cfg['trainer']['finetuning']:
+            finetuning_cfg = cfg['trainer']['finetuning']['clean']
+        else: finetuning_cfg = cfg['trainer']['finetuning']
         trainer = StandardTrainer(
             outputs_dir=outputs_dir,
-            **cfg['trainer']['finetuning'],
+            **finetuning_cfg,
             exp_name=experiment_name,
             exp_tags=None,
         )
@@ -460,9 +468,13 @@ def finetune_models_noise(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_n
         plots_dir = experiment_dir / Path("plots")
         plots_dir.mkdir(exist_ok=True, parents=True)
         
+        finetuning_cfg = None
+        if 'noise' in cfg['trainer']['finetuning']:
+            finetuning_cfg = cfg['trainer']['finetuning']['noise']
+        else: finetuning_cfg = cfg['trainer']['finetuning']
         trainer = StandardTrainer(
             outputs_dir=outputs_dir,
-            **cfg['trainer']['finetuning'],
+            **finetuning_cfg,
             exp_name=experiment_name,
             exp_tags=None,
         )
