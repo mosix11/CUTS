@@ -183,7 +183,7 @@ class OpenClipMultiHeadImageClassifier(BaseModel):
         loss_fn:nn.Module = None,
         metrics:dict = None
     ):
-        super().__init__(loss_fn=loss_fn, metrics=metrics)
+        super().__init__(loss_fn=loss_fn, metrics=None)
         
         self.model_type = model_type
         self.pt_weights = pt_weights
@@ -201,7 +201,19 @@ class OpenClipMultiHeadImageClassifier(BaseModel):
         
         # By default all heads are frozen.
         self.freeze_all_heads()
-    
+        
+        self.head_metrics = nn.ModuleDict()
+        for ds_name, ds_metrics in metrics.items():
+            self.head_metrics[ds_name] = nn.ModuleDict()
+            for name, metric_instance in ds_metrics.items():
+                if not isinstance(metric_instance, torchmetrics.Metric):
+                    raise TypeError(f"Metric '{name}' must be an instance of torchmetrics.Metric.")
+                self.head_metrics[ds_name][name] = metric_instance
+        
+        # By default the metric for the defualt active head is activated
+        self.metrics = self.head_metrics[self.active_head]
+                
+                
     def forward(self, x):
         ftrs = self.image_encoder(x)
         logits = self.classifier_heads[self.active_head](ftrs)
@@ -212,6 +224,7 @@ class OpenClipMultiHeadImageClassifier(BaseModel):
         if head_name not in self.classifier_heads:
             raise ValueError('The specified head name is not in the classifier heads.')
         self.active_head = head_name
+        self.metrics = self.head_metrics[self.active_head]
         
     def get_active_head(self):
         return self.classifier_heads[self.activate_head]

@@ -53,12 +53,11 @@ def create_model(cfg, num_classes=None):
         if num_classes:
             for metric_name in cfg['metrics']:    
                 metrics[metric_name] = get_metric(metric_name, num_classes)
-        elif 'heads_cfg' in cfg:
-            for head_cfg in cfg['heads_cfg']:
-                head_name, head_out_dim = head_cfg['head_name'], head_cfg['head_out_dim']
-                metrics[head_name] = {}
+        elif 'datasets_cfgs' in cfg:
+            for dataset_name, class_names in cfg['datasets_cfgs'].items():
+                metrics[dataset_name] = {}
                 for metric_name in cfg['metrics']:
-                    metrics[head_name][metric_name] = get_metric(metric_name, num_classes=head_out_dim)   
+                    metrics[dataset_name][metric_name] = get_metric(metric_name, num_classes=len(class_names))   
             
         cfg['metrics'] = metrics
 
