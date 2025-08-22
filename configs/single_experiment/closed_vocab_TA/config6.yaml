@@ -29,13 +29,14 @@ trainer:
     max_iterations: 10000
     optimizer_cfg: 
       type: "adamw"
-      lr: 1.0e-4
+      lr: 1.0e-5
       betas: [0.9, 0.999]
     lr_schedule_cfg:
-      type: 'step'
+      type: 'cosann_warmup'
       update_on: 'gradient_step'
-      milestones: [2000, 3000, 4000, 5000, 6000, 7000, 8000, 9000]
-      gamma: 0.7
+      warmup_steps: 300
+      T_max: 6000
+      eta_min: 0
     early_stopping: False
     validation_freq: -1
     save_best_model: False
