@@ -408,6 +408,7 @@ def finetune_models_noise(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_n
         finetuning_cfg = None
         if 'mix' in cfg['trainer']['finetuning']:
             finetuning_cfg = cfg['trainer']['finetuning']['mix']
+            finetuning_cfg['comet_api_key'] =  os.getenv("COMET_API_KEY")
         else: finetuning_cfg = cfg['trainer']['finetuning']
         trainer = StandardTrainer(
             outputs_dir=outputs_dir,
@@ -439,6 +440,7 @@ def finetune_models_noise(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_n
         finetuning_cfg = None
         if 'clean' in cfg['trainer']['finetuning']:
             finetuning_cfg = cfg['trainer']['finetuning']['clean']
+            finetuning_cfg['comet_api_key'] =  os.getenv("COMET_API_KEY")
         else: finetuning_cfg = cfg['trainer']['finetuning']
         trainer = StandardTrainer(
             outputs_dir=outputs_dir,
@@ -471,6 +473,7 @@ def finetune_models_noise(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_n
         finetuning_cfg = None
         if 'noise' in cfg['trainer']['finetuning']:
             finetuning_cfg = cfg['trainer']['finetuning']['noise']
+            finetuning_cfg['comet_api_key'] =  os.getenv("COMET_API_KEY")
         else: finetuning_cfg = cfg['trainer']['finetuning']
         trainer = StandardTrainer(
             outputs_dir=outputs_dir,
