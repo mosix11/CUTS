@@ -25,6 +25,7 @@ def get_metric(metric_name, num_classes):
         else:
             return MulticlassF1Score(num_classes=num_classes, average='micro')
     else: raise ValueError(f"Invalid metric {metric_name}.")
+    
 def create_model(cfg, num_classes=None):
     model_type = cfg.pop('type')
     loss_fn_cfg = cfg['loss_fn']

@@ -3,7 +3,7 @@ dataset_seed: &dataset_seed 11
 
 datasets:
   - name: "cifar100"
-    num_classes: 10
+    num_classes: 100
     img_size: [224, 224]
     batch_size: 128
     valset_ratio: 0.0
