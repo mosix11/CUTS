@@ -66,7 +66,7 @@ class StandardTrainer(BaseClassificationTrainer):
 
             epoch_train_loss.update(loss.detach().cpu().item(), n=input_batch.shape[0])
             
-            # Tell the base: a gradient step happened (centralized per-step logic)
+            # Tell the base: a gradient step happened
             self.after_optimizer_step(
                 train_snapshot={
                     'Train/Loss':float(loss.detach().cpu().item()),

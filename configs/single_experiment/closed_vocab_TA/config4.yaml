@@ -5,7 +5,7 @@ datasets:
   - name: "mnist"
     num_classes: 10
     img_size: [224, 224]
-    batch_size: 512
+    batch_size: 128
     valset_ratio: 0.0
     num_workers: 12
     seed: *dataset_seed
@@ -13,7 +13,7 @@ datasets:
   - name: "fashion_mnist"
     num_classes: 10
     img_size: [224, 224]
-    batch_size: 512
+    batch_size: 128
     valset_ratio: 0.0
     num_workers: 12
     seed: *dataset_seed
@@ -21,7 +21,7 @@ datasets:
   - name: "cifar10"
     num_classes: 10
     img_size: [224, 224]
-    batch_size: 512
+    batch_size: 128
     valset_ratio: 0.0
     num_workers: 12
     seed: *dataset_seed
@@ -29,7 +29,7 @@ datasets:
   - name: "cifar100"
     num_classes: 100
     img_size: [224, 224]
-    batch_size: 512
+    batch_size: 128
     valset_ratio: 0.0
     num_workers: 12
     seed: *dataset_seed
@@ -37,7 +37,7 @@ datasets:
   - name: "svhn"
     num_classes: 10
     img_size: [224, 224]
-    batch_size: 512
+    batch_size: 128
     valset_ratio: 0.0
     num_workers: 12
     seed: *dataset_seed
@@ -45,7 +45,7 @@ datasets:
   - name: "food101"
     num_classes: 101
     img_size: [224, 224]
-    batch_size: 512
+    batch_size: 128
     valset_ratio: 0.0
     num_workers: 12
     seed: *dataset_seed
@@ -53,7 +53,7 @@ datasets:
   - name: "flowers102"
     num_classes: 102
     img_size: [224, 224]
-    batch_size: 512
+    batch_size: 128
     valset_ratio: 0.0
     num_workers: 12
     seed: *dataset_seed
@@ -61,7 +61,7 @@ datasets:
   - name: "kmnist"
     num_classes: 10
     img_size: [224, 224]
-    batch_size: 512
+    batch_size: 128
     valset_ratio: 0.0
     num_workers: 12
     seed: *dataset_seed
@@ -69,7 +69,7 @@ datasets:
   - name: "oxfordpet"
     num_classes: 37
     img_size: [224, 224]
-    batch_size: 512
+    batch_size: 128
     valset_ratio: 0.0
     num_workers: 12
     seed: *dataset_seed
@@ -77,7 +77,7 @@ datasets:
   - name: "stanford_cars"
     num_classes: 196
     img_size: [224, 224]
-    batch_size: 512
+    batch_size: 128
     valset_ratio: 0.0
     num_workers: 12
     seed: *dataset_seed
@@ -85,7 +85,7 @@ datasets:
   - name: "eurosat"
     num_classes: 10
     img_size: [224, 224]
-    batch_size: 512
+    batch_size: 128
     valset_ratio: 0.0
     num_workers: 12
     seed: *dataset_seed

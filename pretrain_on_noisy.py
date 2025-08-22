@@ -508,11 +508,6 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         np.random.seed(training_seed)
         torch.manual_seed(training_seed)
         torch.cuda.manual_seed_all(training_seed)
-    torch.backends.cudnn.enabled = True
-    torch.backends.cudnn.benchmark = False
-    os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
-    torch.use_deterministic_algorithms(True) 
-    torch.set_float32_matmul_precision("high")
     
     cpu = trainer_utils.get_cpu_device()
     gpu = trainer_utils.get_gpu_device()
