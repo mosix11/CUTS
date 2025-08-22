@@ -368,7 +368,107 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
         
         results = trainer.fit(model, dataset, resume=False)
         torch.save(model.get_encoder_weights(), weights_dir / Path("ft_weights.pth"))
+    
+    
+def finetune_models_noise(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
+    cfg['trainer']['finetuning']['comet_api_key'] = os.getenv("COMET_API_KEY")
+    
+    
+    dataset_cfg = cfg['datasets'][0]
+    noise_cfg = dataset_cfg.pop('noise_cfg')
+    base_dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
+    
+
+    cfg['model']['datasets_cfgs'] = {dataset_cfg['name']: base_dataset.get_class_names()} 
+    base_model = model_factory.create_model(cfg['model'])
+    base_model.freeze_all_heads()
+    
+    dataset_cfg['train_transforms'] = base_model.get_train_transforms()
+    dataset_cfg['val_transforms'] = base_model.get_val_transforms()
+    base_dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
+    
+    
+    base_dataset.inject_noise(**noise_cfg)
+    
+    
+    if not outputs_dir.joinpath(f"{cfg_name}/mix/weights/ft_weights.pth").exists():
+        dataset = copy.deepcopy(base_dataset)
+        model = copy.deepcopy(base_model)
             
+        experiment_name = f"{cfg_name}/mix"
+        experiment_dir = outputs_dir / Path(experiment_name)
+
+        weights_dir = experiment_dir / Path("weights")
+        weights_dir.mkdir(exist_ok=True, parents=True)
+
+        plots_dir = experiment_dir / Path("plots")
+        plots_dir.mkdir(exist_ok=True, parents=True)
+        
+        
+        trainer = StandardTrainer(
+            outputs_dir=outputs_dir,
+            **cfg['trainer']['finetuning'],
+            exp_name=experiment_name,
+            exp_tags=None,
+        )
+        
+        results = trainer.fit(model, dataset, resume=False)
+        torch.save(model.state_dict(), weights_dir / Path("ft_weights.pth"))
+        
+      
+    if not outputs_dir.joinpath(f"{cfg_name}/clean/weights/ft_weights.pth").exists():
+        dataset = copy.deepcopy(base_dataset)
+        model = copy.deepcopy(base_model)
+        
+        clean_set, noisy_set = dataset.get_clean_noisy_subsets(set='Train')
+        dataset.set_trainset(clean_set, shuffle=True)
+            
+        experiment_name = f"{cfg_name}/clean"
+        experiment_dir = outputs_dir / Path(experiment_name)
+
+        weights_dir = experiment_dir / Path("weights")
+        weights_dir.mkdir(exist_ok=True, parents=True)
+
+        plots_dir = experiment_dir / Path("plots")
+        plots_dir.mkdir(exist_ok=True, parents=True)
+        
+        trainer = StandardTrainer(
+            outputs_dir=outputs_dir,
+            **cfg['trainer']['finetuning'],
+            exp_name=experiment_name,
+            exp_tags=None,
+        )
+        
+        results = trainer.fit(model, dataset, resume=False)
+        torch.save(model.state_dict(), weights_dir / Path("ft_weights.pth"))
+        
+        
+        
+    if not outputs_dir.joinpath(f"{cfg_name}/noise/weights/ft_weights.pth").exists():
+        dataset = copy.deepcopy(base_dataset)
+        model = copy.deepcopy(base_model)  
+        
+        clean_set, noisy_set = dataset.get_clean_noisy_subsets(set='Train')
+        dataset.set_trainset(noisy_set, shuffle=True)
+            
+        experiment_name = f"{cfg_name}/noise"
+        experiment_dir = outputs_dir / Path(experiment_name)
+
+        weights_dir = experiment_dir / Path("weights")
+        weights_dir.mkdir(exist_ok=True, parents=True)
+
+        plots_dir = experiment_dir / Path("plots")
+        plots_dir.mkdir(exist_ok=True, parents=True)
+        
+        trainer = StandardTrainer(
+            outputs_dir=outputs_dir,
+            **cfg['trainer']['finetuning'],
+            exp_name=experiment_name,
+            exp_tags=None,
+        )
+        
+        results = trainer.fit(model, dataset, resume=False)
+        torch.save(model.state_dict(), weights_dir / Path("ft_weights.pth"))        
 
 def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     training_seed = cfg['training_seed']
@@ -961,6 +1061,13 @@ if __name__ == "__main__":
     )
     
     parser.add_argument(
+        "-n",
+        "--noise",
+        help="Finetune the image encoder with forzen heads on noise.",
+        action="store_true",
+    )
+    
+    parser.add_argument(
         "-t",
         "--tv",
         help="Apply task vectors to an already trained and finetuned experiment.",
@@ -988,5 +1095,8 @@ if __name__ == "__main__":
     if args.finetune:
         # finetune_models(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)
         finetune_models(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)
+        
+    if args.noise:
+        finetune_models_noise(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)
     if args.tv:
         apply_tv(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)
