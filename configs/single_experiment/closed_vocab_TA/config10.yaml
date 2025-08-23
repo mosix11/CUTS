@@ -5,7 +5,7 @@ datasets:
   - name: "eurosat"
     num_classes: 100
     img_size: [224, 224]
-    batch_size: 128
+    batch_size: 256
     valset_ratio: 0.0
     num_workers: 12
     seed: *dataset_seed

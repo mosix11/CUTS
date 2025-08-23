@@ -69,55 +69,9 @@ def eval_model_on_tvs(model, taskvectors, results_dict, cfg, dataset, num_classe
 
 
 
+    
+    
 def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
-    cfg['trainer']['finetuning']['comet_api_key'] = os.getenv("COMET_API_KEY")
-
-    model_ds_cfgs = OrderedDict()
-    for ds_cfg in cfg['datasets']:
-        tmp_ds, _ = dataset_factory.create_dataset(ds_cfg)
-        model_ds_cfgs[ds_cfg['name']] = copy.deepcopy(tmp_ds.get_class_names())
-
-    cfg['model']['datasets_cfgs'] = model_ds_cfgs 
-    model = model_factory.create_model(cfg['model'])
-    model.freeze_all_heads()
-    pt_weights = copy.deepcopy(model.get_encoder_weights())
-    
-    for dataset_cfg in cfg['datasets']:
-        task_name = dataset_cfg['name']
-        
-        experiment_name = f"{cfg_name}/{task_name}/finetune"
-        experiment_dir = outputs_dir / f"{cfg_name}/{task_name}"
-        
-        weights_dir = experiment_dir / Path("weights")
-        weights_dir.mkdir(exist_ok=True, parents=True)
-        
-        plots_dir = experiment_dir / Path("plots")
-        plots_dir.mkdir(exist_ok=True, parents=True)
-        
-        if weights_dir.joinpath("ft_weights.pth").exists():
-            continue
-        
-        dataset_cfg['train_transforms'] = model.get_train_transforms()
-        dataset_cfg['val_transforms'] = model.get_val_transforms()
-        dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
-        
-        model.load_encoder(pt_weights)
-
-        model.activate_head(head_name=task_name)
-        model.unfreeze_encoder()
-        
-        trainer = StandardTrainer(
-            outputs_dir=outputs_dir,
-            **cfg['trainer']['finetuning'],
-            exp_name=experiment_name,
-            exp_tags=None,
-        )
-        
-        results = trainer.fit(model, dataset, resume=False)
-        torch.save(model.get_encoder_weights(), weights_dir / Path("ft_weights.pth"))
-    
-    
-def finetune_models_noise(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     cfg['trainer']['finetuning']['comet_api_key'] = os.getenv("COMET_API_KEY")
     
     
@@ -152,9 +106,14 @@ def finetune_models_noise(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_n
         plots_dir.mkdir(exist_ok=True, parents=True)
         
         
+        finetuning_cfg = None
+        if 'mix' in cfg['trainer']['finetuning']:
+            finetuning_cfg = cfg['trainer']['finetuning']['mix']
+            finetuning_cfg['comet_api_key'] =  os.getenv("COMET_API_KEY")
+        else: finetuning_cfg = cfg['trainer']['finetuning']
         trainer = StandardTrainer(
             outputs_dir=outputs_dir,
-            **cfg['trainer']['finetuning'],
+            **finetuning_cfg,
             exp_name=experiment_name,
             exp_tags=None,
         )
@@ -179,9 +138,14 @@ def finetune_models_noise(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_n
         plots_dir = experiment_dir / Path("plots")
         plots_dir.mkdir(exist_ok=True, parents=True)
         
+        finetuning_cfg = None
+        if 'clean' in cfg['trainer']['finetuning']:
+            finetuning_cfg = cfg['trainer']['finetuning']['clean']
+            finetuning_cfg['comet_api_key'] =  os.getenv("COMET_API_KEY")
+        else: finetuning_cfg = cfg['trainer']['finetuning']
         trainer = StandardTrainer(
             outputs_dir=outputs_dir,
-            **cfg['trainer']['finetuning'],
+            **finetuning_cfg,
             exp_name=experiment_name,
             exp_tags=None,
         )
@@ -207,15 +171,20 @@ def finetune_models_noise(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_n
         plots_dir = experiment_dir / Path("plots")
         plots_dir.mkdir(exist_ok=True, parents=True)
         
+        finetuning_cfg = None
+        if 'noise' in cfg['trainer']['finetuning']:
+            finetuning_cfg = cfg['trainer']['finetuning']['noise']
+            finetuning_cfg['comet_api_key'] =  os.getenv("COMET_API_KEY")
+        else: finetuning_cfg = cfg['trainer']['finetuning']
         trainer = StandardTrainer(
             outputs_dir=outputs_dir,
-            **cfg['trainer']['finetuning'],
+            **finetuning_cfg,
             exp_name=experiment_name,
             exp_tags=None,
         )
         
         results = trainer.fit(model, dataset, resume=False)
-        torch.save(model.state_dict(), weights_dir / Path("ft_weights.pth"))        
+        torch.save(model.state_dict(), weights_dir / Path("ft_weights.pth"))       
 
 
 
@@ -241,7 +210,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
 
     cfg['model']['datasets_cfgs'] = {dataset_cfg['name']: dataset.get_class_names()} 
-    model = model_factory.create_model(cfg['model'], num_classes)
+    model = model_factory.create_model(cfg['model'])
     model.freeze_all_heads()
     
     pt_weights = copy.deepcopy(model.state_dict())
@@ -318,39 +287,38 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
 
     
     
-    # model.load_state_dict(pt_weights, strict=False)
-    # pt_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-    # pt_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+    model.load_state_dict(pt_weights, strict=False)
+    pt_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+    pt_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
     
-    # model.load_state_dict(ft_weights['mix'], strict=False)
-    # mix_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-    # mix_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+    model.load_state_dict(ft_weights['mix'], strict=False)
+    mix_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+    mix_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
     
-    # model.load_state_dict(ft_weights['noise'], strict=False)
-    # noise_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-    # noise_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+    model.load_state_dict(ft_weights['noise'], strict=False)
+    noise_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+    noise_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
     
-    # model.load_state_dict(ft_weights['clean'], strict=False)
-    # clean_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-    # clean_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+    model.load_state_dict(ft_weights['clean'], strict=False)
+    clean_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+    clean_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
     
-    # model.load_state_dict(pt_weights, strict=False)
-    
-    # results_dict = OrderedDict()
-    
-    # results_dict['Pretrain'] = {'test_results': pt_test_results, 'train_results': pt_train_results}
-    # results_dict['Mix'] = {'test_results': mix_test_results, 'train_results': mix_train_results}
-    # results_dict['Clean'] = {'test_results': clean_test_results, 'train_results': clean_train_results}
-    # results_dict['Noise'] = {'test_results': noise_test_results, 'train_results': noise_train_results}
-    
-    
-    
-    # with open(results_dir / 'metrics.json' , 'w') as json_file:
-    #     json.dump(results_dict, json_file, indent=4)
-    
+    model.load_state_dict(pt_weights, strict=False)
     
     results_dict = OrderedDict()
-    for alpha in np.linspace(0, -1.0, 10):
+    
+    results_dict['Pretrain'] = {'test_results': pt_test_results, 'train_results': pt_train_results}
+    results_dict['Mix'] = {'test_results': mix_test_results, 'train_results': mix_train_results}
+    results_dict['Clean'] = {'test_results': clean_test_results, 'train_results': clean_train_results}
+    results_dict['Noise'] = {'test_results': noise_test_results, 'train_results': noise_train_results}
+    
+    
+    
+    
+    
+    
+    # results_dict = OrderedDict()
+    for alpha in tqdm(np.linspace(0, -1.0, 10)):
     
         model.load_state_dict(ft_weights['mix'], strict=False)
         task_vectors['noise'].apply_to(model, scaling_coef=alpha, strict=False)
@@ -359,8 +327,11 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
 
         results_dict[alpha] = {'test_results': tv_test_results, 'train_results': tv_train_results}
     
-    with open(results_dir / 'tv_metrics.json' , 'w') as json_file:
+    with open(results_dir / 'metrics.json' , 'w') as json_file:
         json.dump(results_dict, json_file, indent=4)
+    
+    # with open(results_dir / 'tv_metrics.json' , 'w') as json_file:
+    #     json.dump(results_dict, json_file, indent=4)
             
 def apply_tvs(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     training_seed = cfg['training_seed']
@@ -784,16 +755,11 @@ if __name__ == "__main__":
     parser.add_argument(
         "-f",
         "--finetune",
-        help="Finetune the image encoder with forzen heads.",
+        help="Finetune the image encoder with forzen heads on noisy datasets.",
         action="store_true",
     )
     
-    parser.add_argument(
-        "-n",
-        "--noise",
-        help="Finetune the image encoder with forzen heads on noise.",
-        action="store_true",
-    )
+
     
     parser.add_argument(
         "-t",
@@ -818,10 +784,8 @@ if __name__ == "__main__":
 
         
     if args.finetune:
-        # finetune_models(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)
         finetune_models(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)
         
-    if args.noise:
-        finetune_models_noise(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)
+
     if args.tv:
         apply_tv(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)
