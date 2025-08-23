@@ -2,10 +2,10 @@ training_seed: &training_seed 11
 dataset_seed: &dataset_seed 11
 
 datasets:
-  - name: "mnist"
+  - name: "svhn"
     num_classes: 10
     img_size: [224, 224]
-    batch_size: 256
+    batch_size: 128
     valset_ratio: 0.0
     num_workers: 12
     seed: *dataset_seed
@@ -46,7 +46,7 @@ trainer:
       run_on_gpu: True
       use_amp: True
       log_comet: True
-      comet_project_name: 'closed_vocab_TA'
+      comet_project_name: 'clip-noise-TA'
       seed: *training_seed
     noise:
       max_iterations: 13000
@@ -68,7 +68,7 @@ trainer:
       run_on_gpu: True
       use_amp: True
       log_comet: True
-      comet_project_name: 'closed_vocab_TA'
+      comet_project_name: 'clip-noise-TA'
       seed: *training_seed
     clean:
       max_iterations: 6000
@@ -89,7 +89,5 @@ trainer:
       run_on_gpu: True
       use_amp: True
       log_comet: True
-      comet_project_name: 'closed_vocab_TA'
+      comet_project_name: 'clip-noise-TA'
       seed: *training_seed
-
-

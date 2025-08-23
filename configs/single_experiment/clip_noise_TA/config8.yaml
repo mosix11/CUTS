@@ -2,8 +2,8 @@ training_seed: &training_seed 11
 dataset_seed: &dataset_seed 11
 
 datasets:
-  - name: "cifar10"
-    num_classes: 10
+  - name: "cifar100"
+    num_classes: 100
     img_size: [224, 224]
     batch_size: 128
     valset_ratio: 0.0
@@ -44,6 +44,6 @@ trainer:
     run_on_gpu: True
     use_amp: True
     log_comet: True
-    comet_project_name: 'closed_vocab_TA'
+    comet_project_name: 'clip-noise-TA'
     seed: *training_seed
 
