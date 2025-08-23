@@ -220,6 +220,7 @@ class OpenClipMultiHeadImageClassifier(BaseModel):
         return logits
     
     
+    
     def activate_head(self, head_name:str):
         if head_name not in self.classifier_heads:
             raise ValueError('The specified head name is not in the classifier heads.')

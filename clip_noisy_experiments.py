@@ -26,7 +26,7 @@ from tqdm import tqdm
 from collections import OrderedDict, defaultdict
 import re
 
-from src.trainers import knn_eval, ncm_eval, knn_ncm_eval
+from src.trainers import umap_plot
 from helper_funcs import evaluate_model, eval_model_on_clean_noise_splits, search_optimal_coefficient, get_confusion_matrix, row_normalize
 
 def eval_model_on_tvs(model, taskvectors, results_dict, cfg, dataset, num_classes, device):
@@ -412,7 +412,14 @@ def apply_tv_gt(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         show=False
     )
 
+    umap_plot(
+        feature_extractor=model.get_image_encoder(),
+        dataloader=dataset.get_train_dataloader(),
+        device=gpu,
+        
+    )
     
+    exit()
     
     model.load_state_dict(pt_weights, strict=False)
     pt_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
@@ -439,12 +446,7 @@ def apply_tv_gt(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     results_dict['Clean'] = {'test_results': clean_test_results, 'train_results': clean_train_results}
     results_dict['Noise'] = {'test_results': noise_test_results, 'train_results': noise_train_results}
     
-    
-    
-    
-    
-    
-    # results_dict = OrderedDict()
+
     for alpha in tqdm(np.linspace(-0.1, -1.0, 10)):
     
         model.load_state_dict(ft_weights['mix'], strict=False)
@@ -454,7 +456,7 @@ def apply_tv_gt(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
 
         results_dict[alpha] = {'test_results': tv_test_results, 'train_results': tv_train_results}
     
-    with open(results_dir / 'metrics.json' , 'w') as json_file:
+    with open(results_dirs['metrics'] / 'metrics.json' , 'w') as json_file:
         json.dump(results_dict, json_file, indent=4)
     
     # with open(results_dir / 'tv_metrics.json' , 'w') as json_file:
@@ -490,7 +492,6 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     
     dataset_cfg = cfg['datasets'][0]
-    noise_cfg = dataset_cfg.pop('noise_cfg')
     dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
     
 
@@ -505,7 +506,8 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     dataset_cfg['val_transforms'] = model.get_val_transforms()
     dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
     
-    dataset.inject_noise(**noise_cfg)
+    strategy = cfg['strategy']
+    dataset.inject_noise(**strategy['noise']['pretraining'])
 
 
 
@@ -607,8 +609,8 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # results_dict = OrderedDict()
     for alpha in tqdm(np.linspace(-0.1, -1.0, 10)):
     
-        model.load_state_dict(task_vectors['Average'], strict=False)
-        task_vectors['noise'].apply_to(model, scaling_coef=alpha, strict=False)
+        model.load_state_dict(mix_weights, strict=False)
+        task_vectors['Average TV'].apply_to(model, scaling_coef=alpha, strict=False)
         tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
         tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
 
@@ -1081,5 +1083,7 @@ if __name__ == "__main__":
     elif args.finetune:
         finetune_models(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)
 
-    if args.tv:
+    if args.tv and args.groundtruth:
+        apply_tv_gt(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)
+    elif args.tv:
         apply_tv(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)
