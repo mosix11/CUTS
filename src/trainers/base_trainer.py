@@ -179,7 +179,7 @@ class BaseClassificationTrainer(ABC):
         
     def prepare_batch(self, batch):
         if self.run_on_gpu:
-            batch = [tens.to(self.gpu) for tens in batch]
+            batch = [tens.to(self.gpu, non_blocking=True) for tens in batch]
             return batch
         else: return batch
         

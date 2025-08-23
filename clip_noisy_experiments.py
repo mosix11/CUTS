@@ -272,7 +272,7 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
             dataset = copy.deepcopy(base_dataset)
             model = copy.deepcopy(base_model)
             
-            mix_model_ckp_path = outputs_dir/ Path(f"{cfg_name}/mix") / Path('weights/model_weights.pth')
+            mix_model_ckp_path = outputs_dir/ Path(f"{cfg_name}/mix") / Path('weights/ft_weights.pth')
             checkpoint = torch.load(mix_model_ckp_path)
             model.load_state_dict(checkpoint)
             
@@ -306,7 +306,7 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
             
 
 
-def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
+def apply_tv_gt(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     training_seed = cfg['training_seed']
     if training_seed:
         random.seed(training_seed)
@@ -319,6 +319,16 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     results_dir = results_dir / cfg_name
     results_dir.mkdir(exist_ok=True, parents=True)
+    
+    results_dirs = {}
+    results_dirs['cms'] = results_dir / 'confusion_mats'
+    results_dirs['Ts'] = results_dir / 'transition_mats'
+    results_dirs['W_norms'] = results_dir / 'weight_norms'
+    results_dirs['TV_norms'] = results_dir / 'TV_norms'
+    results_dirs['embed_plots'] = results_dir / 'embedding_plots'
+    results_dirs['metrics'] = results_dir / 'metrics'    
+    for dir in results_dirs.values():
+        dir.mkdir(exist_ok=True, parents=True)
     
     
     dataset_cfg = cfg['datasets'][0]
@@ -449,7 +459,167 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     # with open(results_dir / 'tv_metrics.json' , 'w') as json_file:
     #     json.dump(results_dict, json_file, indent=4)
+
+
+def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
+    training_seed = cfg['training_seed']
+    if training_seed:
+        random.seed(training_seed)
+        np.random.seed(training_seed)
+        torch.manual_seed(training_seed)
+        torch.cuda.manual_seed_all(training_seed)
+    
+    cpu = trainer_utils.get_cpu_device()
+    gpu = trainer_utils.get_gpu_device()
+    
+    
+    outputs_dir = outputs_dir / cfg_name
+    
+    results_dir = results_dir / cfg_name
+    results_dir.mkdir(exist_ok=True, parents=True)
+    
+    results_dirs = {}
+    results_dirs['cms'] = results_dir / 'confusion_mats'
+    results_dirs['Ts'] = results_dir / 'transition_mats'
+    results_dirs['W_norms'] = results_dir / 'weight_norms'
+    results_dirs['TV_norms'] = results_dir / 'TV_norms'
+    results_dirs['embed_plots'] = results_dir / 'embedding_plots'
+    results_dirs['metrics'] = results_dir / 'metrics'    
+    for dir in results_dirs.values():
+        dir.mkdir(exist_ok=True, parents=True)
+    
+    
+    dataset_cfg = cfg['datasets'][0]
+    noise_cfg = dataset_cfg.pop('noise_cfg')
+    dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
+    
+
+    cfg['model']['datasets_cfgs'] = {dataset_cfg['name']: dataset.get_class_names()} 
+    model = model_factory.create_model(cfg['model'])
+    model.freeze_all_heads()
+    
+    pt_weights = copy.deepcopy(model.state_dict())
+    pt_weights = OrderedDict((k, v) for k, v in pt_weights.items() if "classifier_heads" not in k)
+    
+    dataset_cfg['train_transforms'] = model.get_train_transforms()
+    dataset_cfg['val_transforms'] = model.get_val_transforms()
+    dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
+    
+    dataset.inject_noise(**noise_cfg)
+
+
+
+    # Load weights while removing classifier weights from the state dict
+    mix_weights = OrderedDict(
+    (k, v) for k, v in torch.load(
+        outputs_dir.joinpath(f"mix/weights/ft_weights.pth"),
+        map_location='cpu'
+    ).items() if "classifier_heads" not in k)
+    
+    gold_weights = OrderedDict(
+    (k, v) for k, v in torch.load(
+        outputs_dir.joinpath(f"clean/weights/ft_weights.pth"),
+        map_location='cpu'
+    ).items() if "classifier_heads" not in k)
+    
+    noise_weights = OrderedDict()
+    
+    for noise_tv in cfg['strategy']['noise']['finetuning']:
+        ft_expr_dir = outputs_dir / f"finetune_{noise_tv['noise_rate']}_{noise_tv['seed']}"
+        n_weights = OrderedDict(
+        (k, v) for k, v in torch.load(
+            ft_expr_dir.joinpath(f"weights/ft_weights.pth"),
+            map_location='cpu'
+        ).items() if "classifier_heads" not in k)
+        noise_weights[f"{noise_tv['noise_rate']*100:.0f}% Noise, {noise_tv['seed']} Seed"] = n_weights
+        
+    
             
+    task_vectors = OrderedDict()
+    for task_name, finetuend_weights in noise_weights.items():
+        task_vectors[task_name] = TaskVector(mix_weights, finetuend_weights)
+        
+    if len(task_vectors) == 1:
+        only_tv = task_vectors.popitem(last=False)[1]
+        task_vectors['Average TV'] = only_tv
+    else:
+        task_vectors['Average TV'] = TaskVector.mean(task_vectors)
+        
+    task_vectors['Average TV Pruned 0.4'] = task_vectors['Average TV'].prune_small_weights(rate=0.4)
+    task_vectors['Average TV Pruned 0.6'] = task_vectors['Average TV'].prune_small_weights(rate=0.6)
+    task_vectors['Average TV Pruned 0.8'] = task_vectors['Average TV'].prune_small_weights(rate=0.8)
+    task_vectors['Average TV Pruned 0.9'] = task_vectors['Average TV'].prune_small_weights(rate=0.9)
+    task_vectors['Average TV Pruned 0.95'] = task_vectors['Average TV'].prune_small_weights(rate=0.95)
+    task_vectors['Average TV Pruned 0.99'] = task_vectors['Average TV'].prune_small_weights(rate=0.99)
+    task_vectors['Random Vector'] = task_vectors['Average TV'].generate_random_vector_with_same_layer_norms(seed=11)
+
+    
+    
+    
+    ft_tvs_list = list(task_vectors.values())
+    tv_names = list(task_vectors.keys())
+    
+    task_sim = []
+    for i in range(len(ft_tvs_list)):
+        anchor_tv = ft_tvs_list[i]
+        task_sim.append([])
+        for j in range(len(ft_tvs_list)):
+            other_tv = ft_tvs_list[j]
+            cos_sim = anchor_tv.cosine_similarity_flatten(other_tv)
+            task_sim[i].append(cos_sim)
+    task_sim = np.array(task_sim)
+    
+    misc_utils.plot_confusion_matrix(
+        title='Task Vector Similarity Matrix',
+        cm=task_sim,
+        class_names=tv_names,
+        color_map='vlag',
+        color_bar=True,
+        vmin= -1.0,
+        vmax= 1.0,
+        x_label='Task Vectors',
+        y_label='Task Vectors',
+        tick_label_font_size=6,
+        filepath=results_dir / 'task_similarities.png',
+        show=False
+    )
+
+    
+    
+    
+    model.load_state_dict(mix_weights, strict=False)
+    mix_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+    mix_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+    
+    
+    model.load_state_dict(gold_weights, strict=False)
+    gold_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+    gold_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+    
+    model.load_state_dict(pt_weights, strict=False)
+    
+    results_dict = OrderedDict()
+    
+    results_dict['Mix'] = {'test_results': mix_test_results, 'train_results': mix_train_results}
+    results_dict['Gold'] = {'test_results': gold_test_results, 'train_results': gold_train_results}
+    
+    
+    # results_dict = OrderedDict()
+    for alpha in tqdm(np.linspace(-0.1, -1.0, 10)):
+    
+        model.load_state_dict(task_vectors['Average'], strict=False)
+        task_vectors['noise'].apply_to(model, scaling_coef=alpha, strict=False)
+        tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+        tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+
+        results_dict[alpha] = {'test_results': tv_test_results, 'train_results': tv_train_results}
+    
+    with open(results_dir / 'metrics.json' , 'w') as json_file:
+        json.dump(results_dict, json_file, indent=4)
+    
+    # with open(results_dir / 'tv_metrics.json' , 'w') as json_file:
+    #     json.dump(results_dict, json_file, indent=4)
+    
 def apply_tvs(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     training_seed = cfg['training_seed']
     if training_seed:
@@ -474,6 +644,7 @@ def apply_tvs(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     results_dirs['Ts'] = results_dir / 'transition_mats'
     results_dirs['W_norms'] = results_dir / 'weight_norms'
     results_dirs['TV_norms'] = results_dir / 'TV_norms'
+    results_dirs['embed_plots'] = results_dir / 'embedding_plots'
     results_dirs['metrics'] = results_dir / 'metrics'    
     for dir in results_dirs.values():
         dir.mkdir(exist_ok=True, parents=True)
