@@ -267,6 +267,43 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
         torch.save(model.state_dict(), weights_dir / Path("ft_weights.pth"))
         
         
+    # Finetune on the set we use for noise vectors but with uncorrupted labels.
+    if not outputs_dir.joinpath(f"{cfg_name}/finetune_clean/weights/ft_weights.pth").exists():
+        dataset = copy.deepcopy(base_dataset)
+        model = copy.deepcopy(base_model)
+        
+        mix_model_ckp_path = outputs_dir/ Path(f"{cfg_name}/mix") / Path('weights/ft_weights.pth')
+        checkpoint = torch.load(mix_model_ckp_path)
+        model.load_state_dict(checkpoint)
+        
+        if strategy['finetuning_set'] == 'Heldout':
+            dataset.set_trainset(dataset.get_heldoutset(), shuffle=True)
+        
+        experiment_name = f"{cfg_name}/finetune_clean"
+        experiment_dir = outputs_dir / Path(experiment_name)
+
+        weights_dir = experiment_dir / Path("weights")
+        weights_dir.mkdir(exist_ok=True, parents=True)
+
+        plots_dir = experiment_dir / Path("plots")
+        plots_dir.mkdir(exist_ok=True, parents=True)
+        
+        finetuning_cfg = None
+        if 'clean' in cfg['trainer']['finetuning']:
+            finetuning_cfg = cfg['trainer']['finetuning']['clean']
+            finetuning_cfg['comet_api_key'] =  os.getenv("COMET_API_KEY")
+        else: finetuning_cfg = cfg['trainer']['finetuning']
+        trainer = StandardTrainer(
+            outputs_dir=outputs_dir,
+            **finetuning_cfg,
+            exp_name=experiment_name,
+            exp_tags=None,
+        )
+        
+        results = trainer.fit(model, dataset, resume=False)
+        torch.save(model.state_dict(), weights_dir / Path("ft_weights.pth"))
+        
+        
     for idx, noise_tv in enumerate(strategy['noise']['finetuning']):
         if not outputs_dir.joinpath(f"{cfg_name}/finetune_{noise_tv['noise_rate']}_{noise_tv['seed']}/weights/model_weights.pth").exists():
             dataset = copy.deepcopy(base_dataset)
@@ -500,7 +537,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
     
     strategy = cfg['strategy']
-    # dataset.inject_noise(**strategy['noise']['pretraining'])
+    dataset.inject_noise(**strategy['noise']['pretraining'])
 
 
 
@@ -580,21 +617,21 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     )
 
     
-    model.load_state_dict(mix_weights, strict=False)
-    umap_plot(
-        feature_extractor=model.get_image_encoder(),
-        dataloader=dataset.get_train_dataloader(),
-        device=gpu,
-    )
+    # model.load_state_dict(mix_weights, strict=False)
+    # umap_plot(
+    #     feature_extractor=model.get_image_encoder(),
+    #     dataloader=dataset.get_train_dataloader(),
+    #     device=gpu,
+    # )
     
-    task_vectors['Average TV'].apply_to(model, scaling_coef=-1.0, strict=False)
-    umap_plot(
-        feature_extractor=model.get_image_encoder(),
-        dataloader=dataset.get_train_dataloader(),
-        device=gpu,
-    )
+    # task_vectors['Average TV'].apply_to(model, scaling_coef=-1.0, strict=False)
+    # umap_plot(
+    #     feature_extractor=model.get_image_encoder(),
+    #     dataloader=dataset.get_train_dataloader(),
+    #     device=gpu,
+    # )
     
-    exit()
+    # exit()
     
     model.load_state_dict(mix_weights, strict=False)
     mix_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
