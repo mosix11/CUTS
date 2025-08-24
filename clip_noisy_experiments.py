@@ -306,7 +306,7 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
         
         
     for idx, noise_tv in enumerate(strategy['noise']['finetuning']):
-        if not outputs_dir.joinpath(f"{cfg_name}/finetune_{noise_tv['noise_rate']}_{noise_tv['seed']}/weights/model_weights.pth").exists():
+        if not outputs_dir.joinpath(f"{cfg_name}/finetune_{noise_tv['noise_rate']}_{noise_tv['seed']}/weights/ft_weights.pth").exists():
             dataset = copy.deepcopy(base_dataset)
             model = copy.deepcopy(base_model)
             
