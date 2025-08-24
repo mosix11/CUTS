@@ -412,14 +412,7 @@ def apply_tv_gt(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         show=False
     )
 
-    umap_plot(
-        feature_extractor=model.get_image_encoder(),
-        dataloader=dataset.get_train_dataloader(),
-        device=gpu,
-        
-    )
-    
-    exit()
+
     
     model.load_state_dict(pt_weights, strict=False)
     pt_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
@@ -507,7 +500,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
     
     strategy = cfg['strategy']
-    dataset.inject_noise(**strategy['noise']['pretraining'])
+    # dataset.inject_noise(**strategy['noise']['pretraining'])
 
 
 
@@ -587,7 +580,21 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     )
 
     
+    model.load_state_dict(mix_weights, strict=False)
+    umap_plot(
+        feature_extractor=model.get_image_encoder(),
+        dataloader=dataset.get_train_dataloader(),
+        device=gpu,
+    )
     
+    task_vectors['Average TV'].apply_to(model, scaling_coef=-1.0, strict=False)
+    umap_plot(
+        feature_extractor=model.get_image_encoder(),
+        dataloader=dataset.get_train_dataloader(),
+        device=gpu,
+    )
+    
+    exit()
     
     model.load_state_dict(mix_weights, strict=False)
     mix_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)

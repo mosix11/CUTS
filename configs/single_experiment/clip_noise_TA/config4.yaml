@@ -22,7 +22,7 @@ strategy:
 
 
 datasets:
-  - name: "cifar10"
+  - name: "svhn"
     num_classes: 10
     img_size: [224, 224]
     batch_size: 256
@@ -43,7 +43,7 @@ model:
 trainer:
   finetuning:
     mix:
-      max_iterations: 5000
+      max_iterations: 13000
       optimizer_cfg: 
         type: "adamw"
         lr: 1.0e-5
@@ -52,8 +52,8 @@ trainer:
         type: 'cosann_warmup'
         update_on: 'gradient_step'
         warmup_steps: 300
-        hold_steps: 0
-        T_max: 5000
+        hold_steps: 10000
+        T_max: 13000
         eta_min: 0
       early_stopping: False
       validation_freq: -1
