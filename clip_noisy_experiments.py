@@ -555,6 +555,12 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         map_location='cpu'
     ).items() if "classifier_heads" not in k)
     
+    ft_ho_clean = OrderedDict(
+    (k, v) for k, v in torch.load(
+        outputs_dir.joinpath(f"finetune_clean/weights/ft_weights.pth"),
+        map_location='cpu'
+    ).items() if "classifier_heads" not in k)
+    
     noise_weights = OrderedDict()
     
     for noise_tv in cfg['strategy']['noise']['finetuning']:
@@ -634,6 +640,9 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     # exit()
     
+    
+
+
     model.load_state_dict(mix_weights, strict=False)
     mix_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
     mix_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
@@ -643,13 +652,16 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     gold_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
     gold_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
     
-    model.load_state_dict(pt_weights, strict=False)
+    model.load_state_dict(ft_ho_clean, strict=False)
+    ft_ho_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+    ft_ho_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+    
     
     results_dict = OrderedDict()
     
     results_dict['Mix'] = {'test_results': mix_test_results, 'train_results': mix_train_results}
     results_dict['Gold'] = {'test_results': gold_test_results, 'train_results': gold_train_results}
-    
+    results_dict['FT HO Clean'] = {'test_results': ft_ho_test_results, 'train_results': ft_ho_train_results}
     
     # results_dict = OrderedDict()
     for alpha in tqdm(np.linspace(-0.1, -1.0, 10)):
