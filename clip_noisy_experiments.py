@@ -268,7 +268,7 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
         
         
     # Finetune on the set we use for noise vectors but with uncorrupted labels.
-    if not outputs_dir.joinpath(f"{cfg_name}/finetune_clean/weights/ft_weights.pth").exists():
+    if not outputs_dir.joinpath(f"{cfg_name}/finetune_clean/weights/ft_weights.pth").exists() and strategy['finetuning_set'] == 'Heldout':
         dataset = copy.deepcopy(base_dataset)
         model = copy.deepcopy(base_model)
         
@@ -276,8 +276,8 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
         checkpoint = torch.load(mix_model_ckp_path)
         model.load_state_dict(checkpoint)
         
-        if strategy['finetuning_set'] == 'Heldout':
-            dataset.set_trainset(dataset.get_heldoutset(), shuffle=True)
+        
+        dataset.set_trainset(dataset.get_heldoutset(), shuffle=True)
         
         experiment_name = f"{cfg_name}/finetune_clean"
         experiment_dir = outputs_dir / Path(experiment_name)
@@ -289,10 +289,11 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
         plots_dir.mkdir(exist_ok=True, parents=True)
         
         finetuning_cfg = None
-        if 'clean' in cfg['trainer']['finetuning']:
-            finetuning_cfg = cfg['trainer']['finetuning']['clean']
+        if 'heldout' in cfg['trainer']['finetuning']:
+            finetuning_cfg = cfg['trainer']['finetuning']['heldout']
             finetuning_cfg['comet_api_key'] =  os.getenv("COMET_API_KEY")
         else: finetuning_cfg = cfg['trainer']['finetuning']
+        
         trainer = StandardTrainer(
             outputs_dir=outputs_dir,
             **finetuning_cfg,
