@@ -590,6 +590,9 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     task_vectors['Average TV Pruned 0.9'] = task_vectors['Average TV'].prune_small_weights(rate=0.9)
     task_vectors['Average TV Pruned 0.95'] = task_vectors['Average TV'].prune_small_weights(rate=0.95)
     task_vectors['Average TV Pruned 0.99'] = task_vectors['Average TV'].prune_small_weights(rate=0.99)
+    
+    task_vectors['Clean'] = TaskVector(mix_weights, ft_ho_clean)
+    
     task_vectors['Random Vector'] = task_vectors['Average TV'].generate_random_vector_with_same_layer_norms(seed=11)
 
     
@@ -623,7 +626,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         show=False
     )
 
-    
+
     # model.load_state_dict(mix_weights, strict=False)
     # umap_plot(
     #     feature_extractor=model.get_image_encoder(),
@@ -665,6 +668,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     # results_dict = OrderedDict()
     for alpha in tqdm(np.linspace(-0.1, -1.0, 10)):
+    # for alpha in tqdm(np.linspace(-1.1, -1.6, 5)):
     
         model.load_state_dict(mix_weights, strict=False)
         task_vectors['Average TV'].apply_to(model, scaling_coef=alpha, strict=False)
@@ -675,6 +679,8 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     with open(results_dir / 'metrics.json' , 'w') as json_file:
         json.dump(results_dict, json_file, indent=4)
+    
+    # print(results_dict)
     
     # with open(results_dir / 'tv_metrics.json' , 'w') as json_file:
     #     json.dump(results_dict, json_file, indent=4)
