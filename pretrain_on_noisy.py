@@ -1,6 +1,6 @@
 import comet_ml
 from src.datasets import dataset_factory
-from src.models import model_factory, TaskVector, weight_norm_analysis
+from src.models import model_factory, TaskVector
 from src.trainers import StandardTrainer, TrainerRLS, utils as trainer_utils
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -27,6 +27,7 @@ from collections import OrderedDict
 import re
 
 from helper_funcs import evaluate_model, eval_model_on_clean_noise_splits, search_optimal_coefficient, analyze_IC, get_confusion_matrix, estimate_T_from_confusion, symmetric_noise_detected, row_normalize
+from src.utils import weight_norm_analysis
 
     
 def generate_latex_table_from_results(results_dict, output_path):
@@ -610,15 +611,21 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # ft_gt_noise_tv = TaskVector(pretrain_weights, ft_gt_noise_weights)
 
     finetune_tvs = OrderedDict()
-    
+    ft_ho_clean_weights = None
     for ft_expr, ft_weight in finetune_weights.items():
         finetune_tvs[f"{float(ft_expr.split('_')[0])*100:.0f}% Noise, {ft_expr.split('_')[1]} Seed"] = TaskVector(pretrain_weights, ft_weight)
-        
+        if float(ft_expr.split('_')[0]) == 0:
+            finetune_tvs.popitem(last=True)
+            ft_ho_clean_weights = ft_weight
+
+    print(finetune_tvs.keys())
     if len(finetune_tvs) == 1:
         finetune_tvs['Average TV'] = list(finetune_tvs.items())[0][1]
         finetune_tvs.popitem(last=False)
     else:
         finetune_tvs['Average TV'] = TaskVector.mean(finetune_tvs)
+    if ft_ho_clean_weights:
+        finetune_tvs['Heldout Clean'] = TaskVector(pretrain_weights, ft_ho_clean_weights)
     finetune_tvs['Average TV Pruned 0.4'] = finetune_tvs['Average TV'].prune_small_weights(rate=0.4)
     finetune_tvs['Average TV Pruned 0.6'] = finetune_tvs['Average TV'].prune_small_weights(rate=0.6)
     finetune_tvs['Average TV Pruned 0.8'] = finetune_tvs['Average TV'].prune_small_weights(rate=0.8)
@@ -918,7 +925,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         results_dict[f"Avg 0.8, alpha={alpha}"] = {'test_results': tv_test_results, 'train_results': tv_train_results}
     
         
-    with open(results_dirs['metrics'] / 'metrics.json' , 'w') as json_file:
+    with open(results_dirs['metrics'] / 'metrics2.json' , 'w') as json_file:
         json.dump(results_dict, json_file, indent=4)
     # generate_latex_table_from_results(results_dict, results_dirs['metrics'] / 'results_tex.txt')
     

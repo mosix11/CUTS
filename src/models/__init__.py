@@ -1,3 +1,4 @@
+
 from .base_model import BaseModel
 from .fc1 import FC1
 from .fcN import FCN
@@ -13,4 +14,4 @@ from .open_clip_models import OpenClipImageEncoder, OpenClipMultiHeadImageClassi
 from .task_vectors import TaskVector
 
 
-from . import model_factory, utils, weight_norm_analysis
+from . import model_factory, utils

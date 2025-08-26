@@ -1,6 +1,6 @@
 import comet_ml
 from src.datasets import dataset_factory
-from src.models import model_factory, TaskVector, weight_norm_analysis
+from src.models import model_factory, TaskVector
 from src.trainers import StandardTrainer, TrainerRLS,  utils as trainer_utils
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -27,6 +27,7 @@ from collections import OrderedDict
 import re
 
 from helper_funcs import evaluate_model, search_optimal_coefficient, analyze_IC, get_confusion_matrix, estimate_T_from_confusion, symmetric_noise_detected, row_normalize
+from utils import weight_norm_analysis
 
     
 

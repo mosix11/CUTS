@@ -1,6 +1,6 @@
 import comet_ml
 from src.datasets import dataset_factory, dataset_wrappers
-from src.models import model_factory, TaskVector, weight_norm_analysis
+from src.models import model_factory, TaskVector
 from src.trainers import StandardTrainer, utils as trainer_utils
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -26,8 +26,9 @@ from tqdm import tqdm
 from collections import OrderedDict, defaultdict
 import re
 
-from src.trainers import umap_plot
+from src.utils import umap_plot
 from helper_funcs import evaluate_model, eval_model_on_clean_noise_splits, search_optimal_coefficient, get_confusion_matrix, row_normalize
+from src.utils import weight_norm_analysis
 
 def eval_model_on_tvs(model, taskvectors, results_dict, cfg, dataset, num_classes, device):
     
