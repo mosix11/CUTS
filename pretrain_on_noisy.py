@@ -519,6 +519,9 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     dataset, num_classes = dataset_factory.create_dataset(cfg['dataset'])
     
+    strategy = cfg['strategy']
+    dataset.inject_noise(**strategy['noise']['pretraining'])
+    
     base_model = model_factory.create_model(cfg['model'], num_classes)
     
     results_dir = results_dir / cfg_name
@@ -548,63 +551,63 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         
     gold_weights = torch.load(gold_dir / 'weights/model_weights.pth', map_location=cpu)
     pretrain_weights = torch.load(pretrain_dir / 'weights/model_weights.pth', map_location=cpu)
-    ft_gold_wieghts = torch.load(ft_gold_dir / 'weights/model_weights.pth', map_location=cpu)
-    ft_gt_noise_weights = torch.load(ft_gt_noise_dir / 'weights/model_weights.pth', map_location=cpu)
+    # ft_gold_wieghts = torch.load(ft_gold_dir / 'weights/model_weights.pth', map_location=cpu)
+    # ft_gt_noise_weights = torch.load(ft_gt_noise_dir / 'weights/model_weights.pth', map_location=cpu)
     finetune_weights = OrderedDict()
     for ft_expr, ft_dir in finetune_dirs.items():
         finetune_weights[ft_expr] = torch.load(ft_dir / 'weights/model_weights.pth', map_location=cpu)
     
  
     
-    weight_norm_analysis.plot_abs_weight_norms_compare(
-        state_dicts={
-            'Pretrain': pretrain_weights,
-            'Gold': gold_weights,
-            'FT Noise': next(iter(finetune_weights.items()))[1]
-            },
-        saving_path=results_dirs['W_norms'] / 'L1_pt_gold_ftnoise.png'
-    )
+    # weight_norm_analysis.plot_abs_weight_norms_compare(
+    #     state_dicts={
+    #         'Pretrain': pretrain_weights,
+    #         'Gold': gold_weights,
+    #         'FT Noise': next(iter(finetune_weights.items()))[1]
+    #         },
+    #     saving_path=results_dirs['W_norms'] / 'L1_pt_gold_ftnoise.png'
+    # )
     
     
-    weight_norm_analysis.plot_abs_weight_norms_compare(
-        state_dicts={
-            'Pretrain': pretrain_weights,
-            'FT Gold': ft_gold_wieghts,
-            'FT Noise': next(iter(finetune_weights.items()))[1]
-            },
-        saving_path=results_dirs['W_norms'] / 'L1_pt_ftgold_ftnoise.png'
-    )
+    # weight_norm_analysis.plot_abs_weight_norms_compare(
+    #     state_dicts={
+    #         'Pretrain': pretrain_weights,
+    #         'FT Gold': ft_gold_wieghts,
+    #         'FT Noise': next(iter(finetune_weights.items()))[1]
+    #         },
+    #     saving_path=results_dirs['W_norms'] / 'L1_pt_ftgold_ftnoise.png'
+    # )
     
-    weight_norm_analysis.plot_abs_weight_norms_compare(
-        state_dicts={
-            'FT Gold': ft_gold_wieghts,
-            'FT Noise': next(iter(finetune_weights.items()))[1]
-            },
-        saving_path=results_dirs['W_norms'] / 'L1_ftgold_ftnoise.png'
-    )
+    # weight_norm_analysis.plot_abs_weight_norms_compare(
+    #     state_dicts={
+    #         'FT Gold': ft_gold_wieghts,
+    #         'FT Noise': next(iter(finetune_weights.items()))[1]
+    #         },
+    #     saving_path=results_dirs['W_norms'] / 'L1_ftgold_ftnoise.png'
+    # )
     
-    weight_norm_analysis.plot_abs_weight_norms_compare(
-        state_dicts={
-            'Gold': gold_weights,
-            'Pretrain': pretrain_weights,
-            'FT Gold': ft_gold_wieghts,
-            },
-        saving_path=results_dirs['W_norms'] / 'L1_pt_gold_ftgold.png'
-    )
+    # weight_norm_analysis.plot_abs_weight_norms_compare(
+    #     state_dicts={
+    #         'Gold': gold_weights,
+    #         'Pretrain': pretrain_weights,
+    #         'FT Gold': ft_gold_wieghts,
+    #         },
+    #     saving_path=results_dirs['W_norms'] / 'L1_pt_gold_ftgold.png'
+    # )
     
-    weight_norm_analysis.plot_abs_weight_norms_compare(
-        state_dicts={
-            'Pretrain': pretrain_weights,
-            'FT Gold': ft_gold_wieghts,
-            'FT Noise': next(iter(finetune_weights.items()))[1],
-            'FT GT Noise': ft_gt_noise_weights
-            },
-        saving_path=results_dirs['W_norms'] / 'L1_pt_ftgold_ftnoise_gtnoise.png'
-    )
+    # weight_norm_analysis.plot_abs_weight_norms_compare(
+    #     state_dicts={
+    #         'Pretrain': pretrain_weights,
+    #         'FT Gold': ft_gold_wieghts,
+    #         'FT Noise': next(iter(finetune_weights.items()))[1],
+    #         'FT GT Noise': ft_gt_noise_weights
+    #         },
+    #     saving_path=results_dirs['W_norms'] / 'L1_pt_ftgold_ftnoise_gtnoise.png'
+    # )
     
     
-    ft_gold_tv = TaskVector(pretrain_weights, ft_gold_wieghts)
-    ft_gt_noise_tv = TaskVector(pretrain_weights, ft_gt_noise_weights)
+    # ft_gold_tv = TaskVector(pretrain_weights, ft_gold_wieghts)
+    # ft_gt_noise_tv = TaskVector(pretrain_weights, ft_gt_noise_weights)
 
     finetune_tvs = OrderedDict()
     
@@ -623,10 +626,10 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     finetune_tvs['Average TV Pruned 0.95'] = finetune_tvs['Average TV'].prune_small_weights(rate=0.95)
     finetune_tvs['Average TV Pruned 0.99'] = finetune_tvs['Average TV'].prune_small_weights(rate=0.99)
     finetune_tvs['Random Vector'] = finetune_tvs['Average TV'].generate_random_vector_with_same_layer_norms(seed=11)
-    finetune_tvs['Gold'] = ft_gold_tv
-    finetune_tvs['Ground Truth Noise'] = ft_gt_noise_tv
-    finetune_tvs.move_to_end('Ground Truth Noise', last=False)
-    finetune_tvs.move_to_end('Gold', last=False)
+    # finetune_tvs['Gold'] = ft_gold_tv
+    # finetune_tvs['Ground Truth Noise'] = ft_gt_noise_tv
+    # finetune_tvs.move_to_end('Ground Truth Noise', last=False)
+    # finetune_tvs.move_to_end('Gold', last=False)
     
     
 
@@ -660,120 +663,120 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     )
     
     
-    weight_norm_analysis.plot_abs_weight_norms_compare(
-        state_dicts={
-            'Average TV': finetune_tvs['Average TV'].vector,
-            'Gold TV': finetune_tvs['Gold'].vector,
-            # 'Average TV Pruned 0.8': finetune_tvs['Average TV Pruned 0.8'].vector
-            },
-        saving_path=results_dirs['TV_norms'] / 'L1_norms.png'
-    )
+    # weight_norm_analysis.plot_abs_weight_norms_compare(
+    #     state_dicts={
+    #         'Average TV': finetune_tvs['Average TV'].vector,
+    #         'Gold TV': finetune_tvs['Gold'].vector,
+    #         # 'Average TV Pruned 0.8': finetune_tvs['Average TV Pruned 0.8'].vector
+    #         },
+    #     saving_path=results_dirs['TV_norms'] / 'L1_norms.png'
+    # )
     
     
-    weight_norm_analysis.plot_l2_weight_norms_compare(
-        state_dicts={
-            'Average TV': finetune_tvs['Average TV'].vector,
-            'Gold TV': finetune_tvs['Gold'].vector,
-            # 'Average TV Pruned 0.8': finetune_tvs['Average TV Pruned 0.8'].vector
-            },
-        saving_path=results_dirs['TV_norms'] / 'L2_norms.png'
-    )
+    # weight_norm_analysis.plot_l2_weight_norms_compare(
+    #     state_dicts={
+    #         'Average TV': finetune_tvs['Average TV'].vector,
+    #         'Gold TV': finetune_tvs['Gold'].vector,
+    #         # 'Average TV Pruned 0.8': finetune_tvs['Average TV Pruned 0.8'].vector
+    #         },
+    #     saving_path=results_dirs['TV_norms'] / 'L2_norms.png'
+    # )
     
     
-    base_model.load_state_dict(pretrain_weights)
+    # base_model.load_state_dict(pretrain_weights)
 
-    cm_pt = get_confusion_matrix(
-        base_model,
-        dataset.get_num_classes(),
-        dataset.get_heldout_dataloader(),
-        gpu
-    )
+    # cm_pt = get_confusion_matrix(
+    #     base_model,
+    #     dataset.get_num_classes(),
+    #     dataset.get_heldout_dataloader(),
+    #     gpu
+    # )
     
-    T = estimate_T_from_confusion(cm_pt, alpha=0.01, lam=0.1)
+    # T = estimate_T_from_confusion(cm_pt, alpha=0.01, lam=0.1)
     
-    misc_utils.plot_confusion_matrix(
-        title='Noise Transition Matrix',
-        cm=T,
-        class_names=dataset.get_class_names(),
-        color_map='vlag',
-        color_bar=True,
-        # vmin= 0.0,
-        # vmax= 1.0,
-        x_label='Classes',
-        y_label='Classes',
-        tick_label_font_size=6,
-        filepath=results_dirs['Ts'] / 'transition_matrix.png',
-        show=False
-    )
+    # misc_utils.plot_confusion_matrix(
+    #     title='Noise Transition Matrix',
+    #     cm=T,
+    #     class_names=dataset.get_class_names(),
+    #     color_map='vlag',
+    #     color_bar=True,
+    #     # vmin= 0.0,
+    #     # vmax= 1.0,
+    #     x_label='Classes',
+    #     y_label='Classes',
+    #     tick_label_font_size=6,
+    #     filepath=results_dirs['Ts'] / 'transition_matrix.png',
+    #     show=False
+    # )
     
-    is_sym, kl = symmetric_noise_detected(T, kl_thresh=0.03)
-    if is_sym:
-        print("Pattern is near-symmetric; using uniform off-diagonal.")
-    
-    
-    
-    misc_utils.plot_confusion_matrix(
-        title='Normalized Confusion Matrix',
-        cm=row_normalize(cm_pt),
-        class_names=dataset.get_class_names(),
-        color_map='vlag',
-        color_bar=True,
-        # vmin= 0.0,
-        # vmax= 1.0,
-        x_label='Classes',
-        y_label='Classes',
-        tick_label_font_size=6,
-        filepath=results_dirs['cms'] / 'pretrained_normalized.png',
-        show=False
-    )
+    # is_sym, kl = symmetric_noise_detected(T, kl_thresh=0.03)
+    # if is_sym:
+    #     print("Pattern is near-symmetric; using uniform off-diagonal.")
     
     
-    ft_model = copy.deepcopy(base_model)
-    ft_model.load_state_dict(next(iter(finetune_weights.items()))[1])
-    cm_ft = get_confusion_matrix(
-        ft_model,
-        dataset.get_num_classes(),
-        dataset.get_heldout_dataloader(),
-        gpu
-    )
     
-    misc_utils.plot_confusion_matrix(
-        title='Normalized Confusion Matrix',
-        cm=row_normalize(cm_ft),
-        class_names=dataset.get_class_names(),
-        color_map='vlag',
-        color_bar=True,
-        # vmin= 0.0,
-        # vmax= 1.0,
-        x_label='Classes',
-        y_label='Classes',
-        tick_label_font_size=6,
-        filepath=results_dirs['cms'] / 'ft_noise_normalized.png',
-        show=False
-    )
+    # misc_utils.plot_confusion_matrix(
+    #     title='Normalized Confusion Matrix',
+    #     cm=row_normalize(cm_pt),
+    #     class_names=dataset.get_class_names(),
+    #     color_map='vlag',
+    #     color_bar=True,
+    #     # vmin= 0.0,
+    #     # vmax= 1.0,
+    #     x_label='Classes',
+    #     y_label='Classes',
+    #     tick_label_font_size=6,
+    #     filepath=results_dirs['cms'] / 'pretrained_normalized.png',
+    #     show=False
+    # )
     
-    finetune_tvs['Average TV'].apply_to(base_model, scaling_coef=-1.0)
-    cm_ng = get_confusion_matrix(
-        base_model,
-        dataset.get_num_classes(),
-        dataset.get_heldout_dataloader(),
-        gpu
-    )
     
-    misc_utils.plot_confusion_matrix(
-        title='Normalized Confusion Matrix',
-        cm=row_normalize(cm_ng),
-        class_names=dataset.get_class_names(),
-        color_map='vlag',
-        color_bar=True,
-        # vmin= 0.0,
-        # vmax= 1.0,
-        x_label='Classes',
-        y_label='Classes',
-        tick_label_font_size=6,
-        filepath=results_dirs['cms'] / 'negated_normalized.png',
-        show=False
-    )
+    # ft_model = copy.deepcopy(base_model)
+    # ft_model.load_state_dict(next(iter(finetune_weights.items()))[1])
+    # cm_ft = get_confusion_matrix(
+    #     ft_model,
+    #     dataset.get_num_classes(),
+    #     dataset.get_heldout_dataloader(),
+    #     gpu
+    # )
+    
+    # misc_utils.plot_confusion_matrix(
+    #     title='Normalized Confusion Matrix',
+    #     cm=row_normalize(cm_ft),
+    #     class_names=dataset.get_class_names(),
+    #     color_map='vlag',
+    #     color_bar=True,
+    #     # vmin= 0.0,
+    #     # vmax= 1.0,
+    #     x_label='Classes',
+    #     y_label='Classes',
+    #     tick_label_font_size=6,
+    #     filepath=results_dirs['cms'] / 'ft_noise_normalized.png',
+    #     show=False
+    # )
+    
+    # finetune_tvs['Average TV'].apply_to(base_model, scaling_coef=-1.0)
+    # cm_ng = get_confusion_matrix(
+    #     base_model,
+    #     dataset.get_num_classes(),
+    #     dataset.get_heldout_dataloader(),
+    #     gpu
+    # )
+    
+    # misc_utils.plot_confusion_matrix(
+    #     title='Normalized Confusion Matrix',
+    #     cm=row_normalize(cm_ng),
+    #     class_names=dataset.get_class_names(),
+    #     color_map='vlag',
+    #     color_bar=True,
+    #     # vmin= 0.0,
+    #     # vmax= 1.0,
+    #     x_label='Classes',
+    #     y_label='Classes',
+    #     tick_label_font_size=6,
+    #     filepath=results_dirs['cms'] / 'negated_normalized.png',
+    #     show=False
+    # )
         
 
     # rank_dict = OrderedDict()
@@ -870,15 +873,15 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     base_model.load_state_dict(pretrain_weights)
     pt_test_results, _, _ = evaluate_model(base_model, dataset.get_test_dataloader(), gpu)
-    pt_train_results = eval_model_on_clean_noise_splits(base_model, cfg, dataset, gpu)
+    pt_train_results = eval_model_on_clean_noise_splits(base_model, None, dataset, gpu)
     
     base_model.load_state_dict(gold_weights)
     gold_test_results, _, _ = evaluate_model(base_model, dataset.get_test_dataloader(), gpu)
-    gold_train_results = eval_model_on_clean_noise_splits(base_model, cfg, dataset, gpu)
+    gold_train_results = eval_model_on_clean_noise_splits(base_model, None, dataset, gpu)
     
-    base_model.load_state_dict(ft_gold_wieghts)
-    ft_gold_test_results, _, _ = evaluate_model(base_model, dataset.get_test_dataloader(), gpu)
-    ft_gold_train_results = eval_model_on_clean_noise_splits(base_model, cfg, dataset, gpu)
+    # base_model.load_state_dict(ft_gold_wieghts)
+    # ft_gold_test_results, _, _ = evaluate_model(base_model, dataset.get_test_dataloader(), gpu)
+    # ft_gold_train_results = eval_model_on_clean_noise_splits(base_model, cfg, dataset, gpu)
     
     base_model.load_state_dict(pretrain_weights)
     base_model.to(cpu)
@@ -887,17 +890,37 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     results_dict['Pretrain'] = {'test_results': pt_test_results, 'train_results': pt_train_results}
     results_dict['Gold'] = {'test_results': gold_test_results, 'train_results': gold_train_results}
-    results_dict['Finetune Gold'] = {'test_results': ft_gold_test_results, 'train_results': ft_gold_train_results}
-    results_dict = eval_model_on_tvs(base_model, OrderedDict(zip(tv_names[1:], ft_tvs_list[1:])), results_dict, cfg, dataset, num_classes, gpu)
+    # results_dict['Finetune Gold'] = {'test_results': ft_gold_test_results, 'train_results': ft_gold_train_results}
+    # results_dict = eval_model_on_tvs(base_model, OrderedDict(zip(tv_names[1:], ft_tvs_list[1:])), results_dict, cfg, dataset, num_classes, gpu)
     # results_dict = eval_model_on_tvs(base_model, OrderedDict(zip(tv_names, ft_tvs_list)), results_dict, cfg, dataset, num_classes, gpu)
     
     
     # print(results_dict)
+    
+    for alpha in tqdm(np.linspace(-0.1, -1.0, 10)):
+    # for alpha in tqdm(np.linspace(-1.1, -1.6, 5)):
+    
+        base_model.load_state_dict(pretrain_weights, strict=False)
+        finetune_tvs['Average TV'].apply_to(base_model, scaling_coef=alpha, strict=False)
+        tv_test_results, _, _ = evaluate_model(base_model, dataset.get_test_dataloader(), gpu)
+        tv_train_results = eval_model_on_clean_noise_splits(base_model, None, dataset, gpu)
+
+        results_dict[f"Avg, alpha={alpha}"] = {'test_results': tv_test_results, 'train_results': tv_train_results}
         
+    for alpha in tqdm(np.linspace(-0.1, -1.0, 10)):
+    # for alpha in tqdm(np.linspace(-1.1, -1.6, 5)):
+    
+        base_model.load_state_dict(pretrain_weights, strict=False)
+        finetune_tvs['Average TV Pruned 0.8'].apply_to(base_model, scaling_coef=alpha, strict=False)
+        tv_test_results, _, _ = evaluate_model(base_model, dataset.get_test_dataloader(), gpu)
+        tv_train_results = eval_model_on_clean_noise_splits(base_model, None, dataset, gpu)
+
+        results_dict[f"Avg 0.8, alpha={alpha}"] = {'test_results': tv_test_results, 'train_results': tv_train_results}
+    
         
     with open(results_dirs['metrics'] / 'metrics.json' , 'w') as json_file:
         json.dump(results_dict, json_file, indent=4)
-    generate_latex_table_from_results(results_dict, results_dirs['metrics'] / 'results_tex.txt')
+    # generate_latex_table_from_results(results_dict, results_dirs['metrics'] / 'results_tex.txt')
     
     # otrh_tvs, shrd_tvs = TaskVector.decompose_task_vectors_SVD(ft_tvs_list)
     
