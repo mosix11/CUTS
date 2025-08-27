@@ -29,7 +29,7 @@ class TorchvisionModels(BaseModel):
         
         # TODO check for img_size and grayscalse and modify models
         if model_type == 'resnet18':
-            net = torchvision.models.resnet50(weights=pt_weights)
+            net = torchvision.models.resnet18(weights=pt_weights)
             net.fc = nn.Linear(net.fc.in_features, num_classes)
             
             if img_size == [32, 32]:

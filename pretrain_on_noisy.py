@@ -925,7 +925,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         results_dict[f"Avg 0.8, alpha={alpha}"] = {'test_results': tv_test_results, 'train_results': tv_train_results}
     
         
-    with open(results_dirs['metrics'] / 'metrics2.json' , 'w') as json_file:
+    with open(results_dirs['metrics'] / 'metrics.json' , 'w') as json_file:
         json.dump(results_dict, json_file, indent=4)
     # generate_latex_table_from_results(results_dict, results_dirs['metrics'] / 'results_tex.txt')
     
