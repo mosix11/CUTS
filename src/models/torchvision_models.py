@@ -37,7 +37,7 @@ class TorchvisionModels(BaseModel):
                 net.maxpool = nn.Identity()
             
             
-        if model_type == 'resnet18_nonorm':
+        elif model_type == 'resnet18_nonorm':
             if pt_weights:
                 net = torchvision.models.resnet18(weights=pt_weights)
                 self._replace_bn_with_identity(net)
