@@ -84,7 +84,7 @@ trainer:
       betas: [0.9, 0.999]
     lr_schedule_cfg:
       type: 'step'
-      milestones: [50, 70, 90, 100, 110, 115]
+      milestones: [40, 50, 60, 65, 70, 75]
       gamma: 0.7
     early_stopping: False
     validation_freq: -1
