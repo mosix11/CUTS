@@ -212,9 +212,13 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         # ]
     elif cfg['dataset']['name'] == 'cifar100':
         augmentations = [
-            transformsv2.RandomCrop(32, padding=4),
+            transformsv2.RandomCrop(224, padding=4),
             transformsv2.RandomHorizontalFlip(),
         ]
+        # augmentations = [
+        #     transformsv2.RandomCrop(32, padding=4),
+        #     transformsv2.RandomHorizontalFlip(),
+        # ]
     elif cfg['dataset']['name'] == 'mnist':
         pass
         # augmentations = [
@@ -878,6 +882,8 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # print(temp_res)
     # exit()
     
+    ft_ho_clean_weights
+    
     base_model.load_state_dict(pretrain_weights)
     pt_test_results, _, _ = evaluate_model(base_model, dataset.get_test_dataloader(), gpu)
     pt_train_results = eval_model_on_clean_noise_splits(base_model, None, dataset, gpu)
@@ -885,6 +891,11 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     base_model.load_state_dict(gold_weights)
     gold_test_results, _, _ = evaluate_model(base_model, dataset.get_test_dataloader(), gpu)
     gold_train_results = eval_model_on_clean_noise_splits(base_model, None, dataset, gpu)
+    
+    if ft_ho_clean_weights:
+        base_model.load_state_dict(ft_ho_clean_weights)
+        ftho_test_results, _, _ = evaluate_model(base_model, dataset.get_test_dataloader(), gpu)
+        ftho_train_results = eval_model_on_clean_noise_splits(base_model, None, dataset, gpu)
     
     # base_model.load_state_dict(ft_gold_wieghts)
     # ft_gold_test_results, _, _ = evaluate_model(base_model, dataset.get_test_dataloader(), gpu)
@@ -897,6 +908,8 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     results_dict['Pretrain'] = {'test_results': pt_test_results, 'train_results': pt_train_results}
     results_dict['Gold'] = {'test_results': gold_test_results, 'train_results': gold_train_results}
+    if ft_ho_clean_weights:
+        results_dict['Finetune Heldout Clean'] = {'test_results': ftho_test_results, 'train_results': ftho_train_results}
     # results_dict['Finetune Gold'] = {'test_results': ft_gold_test_results, 'train_results': ft_gold_train_results}
     # results_dict = eval_model_on_tvs(base_model, OrderedDict(zip(tv_names[1:], ft_tvs_list[1:])), results_dict, cfg, dataset, num_classes, gpu)
     # results_dict = eval_model_on_tvs(base_model, OrderedDict(zip(tv_names, ft_tvs_list)), results_dict, cfg, dataset, num_classes, gpu)
