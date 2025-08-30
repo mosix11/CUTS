@@ -1,0 +1,132 @@
+training_seed: &training_seed 11
+dataset_seed: &dataset_seed 11
+
+strategy:
+  finetuning_set: &finetuning_set 'Heldout'
+  noise:
+    pretraining:
+      set: 'Train'
+      noise_rate: 0.6
+      noise_type: 'symmetric'
+      seed: 8
+    finetuning:
+    - set: 'Train'
+      noise_rate: 1.0
+      noise_type: 'symmetric'
+      seed: 12
+    - set: 'Train'
+      noise_rate: 1.0
+      noise_type: 'symmetric'
+      seed: 10
+
+
+
+datasets:
+  - name: "cifar100"
+    num_classes: 100
+    img_size: [224, 224]
+    batch_size: 256
+    heldout_conf: 0.1
+    valset_ratio: 0.0
+    num_workers: 12
+    seed: *dataset_seed
+
+
+model:
+  type: 'open_clip_multihead_ViT-B-16'
+  pt_weights: 'openai'
+  loss_fn:
+    type: 'CE'
+  metrics: ['ACC', 'F1']
+
+
+trainer:
+  finetuning:
+    mix:
+      max_iterations: 5500
+      optimizer_cfg: 
+        type: "adamw"
+        lr: 1.0e-5
+        betas: [0.9, 0.999]
+      lr_schedule_cfg:
+        type: 'cosann_warmup'
+        update_on: 'gradient_step'
+        warmup_steps: 300
+        hold_steps: 0
+        T_max: 5500
+        eta_min: 0
+      early_stopping: False
+      validation_freq: -1
+      save_best_model: False
+      checkpoint_freq: -1
+      run_on_gpu: True
+      use_amp: True
+      log_comet: True
+      comet_project_name: 'clip-noise-TA'
+      seed: *training_seed
+    noise:
+      max_iterations: 4000
+      optimizer_cfg: 
+        type: "adamw"
+        lr: 1.0e-5
+        betas: [0.9, 0.999]
+      lr_schedule_cfg:
+        type: 'cosann_warmup'
+        update_on: 'gradient_step'
+        warmup_steps: 300
+        hold_steps: 0
+        T_max: 4000
+        eta_min: 0
+      early_stopping: False
+      validation_freq: -1
+      save_best_model: False
+      checkpoint_freq: -1
+      run_on_gpu: True
+      use_amp: True
+      log_comet: True
+      comet_project_name: 'clip-noise-TA'
+      seed: *training_seed
+    clean:
+      max_iterations: 3000
+      optimizer_cfg: 
+        type: "adamw"
+        lr: 1.0e-5
+        betas: [0.9, 0.999]
+      lr_schedule_cfg:
+        type: 'cosann_warmup'
+        update_on: 'gradient_step'
+        warmup_steps: 300
+        T_max: 3000
+        eta_min: 1.0e-7
+      early_stopping: False
+      validation_freq: -1
+      save_best_model: False
+      checkpoint_freq: -1
+      run_on_gpu: True
+      use_amp: True
+      log_comet: True
+      comet_project_name: 'clip-noise-TA'
+      seed: *training_seed
+
+    heldout:
+      max_iterations: 1500
+      optimizer_cfg: 
+        type: "adamw"
+        lr: 1.0e-5
+        betas: [0.9, 0.999]
+      lr_schedule_cfg:
+        type: 'cosann_warmup'
+        update_on: 'gradient_step'
+        warmup_steps: 300
+        hold_steps: 700
+        T_max: 1500
+        eta_min: 1.0e-7
+      early_stopping: False
+      validation_freq: -1
+      save_best_model: False
+      checkpoint_freq: -1
+      run_on_gpu: True
+      use_amp: True
+      log_comet: True
+      comet_project_name: 'clip-noise-TA'
+      seed: *training_seed
