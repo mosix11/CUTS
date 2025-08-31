@@ -629,14 +629,14 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
 
 
     model.load_state_dict(mix_weights, strict=False)
-    # fig_umap_pt = umap_plot(
-    #     feature_extractor=model.get_image_encoder(),
-    #     dataloader=dataset.get_train_dataloader(),
-    #     device=gpu,
-    #     class_names=dataset.get_class_names()
-    # )
+    fig_umap_pt = umap_plot(
+        feature_extractor=model.get_image_encoder(),
+        dataloader=dataset.get_train_dataloader(),
+        device=gpu,
+        class_names=dataset.get_class_names()
+    )
     
-    # fig_umap_pt.savefig(results_dirs['embed_plots'] / "umap_pt.png", bbox_inches="tight")
+    fig_umap_pt.savefig(results_dirs['embed_plots'] / "umap_pt.png", bbox_inches="tight")
     
     task_vectors['Average TV'].apply_to(model, scaling_coef=-1.0, strict=False)
     fig_umap_AVG_1 = umap_plot(
