@@ -26,7 +26,7 @@ from tqdm import tqdm
 from collections import OrderedDict, defaultdict
 import re
 
-from src.utils import umap_plot
+from src.utils import embedding_space_analysis
 from helper_funcs import evaluate_model, eval_model_on_clean_noise_splits, search_optimal_coefficient, get_confusion_matrix, row_normalize
 from src.utils import weight_norm_analysis
 
@@ -629,24 +629,106 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
 
 
     model.load_state_dict(mix_weights, strict=False)
-    fig_umap_pt = umap_plot(
+    fig_umap_pt = embedding_space_analysis.umap_plot(
         feature_extractor=model.get_image_encoder(),
         dataloader=dataset.get_train_dataloader(),
         device=gpu,
-        class_names=dataset.get_class_names()
+        class_names=dataset.get_class_names(),
+        n_neighbors=5,
+        min_dist=0.02
     )
     
     fig_umap_pt.savefig(results_dirs['embed_plots'] / "umap_pt.png", bbox_inches="tight")
     
     task_vectors['Average TV'].apply_to(model, scaling_coef=-1.0, strict=False)
-    fig_umap_AVG_1 = umap_plot(
+    fig_umap_AVG_1 = embedding_space_analysis.umap_plot(
         feature_extractor=model.get_image_encoder(),
         dataloader=dataset.get_train_dataloader(),
         device=gpu,
-        class_names=dataset.get_class_names()
+        class_names=dataset.get_class_names(),
+        n_neighbors=5,
+        min_dist=0.02
     )
     
     fig_umap_AVG_1.savefig(results_dirs['embed_plots'] / "umap_avg_tv.png", bbox_inches="tight")
+    
+    
+    model.load_state_dict(gold_weights, strict=False)
+    fig_umap_gold = embedding_space_analysis.umap_plot(
+        feature_extractor=model.get_image_encoder(),
+        dataloader=dataset.get_train_dataloader(),
+        device=gpu,
+        class_names=dataset.get_class_names(),
+        n_neighbors=5,
+        min_dist=0.02
+    )
+    
+    fig_umap_gold.savefig(results_dirs['embed_plots'] / "umap_gold.png", bbox_inches="tight")
+    
+    
+    model.load_state_dict(mix_weights, strict=False)
+    fig_tsne_pt = embedding_space_analysis.tsne_plot(
+        feature_extractor=model.get_image_encoder(),
+        dataloader=dataset.get_train_dataloader(),
+        device=gpu,
+        class_names=dataset.get_class_names(),
+    )
+    
+    fig_tsne_pt.savefig(results_dirs['embed_plots'] / "tsne_pt.png", bbox_inches="tight")
+    
+    task_vectors['Average TV'].apply_to(model, scaling_coef=-1.0, strict=False)
+    fig_tsne_AVG_1 = embedding_space_analysis.tsne_plot(
+        feature_extractor=model.get_image_encoder(),
+        dataloader=dataset.get_train_dataloader(),
+        device=gpu,
+        class_names=dataset.get_class_names(),
+    )
+    
+    fig_tsne_AVG_1.savefig(results_dirs['embed_plots'] / "tsne_avg_tv.png", bbox_inches="tight")
+    
+    
+    model.load_state_dict(gold_weights, strict=False)
+    fig_tsne_gold = embedding_space_analysis.tsne_plot(
+        feature_extractor=model.get_image_encoder(),
+        dataloader=dataset.get_train_dataloader(),
+        device=gpu,
+        class_names=dataset.get_class_names(),
+    )
+    
+    fig_tsne_gold.savefig(results_dirs['embed_plots'] / "tsne_gold.png", bbox_inches="tight")
+    
+    
+    # model.load_state_dict(mix_weights, strict=False)
+    # fig_pca_pt = embedding_space_analysis.pca_plot(
+    #     feature_extractor=model.get_image_encoder(),
+    #     dataloader=dataset.get_train_dataloader(),
+    #     device=gpu,
+    #     class_names=dataset.get_class_names()
+    # )
+    
+    # fig_pca_pt.savefig(results_dirs['embed_plots'] / "pca_pt.png", bbox_inches="tight")
+    
+    # task_vectors['Average TV'].apply_to(model, scaling_coef=-1.0, strict=False)
+    # fig_pca_AVG_1 = embedding_space_analysis.pca_plot(
+    #     feature_extractor=model.get_image_encoder(),
+    #     dataloader=dataset.get_train_dataloader(),
+    #     device=gpu,
+    #     class_names=dataset.get_class_names()
+    # )
+    
+    # fig_pca_AVG_1.savefig(results_dirs['embed_plots'] / "pca_avg_tv.png", bbox_inches="tight")
+    
+    
+    # model.load_state_dict(gold_weights, strict=False)
+    # fig_pca_gold = embedding_space_analysis.pca_plot(
+    #     feature_extractor=model.get_image_encoder(),
+    #     dataloader=dataset.get_train_dataloader(),
+    #     device=gpu,
+    #     class_names=dataset.get_class_names()
+    # )
+    
+    # fig_pca_gold.savefig(results_dirs['embed_plots'] / "pca_gold.png", bbox_inches="tight")
+    
     
     exit()
     

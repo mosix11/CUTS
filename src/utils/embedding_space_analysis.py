@@ -45,16 +45,24 @@ def extract_features(
 
 
 def umap_plot(
-    feature_extractor:nn.Module,
-    dataloader:DataLoader,
+    features: torch.Tensor = None,
+    labels: torch.Tensor = None,
+    feature_extractor:nn.Module = None,
+    dataloader:DataLoader = None,
     device:torch.device = torch.device('cpu'),
     class_names:List[str] = None,
     normalize:bool = False,
     n_neighbors:int = 15,
     min_dist:float = 0.1,
-    n_components:int = 2
+    n_components:int = 2,
+    random_state:float = 11.0,
 ):
-    features, labels = extract_features(feature_extractor, dataloader, normalize, device)
+    
+    if not(features and labels):
+        if feature_extractor and dataloader:
+            features, labels = extract_features(feature_extractor, dataloader, normalize, device)
+        else:
+            raise RuntimeError('One of the pairs `features and labels` or `feature extractor and dataloade` must be provided to the function.')
     
 
     class_names = dict(enumerate(class_names))
@@ -67,8 +75,9 @@ def umap_plot(
         n_neighbors=n_neighbors,
         min_dist=min_dist,
         device=device,
-        backend="keops"
-        # backend=None
+        backend="keops",
+        # backend=None,
+        random_state=random_state
     ).fit_transform(features)
     z = z.detach().cpu().numpy()
         
@@ -81,6 +90,92 @@ def umap_plot(
     
     return fig
     
+
+def pca_plot(
+    features: torch.Tensor = None,
+    labels: torch.Tensor = None,
+    feature_extractor:nn.Module = None,
+    dataloader:DataLoader = None,
+    device:torch.device = torch.device('cpu'),
+    class_names:List[str] = None,
+    normalize:bool = False,
+    n_components:int = 2,
+    random_state:float = 11.0,
+):
+    
+    if not(features and labels):
+        if feature_extractor and dataloader:
+            features, labels = extract_features(feature_extractor, dataloader, normalize, device)
+        else:
+            raise RuntimeError('One of the pairs `features and labels` or `feature extractor and dataloade` must be provided to the function.')
+    
+
+    class_names = dict(enumerate(class_names))
+    vectorized_converter = np.vectorize(lambda x: class_names[x])
+    labels_str = vectorized_converter(labels)
+        
+    z = torchdr.PCA(
+        n_components=n_components,
+        device=device,
+        random_state=random_state
+    ).fit_transform(features)
+    z = z.detach().cpu().numpy()
+        
+    fig, ax = datamapplot.create_plot(
+        z,
+        labels_str,
+        label_over_points=True,
+        label_font_size=30,
+    )
+    
+    return fig
+    
+
+
+def tsne_plot(
+    features: torch.Tensor = None,
+    labels: torch.Tensor = None,
+    feature_extractor:nn.Module = None,
+    dataloader:DataLoader = None,
+    device:torch.device = torch.device('cpu'),
+    class_names:List[str] = None,
+    normalize:bool = False,
+    n_components:int = 2,
+    perplexity:int = 50,
+    max_iter:int = 2000,
+    random_state:float = 11.0,
+):
+    
+    if not(features and labels):
+        if feature_extractor and dataloader:
+            features, labels = extract_features(feature_extractor, dataloader, normalize, device)
+        else:
+            raise RuntimeError('One of the pairs `features and labels` or `feature extractor and dataloade` must be provided to the function.')
+    
+
+    class_names = dict(enumerate(class_names))
+    vectorized_converter = np.vectorize(lambda x: class_names[x])
+    labels_str = vectorized_converter(labels)
+        
+    z = torchdr.TSNE(
+        n_components=n_components,
+        verbose=True,
+        perplexity=perplexity,
+        device=device,
+        max_iter=max_iter,
+        backend="keops",
+        random_state=random_state
+    ).fit_transform(features)
+    z = z.detach().cpu().numpy()
+        
+    fig, ax = datamapplot.create_plot(
+        z,
+        labels_str,
+        label_over_points=True,
+        label_font_size=30,
+    )
+    
+    return fig
 
 # # Run UMAP
 # def umap_plot(
