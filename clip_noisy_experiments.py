@@ -637,7 +637,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         device=gpu,
         class_names=dataset.get_class_names(),
         n_neighbors=5,
-        min_dist=0.6
+        min_dist=1.0
     )
     
     fig_umap_pt.savefig(results_dirs['embed_plots'] / "umap_pt.png", bbox_inches="tight")
@@ -649,7 +649,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         device=gpu,
         class_names=dataset.get_class_names(),
         n_neighbors=5,
-        min_dist=0.6
+        min_dist=1.0
     )
     
     fig_umap_AVG_1.savefig(results_dirs['embed_plots'] / "umap_avg_tv.png", bbox_inches="tight")
@@ -662,7 +662,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         device=gpu,
         class_names=dataset.get_class_names(),
         n_neighbors=5,
-        min_dist=0.6
+        min_dist=1.0
     )
     
     fig_umap_gold.savefig(results_dirs['embed_plots'] / "umap_gold.png", bbox_inches="tight")
