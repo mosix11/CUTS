@@ -68,6 +68,7 @@ def umap_plot(
         min_dist=min_dist,
         device=device,
         backend="keops"
+        # backend=None
     ).fit_transform(features)
     z = z.detach().cpu().numpy()
         
