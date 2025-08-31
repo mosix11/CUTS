@@ -71,7 +71,6 @@ def umap_plot(
         
     z = torchdr.UMAP(
         n_components=n_components,
-        verbose=True,
         n_neighbors=n_neighbors,
         min_dist=min_dist,
         device=device,
@@ -159,7 +158,6 @@ def tsne_plot(
         
     z = torchdr.TSNE(
         n_components=n_components,
-        verbose=True,
         perplexity=perplexity,
         device=device,
         max_iter=max_iter,

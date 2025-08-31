@@ -538,8 +538,10 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     dataset_cfg['val_transforms'] = model.get_val_transforms()
     dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
     
+    dataset_clean = copy.deepcopy(dataset)
+    
     strategy = cfg['strategy']
-    # dataset.inject_noise(**strategy['noise']['pretraining'])
+    dataset.inject_noise(**strategy['noise']['pretraining'])
 
 
 
@@ -631,11 +633,11 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     model.load_state_dict(mix_weights, strict=False)
     fig_umap_pt = embedding_space_analysis.umap_plot(
         feature_extractor=model.get_image_encoder(),
-        dataloader=dataset.get_train_dataloader(),
+        dataloader=dataset_clean.get_train_dataloader(),
         device=gpu,
         class_names=dataset.get_class_names(),
         n_neighbors=5,
-        min_dist=0.02
+        min_dist=0.6
     )
     
     fig_umap_pt.savefig(results_dirs['embed_plots'] / "umap_pt.png", bbox_inches="tight")
@@ -643,11 +645,11 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     task_vectors['Average TV'].apply_to(model, scaling_coef=-1.0, strict=False)
     fig_umap_AVG_1 = embedding_space_analysis.umap_plot(
         feature_extractor=model.get_image_encoder(),
-        dataloader=dataset.get_train_dataloader(),
+        dataloader=dataset_clean.get_train_dataloader(),
         device=gpu,
         class_names=dataset.get_class_names(),
         n_neighbors=5,
-        min_dist=0.02
+        min_dist=0.6
     )
     
     fig_umap_AVG_1.savefig(results_dirs['embed_plots'] / "umap_avg_tv.png", bbox_inches="tight")
@@ -656,52 +658,52 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     model.load_state_dict(gold_weights, strict=False)
     fig_umap_gold = embedding_space_analysis.umap_plot(
         feature_extractor=model.get_image_encoder(),
-        dataloader=dataset.get_train_dataloader(),
+        dataloader=dataset_clean.get_train_dataloader(),
         device=gpu,
         class_names=dataset.get_class_names(),
         n_neighbors=5,
-        min_dist=0.02
+        min_dist=0.6
     )
     
     fig_umap_gold.savefig(results_dirs['embed_plots'] / "umap_gold.png", bbox_inches="tight")
     
     
-    model.load_state_dict(mix_weights, strict=False)
-    fig_tsne_pt = embedding_space_analysis.tsne_plot(
-        feature_extractor=model.get_image_encoder(),
-        dataloader=dataset.get_train_dataloader(),
-        device=gpu,
-        class_names=dataset.get_class_names(),
-    )
+    # model.load_state_dict(mix_weights, strict=False)
+    # fig_tsne_pt = embedding_space_analysis.tsne_plot(
+    #     feature_extractor=model.get_image_encoder(),
+    #     dataloader=dataset_clean.get_train_dataloader(),
+    #     device=gpu,
+    #     class_names=dataset.get_class_names(),
+    # )
     
-    fig_tsne_pt.savefig(results_dirs['embed_plots'] / "tsne_pt.png", bbox_inches="tight")
+    # fig_tsne_pt.savefig(results_dirs['embed_plots'] / "tsne_pt.png", bbox_inches="tight")
     
-    task_vectors['Average TV'].apply_to(model, scaling_coef=-1.0, strict=False)
-    fig_tsne_AVG_1 = embedding_space_analysis.tsne_plot(
-        feature_extractor=model.get_image_encoder(),
-        dataloader=dataset.get_train_dataloader(),
-        device=gpu,
-        class_names=dataset.get_class_names(),
-    )
+    # task_vectors['Average TV'].apply_to(model, scaling_coef=-1.0, strict=False)
+    # fig_tsne_AVG_1 = embedding_space_analysis.tsne_plot(
+    #     feature_extractor=model.get_image_encoder(),
+    #     dataloader=dataset_clean.get_train_dataloader(),
+    #     device=gpu,
+    #     class_names=dataset.get_class_names(),
+    # )
     
-    fig_tsne_AVG_1.savefig(results_dirs['embed_plots'] / "tsne_avg_tv.png", bbox_inches="tight")
+    # fig_tsne_AVG_1.savefig(results_dirs['embed_plots'] / "tsne_avg_tv.png", bbox_inches="tight")
     
     
-    model.load_state_dict(gold_weights, strict=False)
-    fig_tsne_gold = embedding_space_analysis.tsne_plot(
-        feature_extractor=model.get_image_encoder(),
-        dataloader=dataset.get_train_dataloader(),
-        device=gpu,
-        class_names=dataset.get_class_names(),
-    )
+    # model.load_state_dict(gold_weights, strict=False)
+    # fig_tsne_gold = embedding_space_analysis.tsne_plot(
+    #     feature_extractor=model.get_image_encoder(),
+    #     dataloader=dataset_clean.get_train_dataloader(),
+    #     device=gpu,
+    #     class_names=dataset.get_class_names(),
+    # )
     
-    fig_tsne_gold.savefig(results_dirs['embed_plots'] / "tsne_gold.png", bbox_inches="tight")
+    # fig_tsne_gold.savefig(results_dirs['embed_plots'] / "tsne_gold.png", bbox_inches="tight")
     
     
     # model.load_state_dict(mix_weights, strict=False)
     # fig_pca_pt = embedding_space_analysis.pca_plot(
     #     feature_extractor=model.get_image_encoder(),
-    #     dataloader=dataset.get_train_dataloader(),
+    #     dataloader=dataset_clean.get_train_dataloader(),
     #     device=gpu,
     #     class_names=dataset.get_class_names()
     # )
@@ -711,7 +713,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # task_vectors['Average TV'].apply_to(model, scaling_coef=-1.0, strict=False)
     # fig_pca_AVG_1 = embedding_space_analysis.pca_plot(
     #     feature_extractor=model.get_image_encoder(),
-    #     dataloader=dataset.get_train_dataloader(),
+    #     dataloader=dataset_clean.get_train_dataloader(),
     #     device=gpu,
     #     class_names=dataset.get_class_names()
     # )
@@ -722,7 +724,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # model.load_state_dict(gold_weights, strict=False)
     # fig_pca_gold = embedding_space_analysis.pca_plot(
     #     feature_extractor=model.get_image_encoder(),
-    #     dataloader=dataset.get_train_dataloader(),
+    #     dataloader=dataset_clean.get_train_dataloader(),
     #     device=gpu,
     #     class_names=dataset.get_class_names()
     # )
@@ -730,9 +732,9 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # fig_pca_gold.savefig(results_dirs['embed_plots'] / "pca_gold.png", bbox_inches="tight")
     
     
+
+    
     exit()
-    
-    
 
 
     model.load_state_dict(mix_weights, strict=False)
