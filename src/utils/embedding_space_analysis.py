@@ -29,6 +29,14 @@ def extract_features(
     feature_extractor.eval()
     feats, labels = [], []
     
+    # indices = []
+    # for batch in dataloader:
+    #     x, y, idx = batch
+    #     indices.extend(idx)
+    
+    # print(indices)
+    # exit()
+    
     for batch in tqdm(dataloader, desc="Extracting features", leave=False):
         
         batch = prepare_batch(batch, device)
@@ -99,6 +107,7 @@ def pca_plot(
     class_names:List[str] = None,
     normalize:bool = False,
     n_components:int = 2,
+    dataset_name:str = None,
     random_state:float = 11.0,
 ):
     
@@ -120,13 +129,25 @@ def pca_plot(
     ).fit_transform(features)
     z = z.detach().cpu().numpy()
         
+    color_mapping = get_color_mappings(dataset_name)
     fig, ax = datamapplot.create_plot(
         z,
         labels_str,
+        label_color_map=color_mapping,
         label_over_points=True,
         label_font_size=30,
     )
     
+    # fig, ax = plt.subplots(figsize=(5, 5))  # you can change the size
+
+    # ax.scatter(z[:, 0], z[:, 1], 
+    #         c=labels.numpy(), cmap="tab10", 
+    #         s=1, alpha=0.3)
+
+    # # ax.set_title("PCA", fontsize=fontsize)
+    # ax.set_xticks([-5, 5])
+    # ax.set_yticks([-5, 5])
+        
     return fig
     
 
@@ -284,4 +305,14 @@ def all_plot_comp(
 #     plt.legend(*scatter.legend_elements(), title="Classes")
 #     plt.title("UMAP of Image Encoder Features")
 #     plt.show()
+
+
+def get_color_mappings(dataset_name:str):
+    
+    if dataset_name == None:
+        return None
+    elif dataset_name == 'mnist':
+            return {'0': "#f64a4a", '1': "#2e862a", '2': "#0095ff", '3': "#af009d", '4': "#192c65", '5': "#00fffb", '6': "#8246b7", '7': "#92b301", '8': "#fa8f1e", '9': "#0a8d63"}
+    elif dataset_name == 'cifar10':
+        return {'airplane': "#f64a4a", 'automobile': "#2e862a", 'bird': "#0095ff", 'cat': "#af009d", 'deer': "#192c65", 'dog': "#00fffb", 'frog': "#8246b7", 'horse': "#92b301", 'ship': "#fa8f1e", 'truck': "#0a8d63"}
 

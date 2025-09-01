@@ -111,8 +111,8 @@ class BaseClassificationDataset(ABC):
     def get_train_dataloader(self):
         return self.train_loader
     
-    def reset_train_dl(self):
-        self.train_loader = self._build_dataloader(self.trainset, shuffle=True, use_balanced_batch_sampler=True if self.use_balanced_batch_sampler else False)
+    def reset_train_dl(self, shuffle=True):
+        self.train_loader = self._build_dataloader(self.trainset, shuffle=shuffle, use_balanced_batch_sampler=True if self.use_balanced_batch_sampler else False)
 
     def get_val_dataloader(self):
         return self.val_loader
