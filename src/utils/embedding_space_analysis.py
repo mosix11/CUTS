@@ -213,12 +213,6 @@ def all_plot_comp(
     ).fit_transform(features)
     z_infotsne = itsne.detach().cpu().numpy()
     
-    itsne = torchdr.InfoTSNE(
-        device=device,
-        backend="keops",
-        random_state=random_state
-    ).fit_transform(features)
-    z_infotsne = itsne.detach().cpu().numpy()
     
     largevis = torchdr.LargeVis(
         device=device,
@@ -227,12 +221,12 @@ def all_plot_comp(
     ).fit_transform(features)
     z_largevis = largevis.detach().cpu().numpy()
     
-    pacmap = torchdr.PACMAP(
+    pca = torchdr.PCA(
         device=device,
         backend="keops",
         random_state=random_state
     ).fit_transform(features)
-    z_pacmap = pacmap.detach().cpu().numpy()
+    z_pca = pca.detach().cpu().numpy()
     
     # --- Plot the embeddings ---
     fig, axes = plt.subplots(1, 4, figsize=(24, 6))
@@ -253,8 +247,8 @@ def all_plot_comp(
     axes[2].set_xticks([-5, 5])
     axes[2].set_yticks([-5, 5])
 
-    axes[3].scatter(z_pacmap[:, 0], z_pacmap[:, 1], c=labels.numpy(), cmap="tab10", s=1, alpha=0.3)
-    axes[3].set_title("PACMAP", fontsize=fontsize)
+    axes[3].scatter(z_pca[:, 0], z_pca[:, 1], c=labels.numpy(), cmap="tab10", s=1, alpha=0.3)
+    axes[3].set_title("PCA", fontsize=fontsize)
     axes[3].set_xticks([-5, 5])
     axes[3].set_yticks([-5, 5])
 
