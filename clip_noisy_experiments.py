@@ -611,11 +611,11 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     ).items() if "classifier_heads" not in k)
     
     
-    ft_gradient_ascent_weights = OrderedDict(
-    (k, v) for k, v in torch.load(
-        outputs_dir.joinpath(f"gradient_ascent/weights/ft_weights.pth"),
-        map_location='cpu'
-    ).items() if "classifier_heads" not in k)
+    # ft_gradient_ascent_weights = OrderedDict(
+    # (k, v) for k, v in torch.load(
+    #     outputs_dir.joinpath(f"gradient_ascent/weights/ft_weights.pth"),
+    #     map_location='cpu'
+    # ).items() if "classifier_heads" not in k)
     
     noise_weights = OrderedDict()
     
