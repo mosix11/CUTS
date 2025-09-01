@@ -1,7 +1,7 @@
 import comet_ml
 from src.datasets import dataset_factory, dataset_wrappers
 from src.models import model_factory, TaskVector
-from src.trainers import StandardTrainer, utils as trainer_utils
+from src.trainers import StandardTrainer, GradientAscentTrainer, utils as trainer_utils
 import matplotlib.pyplot as plt
 import seaborn as sns
 from src.utils import misc_utils
@@ -298,6 +298,47 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
         else: finetuning_cfg = cfg['trainer']['finetuning']
         
         trainer = StandardTrainer(
+            outputs_dir=outputs_dir,
+            **finetuning_cfg,
+            exp_name=experiment_name,
+            exp_tags=None,
+        )
+        
+        results = trainer.fit(model, dataset, resume=False)
+        torch.save(model.state_dict(), weights_dir / Path("ft_weights.pth"))
+        
+    # Gradient Ascent Baseline
+    if not outputs_dir.joinpath(f"{cfg_name}/gradient_ascent/weights/ft_weights.pth").exists():
+        dataset = copy.deepcopy(base_dataset)
+        model = copy.deepcopy(base_model)
+        
+        mix_model_ckp_path = outputs_dir/ Path(f"{cfg_name}/mix") / Path('weights/ft_weights.pth')
+        checkpoint = torch.load(mix_model_ckp_path)
+        model.load_state_dict(checkpoint)
+        
+        
+        dataset.set_trainset(dataset.get_heldoutset(), shuffle=True)
+        
+        experiment_name = f"{cfg_name}/gradient_ascent"
+        experiment_dir = outputs_dir / Path(experiment_name)
+
+        weights_dir = experiment_dir / Path("weights")
+        weights_dir.mkdir(exist_ok=True, parents=True)
+
+        plots_dir = experiment_dir / Path("plots")
+        plots_dir.mkdir(exist_ok=True, parents=True)
+        
+        if strategy['finetuning_set'] == 'Heldout':
+            dataset.set_trainset(dataset.get_heldoutset(), shuffle=True)
+            dataset.inject_noise(**noise_tv)
+            
+        finetuning_cfg = None
+        if 'gradient_ascent' in cfg['trainer']['finetuning']:
+            finetuning_cfg = cfg['trainer']['finetuning']['gradient_ascent']
+            finetuning_cfg['comet_api_key'] =  os.getenv("COMET_API_KEY")
+        else: finetuning_cfg = cfg['trainer']['finetuning']
+        
+        trainer = GradientAscentTrainer(
             outputs_dir=outputs_dir,
             **finetuning_cfg,
             exp_name=experiment_name,
