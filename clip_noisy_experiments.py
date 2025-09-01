@@ -630,42 +630,75 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     )
 
 
+    
     model.load_state_dict(mix_weights, strict=False)
-    fig_umap_pt = embedding_space_analysis.umap_plot(
+    fig_comp_pt = embedding_space_analysis.all_plot_comp(
         feature_extractor=model.get_image_encoder(),
         dataloader=dataset_clean.get_train_dataloader(),
         device=gpu,
         class_names=dataset.get_class_names(),
-        n_neighbors=5,
-        min_dist=1.0
     )
     
-    fig_umap_pt.savefig(results_dirs['embed_plots'] / "umap_pt.png", bbox_inches="tight")
+    fig_comp_pt.savefig(results_dirs['embed_plots'] / "comp_pt.png", bbox_inches="tight")
+    
     
     task_vectors['Average TV'].apply_to(model, scaling_coef=-1.0, strict=False)
-    fig_umap_AVG_1 = embedding_space_analysis.umap_plot(
+    fig_comp_AVG_1 = embedding_space_analysis.all_plot_comp(
         feature_extractor=model.get_image_encoder(),
         dataloader=dataset_clean.get_train_dataloader(),
         device=gpu,
         class_names=dataset.get_class_names(),
-        n_neighbors=5,
-        min_dist=1.0
     )
     
-    fig_umap_AVG_1.savefig(results_dirs['embed_plots'] / "umap_avg_tv.png", bbox_inches="tight")
+    fig_comp_AVG_1.savefig(results_dirs['embed_plots'] / "comp_avg_tv.png", bbox_inches="tight")
     
     
     model.load_state_dict(gold_weights, strict=False)
-    fig_umap_gold = embedding_space_analysis.umap_plot(
+    fig_comp_gold = embedding_space_analysis.all_plot_comp(
         feature_extractor=model.get_image_encoder(),
         dataloader=dataset_clean.get_train_dataloader(),
         device=gpu,
         class_names=dataset.get_class_names(),
-        n_neighbors=5,
-        min_dist=1.0
     )
     
-    fig_umap_gold.savefig(results_dirs['embed_plots'] / "umap_gold.png", bbox_inches="tight")
+    fig_comp_gold.savefig(results_dirs['embed_plots'] / "comp_gold.png", bbox_inches="tight")
+    
+    # model.load_state_dict(mix_weights, strict=False)
+    # fig_umap_pt = embedding_space_analysis.umap_plot(
+    #     feature_extractor=model.get_image_encoder(),
+    #     dataloader=dataset_clean.get_train_dataloader(),
+    #     device=gpu,
+    #     class_names=dataset.get_class_names(),
+    #     n_neighbors=5,
+    #     min_dist=1.0
+    # )
+    
+    # fig_umap_pt.savefig(results_dirs['embed_plots'] / "umap_pt.png", bbox_inches="tight")
+    
+    # task_vectors['Average TV'].apply_to(model, scaling_coef=-1.0, strict=False)
+    # fig_umap_AVG_1 = embedding_space_analysis.umap_plot(
+    #     feature_extractor=model.get_image_encoder(),
+    #     dataloader=dataset_clean.get_train_dataloader(),
+    #     device=gpu,
+    #     class_names=dataset.get_class_names(),
+    #     n_neighbors=5,
+    #     min_dist=1.0
+    # )
+    
+    # fig_umap_AVG_1.savefig(results_dirs['embed_plots'] / "umap_avg_tv.png", bbox_inches="tight")
+    
+    
+    # model.load_state_dict(gold_weights, strict=False)
+    # fig_umap_gold = embedding_space_analysis.umap_plot(
+    #     feature_extractor=model.get_image_encoder(),
+    #     dataloader=dataset_clean.get_train_dataloader(),
+    #     device=gpu,
+    #     class_names=dataset.get_class_names(),
+    #     n_neighbors=5,
+    #     min_dist=1.0
+    # )
+    
+    # fig_umap_gold.savefig(results_dirs['embed_plots'] / "umap_gold.png", bbox_inches="tight")
     
     
     # model.load_state_dict(mix_weights, strict=False)

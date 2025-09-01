@@ -175,6 +175,97 @@ def tsne_plot(
     
     return fig
 
+
+
+def all_plot_comp(
+    features: torch.Tensor = None,
+    labels: torch.Tensor = None,
+    feature_extractor:nn.Module = None,
+    dataloader:DataLoader = None,
+    device:torch.device = torch.device('cpu'),
+    class_names:List[str] = None,
+    normalize:bool = False,
+    random_state:float = 11.0,
+):
+    
+    if not(features and labels):
+        if feature_extractor and dataloader:
+            features, labels = extract_features(feature_extractor, dataloader, normalize, device)
+        else:
+            raise RuntimeError('One of the pairs `features and labels` or `feature extractor and dataloade` must be provided to the function.')
+    
+
+    class_names = dict(enumerate(class_names))
+    vectorized_converter = np.vectorize(lambda x: class_names[x])
+    labels_str = vectorized_converter(labels)
+        
+    umap = torchdr.UMAP(
+        device=device,
+        backend="keops",
+        random_state=random_state
+    ).fit_transform(features)
+    z_umap = umap.detach().cpu().numpy()
+        
+    itsne = torchdr.InfoTSNE(
+        device=device,
+        backend="keops",
+        random_state=random_state
+    ).fit_transform(features)
+    z_infotsne = itsne.detach().cpu().numpy()
+    
+    itsne = torchdr.InfoTSNE(
+        device=device,
+        backend="keops",
+        random_state=random_state
+    ).fit_transform(features)
+    z_infotsne = itsne.detach().cpu().numpy()
+    
+    largevis = torchdr.LargeVis(
+        device=device,
+        backend="keops",
+        random_state=random_state
+    ).fit_transform(features)
+    z_largevis = largevis.detach().cpu().numpy()
+    
+    pacmap = torchdr.PACMAP(
+        device=device,
+        backend="keops",
+        random_state=random_state
+    ).fit_transform(features)
+    z_pacmap = pacmap.detach().cpu().numpy()
+    
+    # --- Plot the embeddings ---
+    fig, axes = plt.subplots(1, 4, figsize=(24, 6))
+    fontsize = 25
+
+    scatter = axes[0].scatter(z_umap[:, 0], z_umap[:, 1], c=labels.numpy(), cmap="tab10", s=1, alpha=0.3)
+    axes[0].set_title("UMAP", fontsize=fontsize)
+    axes[0].set_xticks([-10, 10])
+    axes[0].set_yticks([-10, 10])
+
+    axes[1].scatter(z_infotsne[:, 0], z_infotsne[:, 1], c=labels.numpy(), cmap="tab10", s=1, alpha=0.3)
+    axes[1].set_title("InfoTSNE", fontsize=fontsize)
+    axes[1].set_xticks([-10, 10])
+    axes[1].set_yticks([-10, 10])
+
+    axes[2].scatter(z_largevis[:, 0], z_largevis[:, 1], c=labels.numpy(), cmap="tab10", s=1, alpha=0.3)
+    axes[2].set_title("LargeVis", fontsize=fontsize)
+    axes[2].set_xticks([-5, 5])
+    axes[2].set_yticks([-5, 5])
+
+    axes[3].scatter(z_pacmap[:, 0], z_pacmap[:, 1], c=labels.numpy(), cmap="tab10", s=1, alpha=0.3)
+    axes[3].set_title("PACMAP", fontsize=fontsize)
+    axes[3].set_xticks([-5, 5])
+    axes[3].set_yticks([-5, 5])
+
+    handles, lbls = scatter.legend_elements(prop="colors", size=15)
+    legend_labels = [f"{i}" for i in range(10)]
+    fig.legend(handles, legend_labels, loc="lower center", ncol=10, fontsize=15)
+    plt.subplots_adjust(bottom=0.15, wspace=0.1)
+        
+    return fig
+
+
 # # Run UMAP
 # def umap_plot(
 #     feature_extractor:nn.Module,
