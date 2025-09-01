@@ -330,7 +330,7 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
         
         if strategy['finetuning_set'] == 'Heldout':
             dataset.set_trainset(dataset.get_heldoutset(), shuffle=True)
-            dataset.inject_noise(**noise_tv)
+            dataset.inject_noise(**strategy['noise']['finetuning'][0])
             
         finetuning_cfg = None
         if 'gradient_ascent' in cfg['trainer']['finetuning']:
