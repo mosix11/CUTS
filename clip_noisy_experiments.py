@@ -307,46 +307,46 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
         results = trainer.fit(model, dataset, resume=False)
         torch.save(model.state_dict(), weights_dir / Path("ft_weights.pth"))
         
-    # Gradient Ascent Baseline
-    if not outputs_dir.joinpath(f"{cfg_name}/gradient_ascent/weights/ft_weights.pth").exists():
-        dataset = copy.deepcopy(base_dataset)
-        model = copy.deepcopy(base_model)
+    # # Gradient Ascent Baseline
+    # if not outputs_dir.joinpath(f"{cfg_name}/gradient_ascent/weights/ft_weights.pth").exists():
+    #     dataset = copy.deepcopy(base_dataset)
+    #     model = copy.deepcopy(base_model)
         
-        mix_model_ckp_path = outputs_dir/ Path(f"{cfg_name}/mix") / Path('weights/ft_weights.pth')
-        checkpoint = torch.load(mix_model_ckp_path)
-        model.load_state_dict(checkpoint)
+    #     mix_model_ckp_path = outputs_dir/ Path(f"{cfg_name}/mix") / Path('weights/ft_weights.pth')
+    #     checkpoint = torch.load(mix_model_ckp_path)
+    #     model.load_state_dict(checkpoint)
         
         
-        dataset.set_trainset(dataset.get_heldoutset(), shuffle=True)
+    #     dataset.set_trainset(dataset.get_heldoutset(), shuffle=True)
         
-        experiment_name = f"{cfg_name}/gradient_ascent"
-        experiment_dir = outputs_dir / Path(experiment_name)
+    #     experiment_name = f"{cfg_name}/gradient_ascent"
+    #     experiment_dir = outputs_dir / Path(experiment_name)
 
-        weights_dir = experiment_dir / Path("weights")
-        weights_dir.mkdir(exist_ok=True, parents=True)
+    #     weights_dir = experiment_dir / Path("weights")
+    #     weights_dir.mkdir(exist_ok=True, parents=True)
 
-        plots_dir = experiment_dir / Path("plots")
-        plots_dir.mkdir(exist_ok=True, parents=True)
+    #     plots_dir = experiment_dir / Path("plots")
+    #     plots_dir.mkdir(exist_ok=True, parents=True)
         
-        if strategy['finetuning_set'] == 'Heldout':
-            dataset.set_trainset(dataset.get_heldoutset(), shuffle=True)
-            dataset.inject_noise(**strategy['noise']['finetuning'][0])
+    #     if strategy['finetuning_set'] == 'Heldout':
+    #         dataset.set_trainset(dataset.get_heldoutset(), shuffle=True)
+    #         dataset.inject_noise(**strategy['noise']['finetuning'][0])
             
-        finetuning_cfg = None
-        if 'gradient_ascent' in cfg['trainer']['finetuning']:
-            finetuning_cfg = cfg['trainer']['finetuning']['gradient_ascent']
-            finetuning_cfg['comet_api_key'] =  os.getenv("COMET_API_KEY")
-        else: finetuning_cfg = cfg['trainer']['finetuning']
+    #     finetuning_cfg = None
+    #     if 'gradient_ascent' in cfg['trainer']['finetuning']:
+    #         finetuning_cfg = cfg['trainer']['finetuning']['gradient_ascent']
+    #         finetuning_cfg['comet_api_key'] =  os.getenv("COMET_API_KEY")
+    #     else: finetuning_cfg = cfg['trainer']['finetuning']
         
-        trainer = GradientAscentTrainer(
-            outputs_dir=outputs_dir,
-            **finetuning_cfg,
-            exp_name=experiment_name,
-            exp_tags=None,
-        )
+    #     trainer = GradientAscentTrainer(
+    #         outputs_dir=outputs_dir,
+    #         **finetuning_cfg,
+    #         exp_name=experiment_name,
+    #         exp_tags=None,
+    #     )
         
-        results = trainer.fit(model, dataset, resume=False)
-        torch.save(model.state_dict(), weights_dir / Path("ft_weights.pth"))
+    #     results = trainer.fit(model, dataset, resume=False)
+    #     torch.save(model.state_dict(), weights_dir / Path("ft_weights.pth"))
         
         
     for idx, noise_tv in enumerate(strategy['noise']['finetuning']):
@@ -604,9 +604,16 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         map_location='cpu'
     ).items() if "classifier_heads" not in k)
     
-    ft_ho_clean = OrderedDict(
+    ft_ho_clean_weights = OrderedDict(
     (k, v) for k, v in torch.load(
         outputs_dir.joinpath(f"finetune_clean/weights/ft_weights.pth"),
+        map_location='cpu'
+    ).items() if "classifier_heads" not in k)
+    
+    
+    ft_gradient_ascent_weights = OrderedDict(
+    (k, v) for k, v in torch.load(
+        outputs_dir.joinpath(f"gradient_ascent/weights/ft_weights.pth"),
         map_location='cpu'
     ).items() if "classifier_heads" not in k)
     
@@ -640,7 +647,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     task_vectors['Average TV Pruned 0.95'] = task_vectors['Average TV'].prune_small_weights(rate=0.95)
     task_vectors['Average TV Pruned 0.99'] = task_vectors['Average TV'].prune_small_weights(rate=0.99)
     
-    task_vectors['Clean'] = TaskVector(mix_weights, ft_ho_clean)
+    task_vectors['Clean'] = TaskVector(mix_weights, ft_ho_clean_weights)
     
     task_vectors['Random Vector'] = task_vectors['Average TV'].generate_random_vector_with_same_layer_norms(seed=11)
 
@@ -800,58 +807,58 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # fig_pca_AVG_1.savefig(results_dirs['embed_plots'] / "pca_avg_tv.png", bbox_inches="tight")
     
     
-    def fig_to_rgb(fig):
-        """Return an (H, W, 3) uint8 array from a Matplotlib Figure for any backend."""
-        fig.canvas.draw()
-        w, h = fig.canvas.get_width_height()
+    # def fig_to_rgb(fig):
+    #     """Return an (H, W, 3) uint8 array from a Matplotlib Figure for any backend."""
+    #     fig.canvas.draw()
+    #     w, h = fig.canvas.get_width_height()
 
-        # Try backends that support RGB directly (Agg, etc.)
-        try:
-            buf = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
-            return buf.reshape(h, w, 3)
-        except AttributeError:
-            # TkAgg gives ARGB; convert to RGB
-            buf = np.frombuffer(fig.canvas.tostring_argb(), dtype=np.uint8).reshape(h, w, 4)
-            # ARGB -> RGB by dropping alpha and reordering
-            return buf[:, :, 1:4]
+    #     # Try backends that support RGB directly (Agg, etc.)
+    #     try:
+    #         buf = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
+    #         return buf.reshape(h, w, 3)
+    #     except AttributeError:
+    #         # TkAgg gives ARGB; convert to RGB
+    #         buf = np.frombuffer(fig.canvas.tostring_argb(), dtype=np.uint8).reshape(h, w, 4)
+    #         # ARGB -> RGB by dropping alpha and reordering
+    #         return buf[:, :, 1:4]
     
-    def combine_figures(figs, ncols=3, nrows=2, figsize=(15, 10)):
-        fig, axes = plt.subplots(nrows, ncols, figsize=figsize)
-        for ax, f in zip(axes.flat, figs):
-            img = fig_to_rgb(f)
-            ax.imshow(img)
-            ax.axis("off")
-        for ax in axes.flat[len(figs):]:
-            ax.axis("off")
-        plt.tight_layout()
-        return fig
+    # def combine_figures(figs, ncols=3, nrows=2, figsize=(15, 10)):
+    #     fig, axes = plt.subplots(nrows, ncols, figsize=figsize)
+    #     for ax, f in zip(axes.flat, figs):
+    #         img = fig_to_rgb(f)
+    #         ax.imshow(img)
+    #         ax.axis("off")
+    #     for ax in axes.flat[len(figs):]:
+    #         ax.axis("off")
+    #     plt.tight_layout()
+    #     return fig
 
-    def make_gif(figs, out_path="progress.gif", duration=0.8):
-        frames = [fig_to_rgb(f) for f in figs]
-        # Per-frame durations in seconds
-        with imageio.get_writer(out_path, mode="I", loop=0, duration=duration) as w:
-            for fr in frames:
-                w.append_data(fr)
+    # def make_gif(figs, out_path="progress.gif", duration=0.8):
+    #     frames = [fig_to_rgb(f) for f in figs]
+    #     # Per-frame durations in seconds
+    #     with imageio.get_writer(out_path, mode="I", loop=0, duration=duration) as w:
+    #         for fr in frames:
+    #             w.append_data(fr)
             
-    figs_pca = []
-    for alpha in np.linspace(0.0, -2.0, 9):
-        model.load_state_dict(mix_weights, strict=False)
-        if alpha != 0.0:
-            task_vectors['Average TV'].apply_to(model, scaling_coef=alpha, strict=False)
-        fig_pca = embedding_space_analysis.pca_plot(
-            feature_extractor=model.get_image_encoder(),
-            dataloader=dataset_clean.get_train_dataloader(),
-            device=gpu,
-            class_names=dataset_clean.get_class_names(),
-            dataset_name=dataset_clean.dataset_name
-        )
-        figs_pca.append(fig_pca)
+    # figs_pca = []
+    # for alpha in np.linspace(0.0, -2.0, 9):
+    #     model.load_state_dict(mix_weights, strict=False)
+    #     if alpha != 0.0:
+    #         task_vectors['Average TV'].apply_to(model, scaling_coef=alpha, strict=False)
+    #     fig_pca = embedding_space_analysis.pca_plot(
+    #         feature_extractor=model.get_image_encoder(),
+    #         dataloader=dataset_clean.get_train_dataloader(),
+    #         device=gpu,
+    #         class_names=dataset_clean.get_class_names(),
+    #         dataset_name=dataset_clean.dataset_name
+    #     )
+    #     figs_pca.append(fig_pca)
         
-    big_fig = combine_figures(figs_pca, ncols=3, nrows=3)
-    big_fig.savefig(results_dirs['embed_plots'] / "pca_evol.png", bbox_inches="tight")
+    # big_fig = combine_figures(figs_pca, ncols=3, nrows=3)
+    # big_fig.savefig(results_dirs['embed_plots'] / "pca_evol.png", bbox_inches="tight")
     
-    make_gif(figs_pca, results_dirs['embed_plots'] / "pca_evol.gif", duration=5.0)
-    exit()
+    # make_gif(figs_pca, results_dirs['embed_plots'] / "pca_evol.gif", duration=5.0)
+    # exit()
     
     # model.load_state_dict(gold_weights, strict=False)
     # fig_pca_gold = embedding_space_analysis.pca_plot(
@@ -867,7 +874,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     # exit()
     
-
+    
 
     model.load_state_dict(mix_weights, strict=False)
     mix_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
@@ -878,7 +885,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     gold_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
     gold_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
     
-    model.load_state_dict(ft_ho_clean, strict=False)
+    model.load_state_dict(ft_ho_clean_weights, strict=False)
     ft_ho_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
     ft_ho_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
     
