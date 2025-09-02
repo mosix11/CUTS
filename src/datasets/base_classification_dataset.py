@@ -152,6 +152,17 @@ class BaseClassificationDataset(ABC):
         self.heldout_set = set
         self.heldout_loader = self._build_dataloader(self.heldout_set, shuffle=shuffle)
         
+    def get_train_indices(self):
+        if not self.heldout_set:
+            raise RuntimeError('Dataset has no heldout conf.')
+        else:
+            return self.train_indices
+    def get_heldout_indices(self):
+        if not self.heldout_set:
+            raise RuntimeError('Dataset has no heldout conf.')
+        else:
+            return self.heldout_indices
+        
             
     def get_generator(self):
         return self.generator
@@ -427,6 +438,8 @@ class BaseClassificationDataset(ABC):
 
         train_view_indices = [i for i in indices_in_view if i not in heldout_view_indices]
         
+        self.train_indices = train_view_indices
+        self.heldout_indices = heldout_view_indices
         return Subset(dataset, train_view_indices), Subset(dataset, heldout_view_indices)
         
     def _get_set(self, set):
