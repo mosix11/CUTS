@@ -7,7 +7,7 @@ from . import PostActResNet9, PostActResNet18, PostActResNet34, PostActResNet50,
 from . import PostActResNet9_ETD
 from . import CNN5_ETD
 from . import ViT_Small
-from . import TorchvisionModels, TimmModels
+from . import TorchvisionModels, TimmModels, DinoV3Classifier
 from . import OpenClipImageEncoder, OpenClipMultiHeadImageClassifier
 
 from .loss_functions import SupervisedContrastiveLoss, CompoundLoss
@@ -101,6 +101,9 @@ def create_model(cfg, num_classes=None):
     elif model_type == 'vit_small':
         model = ViT_Small(**cfg)
         
+    elif model_type == 'dinov3':
+        model = DinoV3Classifier(**cfg)
+        
     elif model_type == 'resnet9v1_etd':
         model = PostActResNet9_ETD(**cfg)
     elif model_type == 'cnn5_etd':
@@ -118,6 +121,8 @@ def create_model(cfg, num_classes=None):
             model_type=model_type,
             **cfg
         )
+        
+    
         
     elif model_type.startswith('open_clip'):
         model_type = model_type.removeprefix('open_clip_')

@@ -1,0 +1,28 @@
+\begin{table}[ht]
+\centering
+\caption{CLIP Model: Utility of oracle, baselines, and corrected models with different negation strength indicated by the value of $\alpha$ across noise levels $\eta$ on MNIST, CIFAR-10, CIFAR-100 with symmetric noise.}
+\label{tab:utility_vs_noise_rate}
+\scriptsize
+% \renewcommand{\arraystretch}{1}
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lccccccccccccccc}
+% \begin{tabular}{l|ccccc|ccccc|ccccc}
+\toprule
+& \multicolumn{5}{c}{MNIST} & \multicolumn{5}{c}{CIFAR10} & \multicolumn{5}{c}{CIFAR100} \\
+\cmidrule(lr){2-6} \cmidrule(lr){7-11} \cmidrule(lr){12-16} 
+Model & 10\% & 20\% & 40\% & 60\% & 80\% & 10\% & 20\% & 40\% & 60\% & 80\% & 10\% & 20\% & 40\% & 60\% & 80\% \\
+\midrule
+$\theta_{\text{mix}}$ & 98.9 & 96.3 & 82.5 & 56.7 & 24.5 & 96.9 & 93.6 & 76.8 & 51.3 & 22.0 & 87.5 & 84.2 & 72.5 & 51.9 & 25.8 \\
+$\theta_{\text{clean}}$ & 99.8 & 99.7 & 99.6 & 99.6 & 99.5 & 98.5 & 98.5 & 98.3 & 98.3 & 97.6 & 90.4 & 90.2 & 89.5 & 88.3 & 86.6 \\
+\cmidrule(lr){1-16}
+$\alpha=0.5$ & 99.2 & 99.1 & 96.6 & 85.9 & 44.6 & 97.8 & 97.4 & 94.5 & 85.2 & 49.1 & 88.0 & 86.2 & 82.4 & 72.4 & 46.0 \\
+$\alpha=1$ & 98.7 & 98.9 & 97.9 & 93.9 & 63.2 & 97.2 & 97.0 & 95.0 & 90.8 & 69.6 & 85.5 & 84.4 & 83.0 & 77.4 & 59.6 \\
+$\alpha=1.5$ & 97.5 & 98.6 & 97.8 & 95.6 & 73.4 & 95.6 & 96.1 & 94.4 & 90.0 & 77.6 & 80.3 & 80.3 & 81.4 & 77.4 & 64.6 \\
+$\alpha=2$ & - & - & 97.2 & 95.5 & 78.1 & - & - & 92.8 & 86.8 & 79.5 & - & - & 77.8 & 75.1 & 65.3 \\
+$\alpha^\ast$ & 99.3 & 99.1 & 97.9 & 95.7 & 78.1 & 97.9 & 97.4 & 95.1 & 90.8 & 79.5 & 88.4 & 86.4 & 83.3 & 77.8 & 65.3 \\
+\cmidrule(lr){1-16}
+$\tau_{\text{random}}$ & - & - & - & - & - & - & - & - & - & - & - & - & - & - & - \\
+GA & - & - & - & - & - & - & - & - & - & - & - & - & - & - & - \\
+\bottomrule
+\end{tabular}
+\end{table}

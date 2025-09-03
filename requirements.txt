@@ -3,6 +3,7 @@ matplotlib
 scipy
 torch
 torchvision
+transformers
 torchmetrics
 tqdm
 requests

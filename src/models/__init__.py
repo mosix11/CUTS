@@ -9,6 +9,7 @@ from .resnet_v1_etd import PostActResNet9_ETD
 from .vit_small import ViT_Small
 from .cnn_etd import CNN5_ETD
 from .torchvision_models import TorchvisionModels
+from .dinov3 import DinoV3Classifier
 from .timm_models import TimmModels
 from .open_clip_models import OpenClipImageEncoder, OpenClipMultiHeadImageClassifier
 from .task_vectors import TaskVector

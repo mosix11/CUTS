@@ -927,15 +927,15 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
 
         results_dict[f"Avg, alpha={alpha}"] = {'test_results': tv_test_results, 'train_results': tv_train_results}
         
-    for alpha in tqdm(np.linspace(-0.1, -1.0, 10)):
-    # for alpha in tqdm(np.linspace(-1.1, -1.6, 5)):
+    # for alpha in tqdm(np.linspace(-0.1, -1.0, 10)):
+    # # for alpha in tqdm(np.linspace(-1.1, -1.6, 5)):
     
-        base_model.load_state_dict(pretrain_weights, strict=False)
-        finetune_tvs['Average TV Pruned 0.8'].apply_to(base_model, scaling_coef=alpha, strict=False)
-        tv_test_results, _, _ = evaluate_model(base_model, dataset.get_test_dataloader(), gpu)
-        tv_train_results = eval_model_on_clean_noise_splits(base_model, None, dataset, gpu)
+    #     base_model.load_state_dict(pretrain_weights, strict=False)
+    #     finetune_tvs['Average TV Pruned 0.8'].apply_to(base_model, scaling_coef=alpha, strict=False)
+    #     tv_test_results, _, _ = evaluate_model(base_model, dataset.get_test_dataloader(), gpu)
+    #     tv_train_results = eval_model_on_clean_noise_splits(base_model, None, dataset, gpu)
 
-        results_dict[f"Avg 0.8, alpha={alpha}"] = {'test_results': tv_test_results, 'train_results': tv_train_results}
+    #     results_dict[f"Avg 0.8, alpha={alpha}"] = {'test_results': tv_test_results, 'train_results': tv_train_results}
     
         
     with open(results_dirs['metrics'] / 'metrics.json' , 'w') as json_file:
