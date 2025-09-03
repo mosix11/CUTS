@@ -65,7 +65,7 @@ trainer:
       comet_project_name: 'clip-noise-TA'
       seed: *training_seed
     noise:
-      max_iterations: 1200
+      max_iterations: 800
       optimizer_cfg: 
         type: "adamw"
         lr: 1.0e-5
@@ -74,8 +74,8 @@ trainer:
         type: 'cosann_warmup'
         update_on: 'gradient_step'
         warmup_steps: 200
-        hold_steps: 0
-        T_max: 1200
+        hold_steps: 200
+        T_max: 800
         eta_min: 0
       early_stopping: False
       validation_freq: -1
