@@ -1,5 +1,5 @@
 import comet_ml
-from src.datasets import dataset_factory, CIFAR10, CIFAR100, BaseClassificationDataset, dataset_wrappers
+from src.datasets import dataset_factory, CIFAR10, CIFAR100,MNIST, BaseClassificationDataset, dataset_wrappers
 from src.models import model_factory, TaskVector
 from src.trainers import StandardTrainer, GradientAscentTrainer, utils as trainer_utils
 from torch.utils.data import DataLoader
@@ -37,73 +37,62 @@ import math
 from typing import Sequence, Optional, Tuple, Union
 import textwrap
 
+import math
+from typing import Sequence, Optional, Tuple, Union
+import torch
+import numpy as np
+import matplotlib.pyplot as plt
+import textwrap
+
 def show_image_grid(
     images: Sequence[torch.Tensor],
     labels: Sequence[Union[str, int]],
     max_images: int = 64,
-    figsize_per_cell: Tuple[float, float] = (2.2, 2.2),
+    figsize_per_cell: Tuple[float, float] = (2.2, 2.6),
     title: Optional[str] = None,
     label_wrap: int = 24,
     label_fontsize: int = 9,
-    tight: bool = True,
+    image_height_frac: float = 0.78,   # fraction of the cell height used by the image
+    label_band_frac: float = 0.18,     # explicit label band height (leave a bit of gap below)
+    hspace: float = 0.25,              # vertical spacing between grid rows
+    wspace: float = 0.08,              # horizontal spacing between grid cols
 ):
     """
-    Visualize (up to 64) images in a balanced grid with labels under each image.
+    Visualize (up to 64) images in a balanced grid with a dedicated label band per cell.
+    Images are drawn in an inset occupying the top portion of the cell; labels sit below.
 
-    Args:
-        images: Sequence of PyTorch tensors. Each can be HxW, CxHxW, or HxWxC.
-                Channel count can be 1, 3, or 4 (alpha ignored).
-        labels: Sequence of labels (same length as images). Will be str()'d.
-        max_images: Maximum number of images to display (<=64).
-        figsize_per_cell: (width,height) inches per grid cell.
-        title: Optional figure title.
-        label_wrap: Wrap labels to this many characters for readability.
-        label_fontsize: Font size for labels under images.
-        tight: If True, uses tight_layout() to minimize whitespace.
-
-    Returns:
-        (fig, axes): Matplotlib figure and axes array.
+    Args are similar to before, with the key layout params:
+      - image_height_frac: portion of the cell reserved for the image (0..1)
+      - label_band_frac: portion reserved for the label text (0..1)
+      - hspace/wspace: inter-cell spacing (as in GridSpec semantics)
     """
     assert len(images) == len(labels), "images and labels must have same length."
     n = min(len(images), max_images, 64)
     if n == 0:
         raise ValueError("No images to display.")
 
-    # --- Choose a near-square grid: cols ≈ rows ≈ sqrt(n)
+    # --- near-square grid
     cols = math.ceil(math.sqrt(n))
     rows = math.ceil(n / cols)
 
-    # --- Figure size
+    # --- figure size
     fig_w = max(1.0, cols * figsize_per_cell[0])
-    fig_h = max(1.0, rows * figsize_per_cell[1] + 0.2)  # a little extra for labels
-    fig, axes = plt.subplots(rows, cols, figsize=(fig_w, fig_h))
-    if rows == 1 and cols == 1:
-        axes = np.array([[axes]])
-    elif rows == 1 or cols == 1:
-        axes = np.atleast_2d(axes).reshape(rows, cols)
+    fig_h = max(1.0, rows * figsize_per_cell[1])
+    fig = plt.figure(figsize=(fig_w, fig_h))
+    gs = fig.add_gridspec(rows, cols, hspace=hspace, wspace=wspace)
 
-    def _to_numpy_img(t: torch.Tensor) -> Tuple[np.ndarray, Optional[str]]:
-        """
-        Convert a torch Tensor to a numpy image in HxW or HxWx3, float in [0,1].
-        Returns (img, cmap) where cmap is 'gray' for single-channel, else None.
-        """
-        # Move to CPU and detach
+    # sanity for fractions
+    image_height_frac = float(np.clip(image_height_frac, 0.5, 0.95))
+    label_band_frac = float(np.clip(label_band_frac, 0.05, 0.45))
+
+    def _to_numpy_img(t: torch.Tensor):
+        """Return (np_img, cmap). Accepts HxW, CxHxW, or HxWxC; normalizes to [0,1]."""
         t = t.detach().cpu()
-
-        # Accept: HxW, CxHxW, or HxWxC
         if t.ndim == 2:
             arr = t
-            is_chw = False
         elif t.ndim == 3:
-            C_first = t.shape[0] in (1, 3, 4)
-            C_last = t.shape[-1] in (1, 3, 4)
-            if C_first and not C_last:
-                # CHW -> HWC
+            if t.shape[0] in (1, 3, 4):  # CHW -> HWC
                 t = t.permute(1, 2, 0)
-            elif not C_first and not C_last:
-                # Ambiguous; assume already HWC
-                pass
-            # Drop alpha if present
             if t.shape[-1] == 4:
                 t = t[..., :3]
             arr = t
@@ -111,72 +100,67 @@ def show_image_grid(
             raise ValueError(f"Unsupported tensor shape {tuple(t.shape)}")
 
         arr = arr.numpy()
-
-        # Determine if grayscale
         cmap = None
-        if arr.ndim == 2:
-            cmap = "gray"
-        elif arr.ndim == 3 and arr.shape[-1] == 1:
+        if arr.ndim == 3 and arr.shape[-1] == 1:
             arr = arr[..., 0]
             cmap = "gray"
-        elif arr.ndim == 3 and arr.shape[-1] == 3:
-            cmap = None
-        else:
-            raise ValueError(f"Unsupported image shape after processing: {arr.shape}")
+        elif arr.ndim == 2:
+            cmap = "gray"
 
-        # Convert to float32 in [0,1]
-        if np.issubdtype(arr.dtype, np.floating):
-            # If outside [0,1], min-max normalize to preserve contrast
-            amin, amax = np.nanmin(arr), np.nanmax(arr)
-            if not np.isfinite(amin) or not np.isfinite(amax):
-                arr = np.nan_to_num(arr, nan=0.0)
-                amin, amax = np.min(arr), np.max(arr)
-            if amin < 0.0 or amax > 1.0:
-                if amax > amin:
-                    arr = (arr - amin) / (amax - amin)
-                else:
-                    arr = np.zeros_like(arr, dtype=np.float32)
-            arr = arr.astype(np.float32)
+        # normalize to [0,1] robustly
+        arr = arr.astype(np.float32, copy=False)
+        amin = float(np.nanmin(arr))
+        amax = float(np.nanmax(arr))
+        if not np.isfinite(amin) or not np.isfinite(amax):
+            arr = np.nan_to_num(arr, nan=0.0)
+            amin, amax = float(np.min(arr)), float(np.max(arr))
+        if amax > amin:
+            arr = (arr - amin) / (amax - amin)
         else:
-            # Integer types -> scale to [0,1]
-            amax = np.max(arr)
-            if amax == 0:
-                arr = np.zeros_like(arr, dtype=np.float32)
-            elif amax <= 255:
-                arr = (arr / 255.0).astype(np.float32)
-            else:
-                # Fallback: min-max
-                amin = np.min(arr)
-                if amax > amin:
-                    arr = ((arr - amin) / (amax - amin)).astype(np.float32)
-                else:
-                    arr = np.zeros_like(arr, dtype=np.float32)
+            arr = np.zeros_like(arr, dtype=np.float32)
 
         return arr, cmap
 
-    # --- Plot images
     for i in range(rows * cols):
         r, c = divmod(i, cols)
-        ax = axes[r, c]
-        if i < n:
-            img_np, cmap = _to_numpy_img(images[i])
-            ax.imshow(img_np, cmap=cmap, interpolation="nearest")
-            ax.set_axis_off()
-            # Label beneath image (use title with padding)
-            label_text = textwrap.fill(str(labels[i]), width=label_wrap)
-            ax.set_title(label_text, fontsize=label_fontsize, pad=4)
-        else:
-            ax.set_visible(False)
+        cell_ax = fig.add_subplot(gs[r, c])
+        cell_ax.set_xticks([]); cell_ax.set_yticks([])
+        for spine in cell_ax.spines.values():
+            spine.set_visible(False)
 
-    if title is not None:
-        fig.suptitle(title, fontsize=12)
+        if i >= n:
+            cell_ax.set_visible(False)
+            continue
 
-    if tight:
-        plt.tight_layout(pad=0.5, rect=(0, 0, 1, 0.97) if title else None)
+        img_np, cmap = _to_numpy_img(images[i])
 
-    return fig, axes
+        # --- draw image in an inset occupying the top portion of the cell
+        top = 1.0
+        img_h = image_height_frac
+        img_ax = cell_ax.inset_axes([0.0, top - img_h, 1.0, img_h])  # [x0, y0, w, h] in cell axes coords
+        img_ax.imshow(img_np, cmap=cmap, interpolation="nearest")
+        img_ax.set_axis_off()
 
+        # --- label text in the reserved band below
+        label_text = textwrap.fill(str(labels[i]), width=label_wrap)
+        # Place text centered near the bottom of the cell (inside padding band)
+        cell_ax.text(
+            0.5, label_band_frac * 0.6,  # vertical anchor inside label band
+            label_text,
+            ha="center", va="center",
+            fontsize=label_fontsize,
+            transform=cell_ax.transAxes,
+            wrap=True,
+        )
 
+    if title:
+        fig.suptitle(title, fontsize=12, y=0.995)
+
+    return fig
+
+def prepare_batch(batch, device):
+    batch = [tens.to(device) for tens in batch]
+    return batch
 
 def prepare_batch(batch, device):
     batch = [tens.to(device) for tens in batch]
@@ -196,16 +180,22 @@ def evaluate_model(
         device (torch.device): The device to run evaluation on.
 
     Returns:
-        tuple: (metrics_dict, all_predictions, all_targets, misclassified_indices)
+        tuple: (metrics_dict, all_predictions, all_targets, misclassified_indices, misclassified_samples)
+            - metrics_dict: evaluation metrics including loss
+            - all_predictions: tensor of all predictions
+            - all_targets: tensor of all targets
+            - misclassified_indices: list of misclassified sample indices
+            - misclassified_samples: list of (target, prediction) tuples for misclassified samples
     """
     loss_met = misc_utils.AverageMeter()
     model.reset_metrics()
     all_preds = []
     all_targets = []
     misclassified_indices = []
+    misclassified_samples = []
     
     if dataloader is None:
-        return None, None, None, None
+        return None, None, None, None, None
     
     model.to(device)
     model.eval()
@@ -227,7 +217,12 @@ def evaluate_model(
             
             # find misclassified
             mis_mask = predictions != target_batch
-            misclassified_indices.extend(indices[mis_mask].cpu().tolist())
+            mis_indices = indices[mis_mask].cpu().tolist()
+            mis_targets = target_batch[mis_mask].cpu().tolist()
+            mis_preds = predictions[mis_mask].cpu().tolist()
+            
+            misclassified_indices.extend(mis_indices)
+            misclassified_samples.extend(list(zip(mis_targets, mis_preds)))
             
     metric_results = model.compute_metrics()
     metric_results['Loss'] = loss_met.avg
@@ -238,6 +233,7 @@ def evaluate_model(
         torch.tensor(all_preds),
         torch.tensor(all_targets),
         misclassified_indices,
+        misclassified_samples,
     )
 
 def eval_model_on_clean_noise_splits(
@@ -253,10 +249,10 @@ def eval_model_on_clean_noise_splits(
     clean_set, noisy_set = dataset_cpy.get_clean_noisy_subsets(set='Train')
     
     dataset_cpy.set_trainset(clean_set, shuffle=False)
-    clean_metric, _, _, misclassified_cleans = evaluate_model(model, dataloader=dataset_cpy.get_train_dataloader(), device=device)
+    clean_metric, _, _, misclassified_cleans, misclassified_cleans_smp = evaluate_model(model, dataloader=dataset_cpy.get_train_dataloader(), device=device)
     
     dataset_cpy.set_trainset(noisy_set, shuffle=False)
-    noisy_metric, _, _, _ = evaluate_model(model, dataloader=dataset_cpy.get_train_dataloader(), device=device)
+    noisy_metric, _, _, _, _ = evaluate_model(model, dataloader=dataset_cpy.get_train_dataloader(), device=device)
     
     dummy_instance = noisy_set
     while not isinstance(dummy_instance, dataset_wrappers.NoisyClassificationDataset):
@@ -264,14 +260,14 @@ def eval_model_on_clean_noise_splits(
     dummy_instance.switch_to_clean_lables()
     
     dataset_cpy.set_trainset(noisy_set, shuffle=False)
-    healing_metric, _, _, misclassified_healed = evaluate_model(model, dataloader=dataset_cpy.get_train_dataloader(), device=device)
+    healing_metric, _, _, misclassified_healed, _ = evaluate_model(model, dataloader=dataset_cpy.get_train_dataloader(), device=device)
 
     
     return {
         'clean_set': clean_metric,
         'noisy_set': noisy_metric,
         'healing_noise': healing_metric,
-    }, misclassified_cleans, misclassified_healed
+    }, misclassified_cleans, misclassified_cleans_smp, misclassified_healed
     
     
 def apply(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
@@ -322,38 +318,20 @@ def apply(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         original_dataset = CIFAR100()
         consistency_scores = np.load('cifar100-cscores.npz')['scores']
         cs_lbls = np.load('cifar100-cscores.npz')['labels']
+    elif dataset_cfg['name'] == 'mnist':
+        original_dataset = MNIST()
+        consistency_scores = np.load('cifar100-cscores.npz')['scores']
+        cs_lbls = np.load('cifar100-cscores.npz')['labels']
     original_dataset.reset_train_dl(shuffle=False)
     
     train_indices = np.array(dataset.get_train_indices())
     
     heldout_indices = np.array(dataset.get_heldout_indices())
     
-    consistency_scores = consistency_scores[train_indices]
-    cs_lbls = cs_lbls[train_indices]
+    # consistency_scores = consistency_scores[train_indices]
+    # cs_lbls = cs_lbls[train_indices]
     
-    # imgs = []
-    # lbls = []
-    
-    # k = 32
-    # for idx in np.argsort(consistency_scores)[:k]:
-    #     img, lbl, dx = original_dataset.get_trainset()[idx]
-    #     imgs.append(img)
-    #     lbls.append(lbl)
-    
-    # class_names = dict(enumerate(original_dataset.get_class_names()))
-    # vectorized_converter = np.vectorize(lambda x: class_names[x])
-    # labels_str = vectorized_converter(lbls)
-    
-    # fig, _ = show_image_grid(
-    #     images=imgs,
-    #     labels=labels_str,
-    #     max_images=32,
-    # )
-    # plt.show()
-    
-    # print(consistency_scores[np.argsort(consistency_scores)[-k:][::-1]])
-    # print(consistency_scores[np.argsort(consistency_scores)[:k]])
-    # exit()
+
     
     dataset.reset_train_dl(shuffle=False)
     
@@ -415,17 +393,43 @@ def apply(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     model.load_state_dict(mix_weights, strict=False)
     
     task_vectors['Average TV'].apply_to(model, scaling_coef=-0.5, strict=False)
-    train_results, misclassified_cleans, misclassified_heals = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+    train_results, misclassified_cleans, misclassified_cleans_smp, misclassified_heals = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
     print(train_results)
     print(misclassified_cleans)
-    print(consistency_scores[misclassified_cleans])
+    # print(consistency_scores[misclassified_cleans])
+    
+    imgs = []
+    # lbls = []
+    
+    # k = 32
+    # for idx in np.argsort(consistency_scores)[:k]:
+    #     img, lbl, dx = original_dataset.get_trainset()[idx]
+    #     imgs.append(img)
+    #     lbls.append(lbl)
+    
+    for idx in train_indices[misclassified_cleans]:
+        img, lbl, dx = original_dataset.get_trainset()[idx]
+        imgs.append(img)
+        # lbls.append(lbl)
+    
+    
+    class_names = dict(enumerate(original_dataset.get_class_names()))
+    vectorized_converter = np.vectorize(lambda x: class_names[x])
+    # labels_str = vectorized_converter(lbls)
+    misclassified_strs = [
+        f"{vectorized_converter(t)} -> {vectorized_converter(p)}"
+        for (t, p) in misclassified_cleans_smp
+    ]
+        
+    fig = show_image_grid(
+        images=imgs,
+        labels=misclassified_strs,
+        label_fontsize=12
+        # max_images=32,
+    )
+    plt.show()
     
 
-
-    
-    # with open(results_dir / 'tv_metrics.json' , 'w') as json_file:
-    #     json.dump(results_dict, json_file, indent=4)
-    
     
 
 
@@ -462,6 +466,6 @@ if __name__ == "__main__":
     results_dir = Path("results/single_experiment/clip_noise_TA").absolute()
     results_dir.mkdir(exist_ok=True, parents=True)
 
-    if cfg['datasets'][0]['name'] != 'cifar10' and cfg['datasets'][0]['name'] != 'cifar100':
-        raise ValueError(f'Consistency scores for {cfg['datasets'][0]['name']} are not available.')
+    # if cfg['datasets'][0]['name'] != 'cifar10' and cfg['datasets'][0]['name'] != 'cifar100':
+    #     raise ValueError(f'Consistency scores for {cfg['datasets'][0]['name']} are not available.')
     apply(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)
