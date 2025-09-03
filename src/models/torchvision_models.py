@@ -50,6 +50,28 @@ class TorchvisionModels(BaseModel):
                 net.conv1 = nn.Conv2d(1 if grayscale else 3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
                 net.maxpool = nn.Identity()
 
+        elif model_type == 'resnet34':
+            net = torchvision.models.resnet34(weights=pt_weights)
+            net.fc = nn.Linear(net.fc.in_features, num_classes)
+            
+            if img_size == [32, 32]:
+                net.conv1 = nn.Conv2d(1 if grayscale else 3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+                net.maxpool = nn.Identity()
+            
+            
+        elif model_type == 'resnet34_nonorm':
+            if pt_weights:
+                net = torchvision.models.resnet34(weights=pt_weights)
+                self._replace_bn_with_identity(net)
+            else:
+                net = torchvision.models.resnet34(norm_layer=nn.Identity)
+                
+            net.fc = nn.Linear(net.fc.in_features, num_classes)
+            
+            if img_size == [32, 32]:
+                net.conv1 = nn.Conv2d(1 if grayscale else 3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+                net.maxpool = nn.Identity()
+
         elif model_type == 'resnet50':
             net = torchvision.models.resnet50(weights=pt_weights)
             net.fc = nn.Linear(net.fc.in_features, num_classes)

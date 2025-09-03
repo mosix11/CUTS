@@ -44,7 +44,7 @@ dataset:
 
 
 model:
-  type: 'torchvision_vit_b_16'
+  type: 'torchvision_resnet34'
   num_classes: *num_classes
   img_size: [224, 224]
   grayscale: False
@@ -56,7 +56,7 @@ model:
 
 trainer:
   pretraining:
-    max_epochs: &max_epochs 120
+    max_epochs: &max_epochs 150
     optimizer_cfg: 
       type: "adamw"
       lr: 5.0e-4
@@ -76,14 +76,14 @@ trainer:
     seed: *training_seed
 
   finetuning:
-    max_epochs: 100
+    max_epochs: 120
     optimizer_cfg: 
       type: "adamw"
       lr: 5.0e-4
       betas: [0.9, 0.999]
     lr_schedule_cfg:
       type: 'step'
-      milestones: [50, 70, 80, 85, 90, 95]
+      milestones: [50, 70, 90, 100, 110, 115]
       gamma: 0.7
     early_stopping: False
     validation_freq: -1
