@@ -897,8 +897,8 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     results_dict['FT HO Clean'] = {'test_results': ft_ho_test_results, 'train_results': ft_ho_train_results}
     
     # results_dict = OrderedDict()
-    for alpha in tqdm(np.linspace(-0.05, -1.5, 30)):
-    # for alpha in tqdm(np.linspace(-0.1, -1.0, 10)):
+    # for alpha in tqdm(np.linspace(-0.05, -1.5, 30)):
+    for alpha in tqdm(np.linspace(-0.1, -1.5, 15)):
     
         model.load_state_dict(mix_weights, strict=False)
         task_vectors['Average TV'].apply_to(model, scaling_coef=alpha, strict=False)
