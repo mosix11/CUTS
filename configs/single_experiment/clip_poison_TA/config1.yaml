@@ -3,27 +3,26 @@ dataset_seed: &dataset_seed 11
 
 strategy:
   finetuning_set: &finetuning_set 'Heldout'
-  noise:
+  poison:
     pretraining:
       set: 'Train'
-      noise_rate: 0.2
-      noise_type: 'symmetric'
+      rate: 0.02
+      target_class: 0
+      trigger_percent: 0.03
+      margin: 2
       seed: 8
     finetuning:
-    - set: 'Train'
-      noise_rate: 1.0
-      noise_type: 'symmetric'
-      seed: 12
-    - set: 'Train'
-      noise_rate: 1.0
-      noise_type: 'symmetric'
-      seed: 10
-
+      - set: 'Train'
+        rate: 1.0
+        target_class: 0
+        trigger_percent: 0.03
+        margin: 2
+        seed: 10
 
 
 datasets:
-  - name: "cifar100"
-    num_classes: 100
+  - name: "mnist"
+    num_classes: 10
     img_size: [224, 224]
     batch_size: 256
     heldout_conf: 0.02
@@ -43,7 +42,7 @@ model:
 trainer:
   finetuning:
     mix:
-      max_iterations: 5000
+      max_iterations: 2500
       optimizer_cfg: 
         type: "adamw"
         lr: 1.0e-5
@@ -53,7 +52,7 @@ trainer:
         update_on: 'gradient_step'
         warmup_steps: 300
         hold_steps: 0
-        T_max: 5000
+        T_max: 2500
         eta_min: 0
       early_stopping: False
       validation_freq: -1
@@ -62,10 +61,10 @@ trainer:
       run_on_gpu: True
       use_amp: True
       log_comet: True
-      comet_project_name: 'clip-noise-TA'
+      comet_project_name: 'clip-poison-TA'
       seed: *training_seed
-    noise:
-      max_iterations: 800
+    poison:
+      max_iterations: 600
       optimizer_cfg: 
         type: "adamw"
         lr: 1.0e-5
@@ -73,9 +72,9 @@ trainer:
       lr_schedule_cfg:
         type: 'cosann_warmup'
         update_on: 'gradient_step'
-        warmup_steps: 200
-        hold_steps: 200
-        T_max: 800
+        warmup_steps: 150
+        hold_steps: 100
+        T_max: 600
         eta_min: 0
       early_stopping: False
       validation_freq: -1
@@ -84,10 +83,10 @@ trainer:
       run_on_gpu: True
       use_amp: True
       log_comet: True
-      comet_project_name: 'clip-noise-TA'
+      comet_project_name: 'clip-poison-TA'
       seed: *training_seed
     clean:
-      max_iterations: 3000
+      max_iterations: 2000
       optimizer_cfg: 
         type: "adamw"
         lr: 1.0e-5
@@ -96,8 +95,8 @@ trainer:
         type: 'cosann_warmup'
         update_on: 'gradient_step'
         warmup_steps: 300
-        T_max: 3000
-        eta_min: 1.0e-7
+        T_max: 2000
+        eta_min: 0
       early_stopping: False
       validation_freq: -1
       save_best_model: False
@@ -105,9 +104,8 @@ trainer:
       run_on_gpu: True
       use_amp: True
       log_comet: True
-      comet_project_name: 'clip-noise-TA'
+      comet_project_name: 'clip-poison-TA'
       seed: *training_seed
-
     heldout:
       max_iterations: 600
       optimizer_cfg: 
@@ -118,9 +116,9 @@ trainer:
         type: 'cosann_warmup'
         update_on: 'gradient_step'
         warmup_steps: 100
-        hold_steps: 100
+        hold_steps: 200
         T_max: 600
-        eta_min: 1.0e-7
+        eta_min: 0
       early_stopping: False
       validation_freq: -1
       save_best_model: False
@@ -128,5 +126,5 @@ trainer:
       run_on_gpu: True
       use_amp: True
       log_comet: True
-      comet_project_name: 'clip-noise-TA'
+      comet_project_name: 'clip-poison-TA'
       seed: *training_seed

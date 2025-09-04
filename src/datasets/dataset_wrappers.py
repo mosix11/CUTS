@@ -394,6 +394,7 @@ class PoisonedClassificationDataset(Dataset):
         target_class: int = 0,
         trigger_percent: float = 0.003,      # 0.3%
         margin: Union[int, Tuple[int, int]] = 0,  # NEW
+        transforms = None,
         seed: Optional[int] = None,
         generator: Optional[torch.Generator] = None,
     ):
@@ -423,6 +424,10 @@ class PoisonedClassificationDataset(Dataset):
         self._subset_index_chain = chain
         self._orig_transform = getattr(self._base_dataset, "transform", None)
         self._base_dataset.transform = None
+        
+        if transforms:
+            print('Overwriting the original transforms on poisoned data!')
+            self._orig_transform = transforms
 
         # Precompute poisoned indices over the visible dataset
         n = len(self.dataset)

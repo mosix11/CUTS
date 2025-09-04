@@ -280,6 +280,7 @@ class BaseClassificationDataset(ABC):
             target_class=target_class,
             trigger_percent=trigger_percent,
             margin=margin,
+            transforms=self.train_transforms,
             seed=seed,
             generator=generator,
         )

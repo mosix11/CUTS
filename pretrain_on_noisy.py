@@ -223,7 +223,6 @@ def pt_ft_model(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         pass
         # augmentations = [
         #     transformsv2.RandomCrop(32, padding=4),
-        #     transformsv2.RandomHorizontalFlip(),
         # ]
     elif cfg['dataset']['name'] == 'fashion_mnist':
         pass
