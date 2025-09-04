@@ -437,6 +437,15 @@ class PoisonedClassificationDataset(Dataset):
             self._poisoned_visible_indices = set(perm[:k].tolist())
         else:
             self._poisoned_visible_indices = set()
+            
+        self._return_clean_labels = False
+
+    def switch_to_clean_lables(self):
+        self._return_clean_labels = True
+    
+    def switch_to_noisy_lables(self):
+        self._return_clean_labels = False
+
 
     def __len__(self) -> int:
         return len(self.dataset)
@@ -453,7 +462,9 @@ class PoisonedClassificationDataset(Dataset):
                 margin_h=self.margin_h,
                 margin_w=self.margin_w,
             )
-            y = self.target_class
+            
+            if not self._return_clean_labels:
+                y = self.target_class
             is_poisoned = True
 
         if self._orig_transform is not None:
@@ -465,7 +476,7 @@ class PoisonedClassificationDataset(Dataset):
     # Helpers
     # -------------------------
     @staticmethod
-    def _parse_margin(margin: Union[int, Tuple[int, int], List[int, int]]) -> Tuple[int, int]:
+    def _parse_margin(margin: Union[int, Tuple[int, int], List[int]]) -> Tuple[int, int]:
         if isinstance(margin, int):
             if margin < 0:
                 raise ValueError("margin must be >= 0.")
@@ -476,7 +487,7 @@ class PoisonedClassificationDataset(Dataset):
                 raise ValueError("margin values must be >= 0.")
             return int(mh), int(mw)
         else:
-            raise TypeError("margin must be an int or a (margin_h, margin_w) tuple.")
+            raise TypeError("margin must be an int or a (margin_h, margin_w) list/tuple.")
 
     @staticmethod
     def _find_base_with_transform(d: Dataset) -> Tuple[Dataset, List]:
