@@ -64,7 +64,7 @@ trainer:
       comet_project_name: 'clip-poison-TA'
       seed: *training_seed
     poison:
-      max_iterations: 800
+      max_iterations: 100
       optimizer_cfg: 
         type: "adamw"
         lr: 1.0e-5
@@ -72,9 +72,9 @@ trainer:
       lr_schedule_cfg:
         type: 'cosann_warmup'
         update_on: 'gradient_step'
-        warmup_steps: 150
-        hold_steps: 250
-        T_max: 800
+        warmup_steps: 30
+        hold_steps: 20
+        T_max: 100
         eta_min: 0
       early_stopping: False
       validation_freq: -1
@@ -108,7 +108,7 @@ trainer:
       comet_project_name: 'clip-poison-TA'
       seed: *training_seed
     heldout:
-      max_iterations: 600
+      max_iterations: 250
       optimizer_cfg: 
         type: "adamw"
         lr: 1.0e-5
@@ -117,8 +117,8 @@ trainer:
         type: 'cosann_warmup'
         update_on: 'gradient_step'
         warmup_steps: 100
-        hold_steps: 200
-        T_max: 600
+        hold_steps: 50
+        T_max: 250
         eta_min: 0
       early_stopping: False
       validation_freq: -1
