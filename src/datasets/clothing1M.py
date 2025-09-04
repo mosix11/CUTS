@@ -85,8 +85,8 @@ class Clothing1M(BaseClassificationDataset):
         self.flatten = flatten
         self.augmentations = [] if augmentations == None else augmentations
         
-        self.train_transforms = train_transforms
-        self.val_transforms = val_transforms
+        self._train_transforms = train_transforms
+        self._val_transforms = val_transforms
         
         if (train_transforms or val_transforms) and (augmentations != None):
             raise ValueError('You should either pass augmentations, or train and validation transforms.')
@@ -99,21 +99,24 @@ class Clothing1M(BaseClassificationDataset):
 
 
     def load_train_set(self):
-        return Clothing1MDataset(root_dir=self.train_noisy_dir, transform=self.get_transforms(train=True))
+        self.train_transforms = self.get_transforms(train=True)
+        return Clothing1MDataset(root_dir=self.train_noisy_dir, transform=self.train_transforms)
     
     def load_validation_set(self):
-        valset = Clothing1MDataset(root_dir=self.val_dir, transform=self.get_transforms(train=True))
-        clean_trainset = Clothing1MDataset(root_dir=self.train_clean_dir, transform=self.get_transforms(train=True))
+        self.val_transforms = self.get_transforms(train=False)
+        valset = Clothing1MDataset(root_dir=self.val_dir, transform=self.val_transforms)
+        clean_trainset = Clothing1MDataset(root_dir=self.train_clean_dir, transform=self.val_transforms)
         return ConcatDataset([valset, clean_trainset])
     
     def load_test_set(self):
-        return Clothing1MDataset(root_dir=self.test_dir, transform=self.get_transforms(train=False))
+        self.val_transforms = self.get_transforms(train=False)
+        return Clothing1MDataset(root_dir=self.test_dir, transform=self.val_transforms)
 
     def get_transforms(self, train=True):
-        if self.train_transforms and train:
-            return self.train_transforms
-        elif self.val_transforms and not train:
-            return self.val_transforms
+        if self._train_transforms and train:
+            return self._train_transforms
+        elif self._val_transforms and not train:
+            return self._val_transforms
         
         trnsfrms = []
         trnsfrms.append(transforms.Resize((256, 256)))

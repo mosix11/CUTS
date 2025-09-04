@@ -1,4 +1,4 @@
-configs/single_experiment/clip_noise_TA/config12.yamltraining_seed: &training_seed 11
+training_seed: &training_seed 11
 dataset_seed: &dataset_seed 11
 
 strategy:

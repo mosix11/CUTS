@@ -32,8 +32,8 @@ class EuroSAT(BaseClassificationDataset):
         self.flatten = flatten
         self.augmentations = [] if augmentations is None else augmentations
 
-        self.train_transforms = train_transforms
-        self.val_transforms = val_transforms
+        self._train_transforms = train_transforms
+        self._val_transforms = val_transforms
 
         if (train_transforms or val_transforms) and (augmentations is not None):
             raise ValueError('You should either pass augmentations, or train and validation transforms.')
@@ -54,8 +54,9 @@ class EuroSAT(BaseClassificationDataset):
         )
 
     def load_train_set(self):
+        self.train_transforms = self.get_transforms(train=True)
         train_idx, _ = self._get_split_indices()
-        base = self._base_dataset(transform=self.get_transforms(train=True))
+        base = self._base_dataset(transform=self.train_transforms)
         self._class_names = base.classes
         return Subset(base, train_idx)
 
@@ -63,15 +64,16 @@ class EuroSAT(BaseClassificationDataset):
         return None
 
     def load_test_set(self):
+        self.val_transforms = self.get_transforms(train=False)
         _, test_idx = self._get_split_indices()
-        base = self._base_dataset(transform=self.get_transforms(train=False))
+        base = self._base_dataset(transform=self.val_transforms)
         return Subset(base, test_idx)
 
     def get_transforms(self, train=True):
-        if self.train_transforms and train:
-            return self.train_transforms
-        elif self.val_transforms and not train:
-            return self.val_transforms
+        if self._train_transforms and train:
+            return self._train_transforms
+        elif self._val_transforms and not train:
+            return self._val_transforms
 
         trnsfrms = []
         if self.img_size != (64, 64):

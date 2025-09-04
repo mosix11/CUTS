@@ -25,8 +25,8 @@ class PCAM(BaseClassificationDataset):
         self.flatten = flatten
         self.augmentations = [] if augmentations == None else augmentations
         
-        self.train_transforms = train_transforms
-        self.val_transforms = val_transforms
+        self._train_transforms = train_transforms
+        self._val_transforms = val_transforms
         
         if (train_transforms or val_transforms) and (augmentations != None):
             raise ValueError('You should either pass augmentations, or train and validation transforms.')
@@ -44,19 +44,22 @@ class PCAM(BaseClassificationDataset):
 
 
     def load_train_set(self):
-        return datasets.PCAM(root=self.dataset_dir, split="train", transform=self.get_transforms(train=True), download=True)
+        self.train_transforms = self.get_transforms(train=True)
+        return datasets.PCAM(root=self.dataset_dir, split="train", transform=self.train_transforms, download=True)
     
     def load_validation_set(self):
-        return datasets.PCAM(root=self.dataset_dir, split="val", transform=self.get_transforms(train=True), download=True)
+        self.val_transforms = self.get_transforms(train=False)
+        return datasets.PCAM(root=self.dataset_dir, split="val", transform=self.val_transforms, download=True)
     
     def load_test_set(self):
-        return datasets.PCAM(root=self.dataset_dir, split="test", transform=self.get_transforms(train=False), download=True)
+        self.val_transforms = self.get_transforms(train=False)
+        return datasets.PCAM(root=self.dataset_dir, split="test", transform=self.val_transforms, download=True)
 
     def get_transforms(self, train=True):
-        if self.train_transforms and train:
-            return self.train_transforms
-        elif self.val_transforms and not train:
-            return self.val_transforms
+        if self._train_transforms and train:
+            return self._train_transforms
+        elif self._val_transforms and not train:
+            return self._val_transforms
         
         trnsfrms = []
         if self.img_size != (96, 96):

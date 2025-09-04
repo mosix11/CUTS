@@ -26,8 +26,8 @@ class StanfordCars(BaseClassificationDataset):
         self.flatten = flatten
         self.augmentations = [] if augmentations == None else augmentations
         
-        self.train_transforms = train_transforms
-        self.val_transforms = val_transforms
+        self._train_transforms = train_transforms
+        self._val_transforms = val_transforms
         
         if (train_transforms or val_transforms) and (augmentations != None):
             raise ValueError('You should either pass augmentations, or train and validation transforms.')
@@ -47,7 +47,8 @@ class StanfordCars(BaseClassificationDataset):
 
 
     def load_train_set(self):
-        trainset = datasets.StanfordCars(root=self.dataset_dir, split="train", transform=self.get_transforms(train=True), download=False)
+        self.train_transforms = self.get_transforms(train=True)
+        trainset = datasets.StanfordCars(root=self.dataset_dir, split="train", transform=self.train_transforms, download=False)
         self._class_names = trainset.classes
         return trainset
     
@@ -55,13 +56,14 @@ class StanfordCars(BaseClassificationDataset):
         return None
     
     def load_test_set(self):
-        return datasets.StanfordCars(root=self.dataset_dir, split="test", transform=self.get_transforms(train=False), download=False)
+        self.val_transforms = self.get_transforms(train=False)
+        return datasets.StanfordCars(root=self.dataset_dir, split="test", transform=self.val_transforms, download=False)
 
     def get_transforms(self, train=True):
-        if self.train_transforms and train:
-            return self.train_transforms
-        elif self.val_transforms and not train:
-            return self.val_transforms
+        if self._train_transforms and train:
+            return self._train_transforms
+        elif self._val_transforms and not train:
+            return self._val_transforms
         
         trnsfrms = []
         if self.img_size != (224, 224):

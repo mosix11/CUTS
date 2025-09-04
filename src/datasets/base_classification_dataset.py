@@ -1,9 +1,10 @@
 import torch
+import torchvision
 from torchvision import datasets
 import torchvision.transforms.v2 as transforms
 from torch.utils.data import Dataset, DataLoader, random_split, Subset
 
-from .dataset_wrappers import DatasetWithIndex, LabelRemapper, NoisyClassificationDataset, BinarizedClassificationDataset
+from .dataset_wrappers import DatasetWithIndex, LabelRemapper, NoisyClassificationDataset, BinarizedClassificationDataset, PoisonedClassificationDataset
 from .custom_samplers import ClassBalancedBatchSampler
 
 import os
@@ -179,6 +180,14 @@ class BaseClassificationDataset(ABC):
     def get_num_classes(self):
         return len(self.available_classes)
     
+    def get_normalization_stats(self):
+        import torchvision.transforms.v2 as transformsv2
+        import torchvision.transforms as transformsv1
+        for t in self.train_transforms.transforms:
+            if isinstance(t, (transformsv1.Normalize, transformsv2.Normalize)):
+                return (t.mean, t.std)
+        return None
+    
     def subset_set(self, set='Train', indices=[]):
         dataset = self._get_set(set)
         dataset = Subset(dataset, indices)
@@ -236,10 +245,57 @@ class BaseClassificationDataset(ABC):
         
         self._set_set(set, dataset)
         
+    def inject_poison(
+        self,
+        set: str = 'Train',
+        rate: float = 0.1,
+        target_class: int = 0,
+        trigger_percent: float = 0.003,
+        margin: Union[int, Tuple[int, int]] = 0,
+        seed: int = None,
+        generator: torch.Generator = None,
+    ):
+        """
+        Injects a BadNets-style trigger into a fraction of samples in the chosen split.
+        For poisoned samples, relabels to `target_class` (default: 0).
+        The trigger sets exactly `trigger_percent` of pixels to white at the bottom-right.
+
+        IMPORTANT: Poison is applied on RAW samples (pre-transform), and then the
+        original transform (from the underlying torchvision dataset) is applied.
+        """
+        dataset = self._get_set(set)
+
+
+        if isinstance(dataset, Subset):
+            while isinstance(dataset.dataset, (LabelRemapper, DatasetWithIndex)):
+                dataset.dataset = dataset.dataset.dataset
+        else:
+            while isinstance(dataset, (LabelRemapper, DatasetWithIndex)):
+                dataset = dataset.dataset
+
+        # --- Wrap with PoisonedClassificationDataset (handles transform swapping internally) ---
+        poisoned_ds = PoisonedClassificationDataset(
+            dataset=dataset,
+            rate=rate,
+            target_class=target_class,
+            trigger_percent=trigger_percent,
+            margin=margin,
+            seed=seed,
+            generator=generator,
+        )
+
+        # If we are remapping labels and using a class subset, apply LabelRemapper after poisoning.
+        if self.remap_labels and self.class_subset:
+            poisoned_ds = LabelRemapper(poisoned_ds, self.label_mapping)
+
+        # DatasetWithIndex last (so your loaders see (x, y, idx, is_poisoned))
+        poisoned_ds = DatasetWithIndex(poisoned_ds)
+
+        self._set_set(set, poisoned_ds)
         
+    
     def get_clean_noisy_subsets(self, set='Train'):
         dataset = self._get_set(set)
-        
         clean_indices = []
         noisy_indices = []
         for item in dataset:
@@ -253,6 +309,7 @@ class BaseClassificationDataset(ABC):
                 raise RuntimeError('The chosen dataset is not noisy!')
         
         return Subset(dataset, clean_indices), Subset(dataset, noisy_indices)
+    
     
     
     def _init_loaders(self):

@@ -2,6 +2,10 @@ import torch
 from torch.utils.data import Dataset, Subset
 import warnings
 import numpy as np
+from typing import Optional, List, Tuple, Union
+import math
+import numpy as np
+from PIL import Image
 
 class DatasetWithIndex(Dataset):
     
@@ -149,9 +153,6 @@ class NoisyClassificationDataset(Dataset):
 
         else:
             warnings.warn("Base dataset has no .targets attribute. Extracting labels by iterating, which can be slow.")
-            # TODO: Teset this, this might have some problems since datasets here most
-            # probably are subclasses of `DatasetWithIndex` and will return three values
-            # when iterated over!
             base_labels = torch.tensor([label for _, label in base_dataset], dtype=torch.long)
 
         if not indices_chain:
@@ -369,4 +370,221 @@ class BinarizedClassificationDataset(Dataset):
         else:
             data[1] = 0.0
         return data
+    
+    
+class PoisonedClassificationDataset(Dataset):
+    """
+    Wraps a classification dataset and injects BadNets-style triggers into a fixed
+    fraction of samples. For those samples, relabel to target_class (default 0).
 
+    Key design points (to match user's infra):
+    - We locate the *base* dataset that actually owns the .transform and temporarily
+      set it to None so we read *raw* samples.
+    - We keep a handle to the original transform (if any) and apply it *after* the
+      poison is injected.
+    - Works through arbitrary Subset chains; chosen poisoned indices are w.r.t. the
+      *visible* wrapped dataset (i.e., the dataset length you pass in here).
+    - Returns (x, y, is_poisoned) so DatasetWithIndex can append idx.
+    """
+
+    def __init__(
+        self,
+        dataset: Dataset,
+        rate: float,
+        target_class: int = 0,
+        trigger_percent: float = 0.003,      # 0.3%
+        margin: Union[int, Tuple[int, int]] = 0,  # NEW
+        seed: Optional[int] = None,
+        generator: Optional[torch.Generator] = None,
+    ):
+        super().__init__()
+        if not (0.0 <= rate <= 1.0):
+            raise ValueError("rate must be in [0, 1].")
+        if trigger_percent <= 0:
+            raise ValueError("trigger_percent must be > 0.")
+
+        self.dataset = dataset
+        self.rate = rate
+        self.target_class = target_class
+        self.trigger_percent = trigger_percent
+        self.margin_h, self.margin_w = self._parse_margin(margin)  # NEW
+
+        # Seed/generator handling
+        if seed and not generator:
+            generator = torch.Generator().manual_seed(seed)
+        elif seed and generator:
+            generator = generator.manual_seed(seed)
+        self.seed = seed
+        self.generator = generator
+
+        # Find base dataset with .transform and null it
+        base, chain = self._find_base_with_transform(self.dataset)
+        self._base_dataset = base
+        self._subset_index_chain = chain
+        self._orig_transform = getattr(self._base_dataset, "transform", None)
+        self._base_dataset.transform = None
+
+        # Precompute poisoned indices over the visible dataset
+        n = len(self.dataset)
+        k = int(round(rate * n))
+        if k > 0:
+            perm = torch.randperm(n, generator=self.generator)
+            self._poisoned_visible_indices = set(perm[:k].tolist())
+        else:
+            self._poisoned_visible_indices = set()
+
+    def __len__(self) -> int:
+        return len(self.dataset)
+
+    def __getitem__(self, visible_idx: int):
+        img, y = self.dataset[visible_idx]
+        img = self._to_pil(img)
+
+        is_poisoned = False
+        if visible_idx in self._poisoned_visible_indices:
+            img = self._apply_bottom_right_white_trigger(
+                pil_img=img,
+                trigger_percent=self.trigger_percent,
+                margin_h=self.margin_h,
+                margin_w=self.margin_w,
+            )
+            y = self.target_class
+            is_poisoned = True
+
+        if self._orig_transform is not None:
+            img = self._orig_transform(img)
+
+        return img, y, torch.tensor(is_poisoned, dtype=torch.bool)
+
+    # -------------------------
+    # Helpers
+    # -------------------------
+    @staticmethod
+    def _parse_margin(margin: Union[int, Tuple[int, int]]) -> Tuple[int, int]:
+        if isinstance(margin, int):
+            if margin < 0:
+                raise ValueError("margin must be >= 0.")
+            return margin, margin
+        elif isinstance(margin, tuple) and len(margin) == 2:
+            mh, mw = margin
+            if mh < 0 or mw < 0:
+                raise ValueError("margin values must be >= 0.")
+            return int(mh), int(mw)
+        else:
+            raise TypeError("margin must be an int or a (margin_h, margin_w) tuple.")
+
+    @staticmethod
+    def _find_base_with_transform(d: Dataset) -> Tuple[Dataset, List]:
+        chain = []
+        current = d
+        while isinstance(current, Subset):
+            chain.append(current.indices)
+            current = current.dataset
+        if not hasattr(current, "transform"):
+            warnings.warn(
+                "Base dataset has no 'transform' attribute; poisoning will be applied "
+                "to whatever type __getitem__ returns as 'image'."
+            )
+        return current, chain
+
+    @staticmethod
+    def _to_pil(img):
+        if isinstance(img, Image.Image):
+            return img
+        if torch.is_tensor(img):
+            if img.dtype != torch.uint8:
+                arr = img.detach().cpu().clone()
+                if arr.min() >= 0.0 and arr.max() <= 1.0:
+                    arr = (arr * 255.0).round().clamp(0, 255).to(torch.uint8)
+                else:
+                    arr = arr.clamp(0, 255).to(torch.uint8)
+            else:
+                arr = img.detach().cpu()
+            if arr.ndim == 2:
+                return Image.fromarray(arr.numpy(), mode="L")
+            elif arr.ndim == 3:
+                c, h, w = arr.shape
+                if c == 1:
+                    return Image.fromarray(arr.squeeze(0).numpy(), mode="L")
+                elif c == 3:
+                    return Image.fromarray(arr.permute(1, 2, 0).numpy())
+                else:
+                    raise ValueError(f"Unsupported channels in tensor: {c}")
+        elif isinstance(img, np.ndarray):
+            if img.ndim == 2:
+                return Image.fromarray(img, mode="L")
+            elif img.ndim == 3 and img.shape[2] in (1, 3):
+                if img.shape[2] == 1:
+                    return Image.fromarray(img.squeeze(2), mode="L")
+                return Image.fromarray(img)
+        raise TypeError(f"Unsupported image type for poisoning: {type(img)}")
+
+    @staticmethod
+    def _apply_bottom_right_white_trigger(
+        pil_img: Image.Image,
+        trigger_percent: float,
+        margin_h: int,
+        margin_w: int,
+    ) -> Image.Image:
+        """
+        Paint exactly ceil(trigger_percent * H * W) white pixels positioned as a compact
+        rectangle at the bottom-right corner *inset* by (margin_h, margin_w).
+        If the requested count exceeds the available area (H - mh) * (W - mw),
+        it is clamped to that area (still at least 1).
+        """
+        arr = np.array(pil_img)
+        if arr.ndim == 2:
+            H, W = arr.shape
+            C = 1
+        else:
+            H, W, C = arr.shape
+
+        # Available area dimensions (from [0..H-1-mh], [0..W-1-mw])
+        avail_h = max(1, H - margin_h)
+        avail_w = max(1, W - margin_w)
+        max_area = avail_h * avail_w
+
+        n_pix = int(math.ceil(trigger_percent * H * W))
+        n_pix = max(1, min(n_pix, max_area))  # clamp to available area, at least 1
+
+        mask = np.zeros((H, W), dtype=bool)
+
+        # Anchor point (bottom-right corner inside the margin)
+        br_row = H - 1 - margin_h
+        br_col = W - 1 - margin_w
+        if br_row < 0 or br_col < 0:
+            # margins too large; fallback: put a single pixel at (0,0)
+            mask[0, 0] = True
+        else:
+            # Choose width ~ sqrt(n_pix), not exceeding available width
+            w = min(avail_w, max(1, int(round(math.sqrt(n_pix)))))
+            h_full = n_pix // w
+            r = n_pix % w
+
+            # Fill full rows upward from br_row, spanning w pixels to the left
+            row_start_full = br_row - (h_full - 1) if h_full > 0 else br_row + 1
+            col_start = br_col - (w - 1)
+
+            # Clamp starts (in case of extreme margins/sizes)
+            if h_full > 0:
+                rs = max(0, row_start_full)
+                re = br_row + 1
+                cs = max(0, col_start)
+                ce = br_col + 1
+                mask[rs:re, cs:ce] = True
+
+            # Remainder r on the row just above the full block
+            if r > 0:
+                rem_row = (br_row - h_full)
+                if rem_row >= 0:
+                    rem_col_start = br_col - (r - 1)
+                    rem_col_start = max(0, rem_col_start)
+                    rem_col_end = br_col + 1
+                    mask[rem_row, rem_col_start:rem_col_end] = True
+
+        if C == 1:
+            arr[mask] = 255
+        else:
+            arr[mask, :] = 255
+
+        return Image.fromarray(arr)
