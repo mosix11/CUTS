@@ -465,12 +465,12 @@ class PoisonedClassificationDataset(Dataset):
     # Helpers
     # -------------------------
     @staticmethod
-    def _parse_margin(margin: Union[int, Tuple[int, int]]) -> Tuple[int, int]:
+    def _parse_margin(margin: Union[int, Tuple[int, int], List[int, int]]) -> Tuple[int, int]:
         if isinstance(margin, int):
             if margin < 0:
                 raise ValueError("margin must be >= 0.")
             return margin, margin
-        elif isinstance(margin, tuple) and len(margin) == 2:
+        elif isinstance(margin, (tuple, list)) and len(margin) == 2:
             mh, mw = margin
             if mh < 0 or mw < 0:
                 raise ValueError("margin values must be >= 0.")

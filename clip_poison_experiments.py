@@ -371,7 +371,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     dataset_clean = copy.deepcopy(dataset)
     
     strategy = cfg['strategy']
-    dataset.inject_noise(**strategy['noise']['pretraining'])
+    dataset.inject_poison(**strategy['poison']['pretraining'])
 
 
 
@@ -401,21 +401,21 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     #     map_location='cpu'
     # ).items() if "classifier_heads" not in k)
     
-    noise_weights = OrderedDict()
+    poison_weights = OrderedDict()
     
-    for noise_tv in cfg['strategy']['noise']['finetuning']:
-        ft_expr_dir = outputs_dir / f"finetune_{noise_tv['noise_rate']}_{noise_tv['seed']}"
+    for poison_tv in cfg['strategy']['poison']['finetuning']:
+        ft_expr_dir = outputs_dir / f"finetune_{poison_tv['rate']}_{poison_tv['seed']}"
         n_weights = OrderedDict(
         (k, v) for k, v in torch.load(
             ft_expr_dir.joinpath(f"weights/ft_weights.pth"),
             map_location='cpu'
         ).items() if "classifier_heads" not in k)
-        noise_weights[f"{noise_tv['noise_rate']*100:.0f}% Noise, {noise_tv['seed']} Seed"] = n_weights
+        poison_weights[f"{poison_tv['rate']*100:.0f}% Noise, {poison_tv['seed']} Seed"] = n_weights
         
     
             
     task_vectors = OrderedDict()
-    for task_name, finetuend_weights in noise_weights.items():
+    for task_name, finetuend_weights in poison_weights.items():
         task_vectors[task_name] = TaskVector(mix_weights, finetuend_weights)
         
     if len(task_vectors) == 1:
