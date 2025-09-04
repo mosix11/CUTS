@@ -215,7 +215,8 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
         
         dataset.set_trainset(dataset.get_heldoutset(), shuffle=True)
         # To fix the transforms issues
-        base_dataset.inject_poison(set='Train', rate=0)
+        dataset.inject_poison(set='Train', rate=0)
+        
         
         experiment_name = f"{cfg_name}/finetune_clean"
         experiment_dir = outputs_dir / Path(experiment_name)
