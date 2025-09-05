@@ -28,6 +28,8 @@ def get_metric(metric_name, num_classes):
     
 def create_model(cfg, num_classes=None):
     model_type = cfg.pop('type')
+    if not num_classes:
+        num_classes = cfg.get('num_classes', None)
     loss_fn_cfg = cfg['loss_fn']
     loss_fn_type = loss_fn_cfg.pop('type')
     if loss_fn_type == 'MSE':

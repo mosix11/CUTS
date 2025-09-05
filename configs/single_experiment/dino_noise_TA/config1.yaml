@@ -6,7 +6,7 @@ strategy:
   noise:
     pretraining:
       set: 'Train'
-      noise_rate: 0.8
+      noise_rate: 0.4
       noise_type: 'symmetric'
       seed: 8
     finetuning:
@@ -21,29 +21,31 @@ strategy:
 
 
 
-datasets:
-  - name: "cifar100"
-    num_classes: 100
-    img_size: [224, 224]
-    batch_size: 256
-    heldout_conf: 0.02
-    valset_ratio: 0.0
-    num_workers: 12
-    seed: *dataset_seed
+dataset:
+  name: "cifar10"
+  num_classes: &num_classes 10
+  img_size: [224, 224]
+  batch_size: 256
+  heldout_conf: 0.02
+  valset_ratio: 0.0
+  num_workers: 12
+  seed: *dataset_seed
 
 
 model:
-  type: 'open_clip_multihead_ViT-B-16'
-  pt_weights: 'openai'
+  type: 'dinov3'
+  num_classes: *num_classes
+  pt_weights: 'facebook/dinov3-vitb16-pretrain-lvd1689m'
   loss_fn:
     type: 'CE'
   metrics: ['ACC', 'F1']
 
 
+
 trainer:
   finetuning:
     mix:
-      max_iterations: 6000
+      max_iterations: 10000
       optimizer_cfg: 
         type: "adamw"
         lr: 1.0e-5
@@ -52,8 +54,8 @@ trainer:
         type: 'cosann_warmup'
         update_on: 'gradient_step'
         warmup_steps: 300
-        hold_steps: 0
-        T_max: 6000
+        hold_steps: 7000
+        T_max: 10000
         eta_min: 0
       early_stopping: False
       validation_freq: -1
@@ -62,7 +64,7 @@ trainer:
       run_on_gpu: True
       use_amp: True
       log_comet: True
-      comet_project_name: 'clip-noise-TA'
+      comet_project_name: 'dino-noise-TA'
       seed: *training_seed
     noise:
       max_iterations: 800
@@ -84,7 +86,7 @@ trainer:
       run_on_gpu: True
       use_amp: True
       log_comet: True
-      comet_project_name: 'clip-noise-TA'
+      comet_project_name: 'dino-noise-TA'
       seed: *training_seed
     clean:
       max_iterations: 3000
@@ -105,7 +107,7 @@ trainer:
       run_on_gpu: True
       use_amp: True
       log_comet: True
-      comet_project_name: 'clip-noise-TA'
+      comet_project_name: 'dino-noise-TA'
       seed: *training_seed
 
     heldout:
@@ -128,5 +130,28 @@ trainer:
       run_on_gpu: True
       use_amp: True
       log_comet: True
-      comet_project_name: 'clip-noise-TA'
+      comet_project_name: 'dino-noise-TA'
       seed: *training_seed
+
+    # gradient_ascent:
+    #   max_iterations: 1000
+    #   optimizer_cfg: 
+    #     type: "adamw"
+    #     lr: 1.0e-5
+    #     betas: [0.9, 0.999]
+    #   lr_schedule_cfg:
+    #     type: 'cosann_warmup'
+    #     update_on: 'gradient_step'
+    #     warmup_steps: 100
+    #     hold_steps: 0
+    #     T_max: 1000
+    #     eta_min: 1.0e-7
+    #   early_stopping: False
+    #   validation_freq: -1
+    #   save_best_model: False
+    #   checkpoint_freq: -1
+    #   run_on_gpu: True
+    #   use_amp: True
+    #   log_comet: True
+    #   comet_project_name: 'clip-noise-TA'
+    #   seed: *training_seed

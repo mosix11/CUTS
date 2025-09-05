@@ -71,79 +71,21 @@ def eval_model_on_tvs(model, taskvectors, results_dict, cfg, dataset, num_classe
     return results    
 
 
-import matplotlib.pyplot as plt
 
-
-def show_poisoned_samples(dataset, n=9, unnormalize=False):
-    """
-    Show `n` poisoned samples from a DatasetWithIndex-wrapped dataset.
-    dataset: your ds.get_trainset() or similar
-    unnormalize: if True, try to undo CIFAR-10 normalization for visualization
-    """
-
-    # Collect poisoned samples
-    poisoned_imgs = []
-    poisoned_labels = []
-    for idx in range(len(dataset)):
-        x, y, *_rest = dataset[idx]
-        # last element in your tuple is is_poison flag
-        is_poison = _rest[-1].item() if torch.is_tensor(_rest[-1]) else bool(_rest[-1])
-        if is_poison:
-            poisoned_imgs.append(x)
-            poisoned_labels.append(y)
-            if len(poisoned_imgs) >= n:
-                break
-
-    if not poisoned_imgs:
-        print("No poisoned samples found!")
-        return
-
-    # CIFAR-10 normalization parameters
-    cifar_mean = torch.tensor([0.4914, 0.4822, 0.4465]).view(3,1,1)
-    cifar_std  = torch.tensor([0.2023, 0.1994, 0.2010]).view(3,1,1)
-
-    # Plot grid
-    fig, axes = plt.subplots(3, 3, figsize=(8,8))
-    for ax, img, label in zip(axes.flat, poisoned_imgs, poisoned_labels):
-        if unnormalize:
-            img = img * cifar_std + cifar_mean
-            
-        print(type(img))
-        img = img.clamp(0,1)
-        if img.shape[0] == 1:  # grayscale
-            ax.imshow(img.squeeze(0).cpu(), cmap="gray")
-        else:
-            ax.imshow(img.permute(1,2,0).cpu())
-        ax.set_title(f"Label={label}", fontsize=10)
-        ax.axis("off")
-
-    plt.tight_layout()
-    plt.show()
-    
     
 def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     cfg['trainer']['finetuning']['comet_api_key'] = os.getenv("COMET_API_KEY")
     
-    
-    dataset_cfg = cfg['datasets'][0]
-    base_dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
-    
-
-    cfg['model']['datasets_cfgs'] = {dataset_cfg['name']: base_dataset.get_class_names()} 
     base_model = model_factory.create_model(cfg['model'])
-    base_model.freeze_all_heads()
     
+    dataset_cfg = cfg['dataset']
     dataset_cfg['train_transforms'] = base_model.get_train_transforms()
     dataset_cfg['val_transforms'] = base_model.get_val_transforms()
     base_dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
     
-    print(dataset_cfg['train_transforms'])
-    print(dataset_cfg['val_transforms'])
-    exit()
-    
     strategy = cfg['strategy']
-    base_dataset.inject_poison(**strategy['poison']['pretraining'])
-    
+    base_dataset.inject_noise(**strategy['noise']['pretraining'])
+
     
     if not outputs_dir.joinpath(f"{cfg_name}/mix/weights/ft_weights.pth").exists():
         dataset = copy.deepcopy(base_dataset)
@@ -218,9 +160,6 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
         
         
         dataset.set_trainset(dataset.get_heldoutset(), shuffle=True)
-        # To fix the transforms issues
-        dataset.inject_poison(set='Train', rate=0)
-        
         
         experiment_name = f"{cfg_name}/finetune_clean"
         experiment_dir = outputs_dir / Path(experiment_name)
@@ -289,8 +228,8 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
     #     torch.save(model.state_dict(), weights_dir / Path("ft_weights.pth"))
         
         
-    for idx, poison_tv in enumerate(strategy['poison']['finetuning']):
-        if not outputs_dir.joinpath(f"{cfg_name}/finetune_{poison_tv['rate']}_{poison_tv['seed']}/weights/ft_weights.pth").exists():
+    for idx, noise_tv in enumerate(strategy['noise']['finetuning']):
+        if not outputs_dir.joinpath(f"{cfg_name}/finetune_{noise_tv['noise_rate']}_{noise_tv['seed']}/weights/ft_weights.pth").exists():
             dataset = copy.deepcopy(base_dataset)
             model = copy.deepcopy(base_model)
             
@@ -298,7 +237,7 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
             checkpoint = torch.load(mix_model_ckp_path)
             model.load_state_dict(checkpoint)
             
-            experiment_name = f"{cfg_name}/finetune_{poison_tv['rate']}_{poison_tv['seed']}"
+            experiment_name = f"{cfg_name}/finetune_{noise_tv['noise_rate']}_{noise_tv['seed']}"
             experiment_dir = outputs_dir / Path(experiment_name)
 
             weights_dir = experiment_dir / Path("weights")
@@ -309,11 +248,11 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
             
             if strategy['finetuning_set'] == 'Heldout':
                 dataset.set_trainset(dataset.get_heldoutset(), shuffle=True)
-                dataset.inject_poison(**poison_tv)
+                dataset.inject_noise(**noise_tv)
                 
             finetuning_cfg = None
-            if 'poison' in cfg['trainer']['finetuning']:
-                finetuning_cfg = cfg['trainer']['finetuning']['poison']
+            if 'noise' in cfg['trainer']['finetuning']:
+                finetuning_cfg = cfg['trainer']['finetuning']['noise']
                 finetuning_cfg['comet_api_key'] =  os.getenv("COMET_API_KEY")
             else: finetuning_cfg = cfg['trainer']['finetuning']
             trainer = StandardTrainer(
@@ -326,6 +265,7 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
             results = trainer.fit(model, dataset, resume=False)
             torch.save(model.state_dict(), weights_dir / Path("ft_weights.pth"))  
             
+
 
 def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     training_seed = cfg['training_seed']
@@ -368,7 +308,6 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     dataset_cfg['train_transforms'] = model.get_val_transforms()
     dataset_cfg['val_transforms'] = model.get_val_transforms()
-    
     dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
     
     dataset.reset_train_dl(shuffle=False)
@@ -376,7 +315,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     dataset_clean = copy.deepcopy(dataset)
     
     strategy = cfg['strategy']
-    dataset.inject_poison(**strategy['poison']['pretraining'])
+    dataset.inject_noise(**strategy['noise']['pretraining'])
 
 
 
@@ -406,21 +345,21 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     #     map_location='cpu'
     # ).items() if "classifier_heads" not in k)
     
-    poison_weights = OrderedDict()
+    noise_weights = OrderedDict()
     
-    for poison_tv in cfg['strategy']['poison']['finetuning']:
-        ft_expr_dir = outputs_dir / f"finetune_{poison_tv['rate']}_{poison_tv['seed']}"
+    for noise_tv in cfg['strategy']['noise']['finetuning']:
+        ft_expr_dir = outputs_dir / f"finetune_{noise_tv['noise_rate']}_{noise_tv['seed']}"
         n_weights = OrderedDict(
         (k, v) for k, v in torch.load(
             ft_expr_dir.joinpath(f"weights/ft_weights.pth"),
             map_location='cpu'
         ).items() if "classifier_heads" not in k)
-        poison_weights[f"{poison_tv['rate']*100:.0f}% Noise, {poison_tv['seed']} Seed"] = n_weights
+        noise_weights[f"{noise_tv['noise_rate']*100:.0f}% Noise, {noise_tv['seed']} Seed"] = n_weights
         
     
             
     task_vectors = OrderedDict()
-    for task_name, finetuend_weights in poison_weights.items():
+    for task_name, finetuend_weights in noise_weights.items():
         task_vectors[task_name] = TaskVector(mix_weights, finetuend_weights)
         
     if len(task_vectors) == 1:
@@ -688,7 +627,8 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # results_dict = OrderedDict()
     # for alpha in tqdm(np.linspace(-0.05, -1.5, 30)):
     # for alpha in tqdm(np.linspace(-0.1, -2.0, 20)):
-    for alpha in tqdm(np.linspace(-0.1, -1.5, 15)):
+    # for alpha in tqdm(np.linspace(-0.1, -1.5, 15)):
+    for alpha in tqdm(np.linspace(-0.05, -3.0, 60)):
     
         model.load_state_dict(mix_weights, strict=False)
         task_vectors['Average TV'].apply_to(model, scaling_coef=alpha, strict=False)
@@ -732,7 +672,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "-f",
         "--finetune",
-        help="Finetune the image encoder with forzen heads on poisoned datasets.",
+        help="Finetune the image encoder with forzen heads on noisy datasets.",
         action="store_true",
     )
     
@@ -746,18 +686,19 @@ if __name__ == "__main__":
 
     dotenv.load_dotenv(".env")
     
-    cfg_path = Path('configs/single_experiment/clip_poison_TA') / f"{args.config}.yaml"
+    cfg_path = Path('configs/single_experiment/dino_noise_TA') / f"{args.config}.yaml"
 
     if not cfg_path.exists(): raise RuntimeError('The specified config file does not exist.')
     with open(cfg_path, 'r') as file:
         cfg = yaml.full_load(file)
 
-    outputs_dir = Path("outputs/single_experiment/clip_poison_TA").absolute()
-    results_dir = Path("results/single_experiment/clip_poison_TA").absolute()
+    outputs_dir = Path("outputs/single_experiment/dino_noise_TA").absolute()
+    results_dir = Path("results/single_experiment/dino_noise_TA").absolute()
     results_dir.mkdir(exist_ok=True, parents=True)
 
         
     if args.finetune:
         finetune_models(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)
+
     if args.tv:
         apply_tv(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)
