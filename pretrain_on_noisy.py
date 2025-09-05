@@ -978,11 +978,12 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # misc_utils.plot_confusion_matrix(cm=shrd_tvs_sim, class_names=class_names, filepath=None, show=True)
     
     
-
-
-if __name__ == "__main__":
-    ranks = trainer_utils.setup_distributed()
     
+from torch.distributed.elastic.multiprocessing.errors import record
+
+@record
+def main():
+    ranks = trainer_utils.setup_distributed()
     
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -1026,3 +1027,6 @@ if __name__ == "__main__":
         apply_tv(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)
     else:
         pt_ft_model(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)
+
+if __name__ == "__main__":
+    main()

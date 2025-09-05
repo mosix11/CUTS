@@ -717,10 +717,10 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     
 
+from torch.distributed.elastic.multiprocessing.errors import record
 
-
-
-if __name__ == "__main__":
+@record
+def main():
     ranks = trainer_utils.setup_distributed()
     
     parser = argparse.ArgumentParser()
@@ -767,3 +767,7 @@ if __name__ == "__main__":
         finetune_models(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)
     if args.tv:
         apply_tv(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)
+
+
+if __name__ == "__main__":
+    main()
