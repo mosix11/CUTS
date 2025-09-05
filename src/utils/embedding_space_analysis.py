@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
-import umap
 import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
@@ -280,31 +279,6 @@ def all_plot_comp(
         
     return fig
 
-
-# # Run UMAP
-# def umap_plot(
-#     feature_extractor:nn.Module,
-#     dataloader:DataLoader,
-#     device:torch.device = torch.device('cpu'),
-#     normalize:bool = False,
-#     n_neighbors:int = 15,
-#     min_dist:float = 0.1,
-#     n_components:int = 2
-# ):
-#     features, labels = extract_features(feature_extractor, dataloader, normalize, device)
-    
-#     reducer = umap.UMAP(n_neighbors=n_neighbors,
-#                         min_dist=min_dist,
-#                         n_components=n_components,
-#                         random_state=42)
-#     embedding = reducer.fit_transform(features)
-    
-#     plt.figure(figsize=(8,6))
-#     scatter = plt.scatter(embedding[:,0], embedding[:,1], 
-#                           c=labels, cmap="tab10", s=10, alpha=0.7)
-#     plt.legend(*scatter.legend_elements(), title="Classes")
-#     plt.title("UMAP of Image Encoder Features")
-#     plt.show()
 
 
 def get_color_mappings(dataset_name:str):
