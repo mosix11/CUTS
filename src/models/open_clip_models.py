@@ -28,6 +28,7 @@ class OpenClipImageEncoderModule(nn.Module):
             self.train_preprocess,
             self.val_preprocess,
         ) = open_clip.create_model_and_transforms(model_name, pretrained=pt_weights)
+
         
         dim = None
         if hasattr(self.model, "visual") and hasattr(self.model.visual, "output_dim"):

@@ -417,7 +417,7 @@ class BaseClassificationDataset(ABC):
             return DataLoader(
                 dataset,
                 batch_sampler=sampler,
-                sampler=DistributedSampler(dataset) if self._is_distributed() else None,
+                sampler=DistributedSampler(dataset) if self.is_distributed() else None,
                 num_workers=self.num_workers,
                 pin_memory=True,
                 generator=self.generator,
@@ -428,7 +428,12 @@ class BaseClassificationDataset(ABC):
                 dataset,
                 batch_size=self.batch_size,
                 shuffle=None if self.is_distributed() else shuffle,
-                sampler=DistributedSampler(dataset, shuffle=shuffle) if self.is_distributed() else None,
+                sampler=DistributedSampler(
+                    dataset,
+                    shuffle=shuffle,
+                    seed=self.seed,
+                    
+                ) if self.is_distributed() else None,
                 num_workers=self.num_workers,
                 pin_memory=True,
                 generator=self.generator,

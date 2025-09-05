@@ -46,7 +46,7 @@ model:
 trainer:
   finetuning:
     mix:
-      max_iterations: 5000
+      max_iterations: 6000
       optimizer_cfg: 
         type: "adamw"
         lr: 1.0e-5
@@ -55,8 +55,8 @@ trainer:
         type: 'cosann_warmup'
         update_on: 'gradient_step'
         warmup_steps: 200
-        hold_steps: 3500
-        T_max: 5000
+        hold_steps: 4800
+        T_max: 6000
         eta_min: 0
       early_stopping: False
       validation_freq: -1
@@ -68,7 +68,7 @@ trainer:
       comet_project_name: 'dino-noise-TA'
       seed: *training_seed
     noise:
-      max_iterations: 400
+      max_iterations: 500
       optimizer_cfg: 
         type: "adamw"
         lr: 1.0e-5
@@ -78,7 +78,7 @@ trainer:
         update_on: 'gradient_step'
         warmup_steps: 100
         hold_steps: 150
-        T_max: 400
+        T_max: 500
         eta_min: 0
       early_stopping: False
       validation_freq: -1
@@ -112,7 +112,7 @@ trainer:
       seed: *training_seed
 
     heldout:
-      max_iterations: 250
+      max_iterations: 300
       optimizer_cfg: 
         type: "adamw"
         lr: 1.0e-5
@@ -121,8 +121,8 @@ trainer:
         type: 'cosann_warmup'
         update_on: 'gradient_step'
         warmup_steps: 100
-        hold_steps: 50
-        T_max: 250
+        hold_steps: 100
+        T_max: 300
         eta_min: 1.0e-7
       early_stopping: False
       validation_freq: -1

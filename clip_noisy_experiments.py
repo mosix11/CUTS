@@ -906,9 +906,9 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     # results_dict = OrderedDict()
     # for alpha in tqdm(np.linspace(-0.05, -1.5, 30)):
-    # for alpha in tqdm(np.linspace(-0.1, -2.0, 20)):
+    for alpha in tqdm(np.linspace(-0.1, -2.0, 20)):
     # for alpha in tqdm(np.linspace(-0.1, -1.5, 15)):
-    for alpha in tqdm(np.linspace(-0.05, -3.0, 60)):
+    # for alpha in tqdm(np.linspace(-0.05, -3.0, 60)):
     
         model.load_state_dict(mix_weights, strict=False)
         task_vectors['Average TV'].apply_to(model, scaling_coef=alpha, strict=False)
