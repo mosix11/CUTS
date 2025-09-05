@@ -152,8 +152,8 @@ class BaseClassificationTrainer(ABC):
     
     def _setup_device(self):
         if self._run_on_gpu:
-            if self._is_distributed():
-                self.device = torch.device(f"cuda:{self._local_rank}")
+            if self.is_distributed():
+                self.device = torch.device(f"cuda:{self.get_local_rank()}")
             else:
                 devices = utils.get_gpu_device()
                 if devices == None:
@@ -185,9 +185,12 @@ class BaseClassificationTrainer(ABC):
 
         self.model.to(self.device)
 
-        if self._is_distributed():
+        if self.is_distributed():
             # IMPORTANT: wrap AFTER .to(device) and BEFORE creating optimizer
             self.model = DDP(self.model, device_ids=[self.device.index], output_device=self.device.index, find_unused_parameters=False)
+            
+    def _mm(self):  # "model module"
+        return self.model.module if isinstance(self.model, DDP) else self.model
         
     def _prepare_batch(self, batch):
         batch = [tens.to(self.device, non_blocking=True) for tens in batch]
@@ -279,7 +282,7 @@ class BaseClassificationTrainer(ABC):
         
         
     def _configure_logger(self, experiment_key=None):
-        if not self._is_main_process:
+        if not self.is_main():
             self.log_comet = False
             return
         experiment_config = comet_ml.ExperimentConfig(
@@ -299,10 +302,10 @@ class BaseClassificationTrainer(ABC):
 
 
     def _save_full_checkpoint(self, path):
-        if not self._is_main_process:
+        if not self.is_main():
             return
         save_dict = {
-            'model_state': self.model.module.state_dict() if self._is_distributed() else self.model.state_dict(),
+            'model_state': self._mm().state_dict(),
             'optim_state': self.optim.state_dict(),
             'epoch': self.epoch+1,
             'global_step': self.global_step,
@@ -338,7 +341,6 @@ class BaseClassificationTrainer(ABC):
         This is the main "template method". It orchestrates the training process.
         DO NOT OVERRIDE THIS METHOD.
         """
-        self._setup_distributed()
         self._setup_device()
         
         self._setup_data_loaders(dataset)
@@ -369,7 +371,7 @@ class BaseClassificationTrainer(ABC):
 
             
         for self.epoch in outer_iterable:
-            if self._is_distributed():
+            if self.is_distributed():
                 self.train_dataloader.sampler.set_epoch(self.epoch)
             
             if (not self.iteration_mode) and isinstance(outer_iterable, tqdm):
@@ -421,7 +423,7 @@ class BaseClassificationTrainer(ABC):
         # self.save_full_checkpoint(final_ckp_path)
         results_path = self.log_dir / Path('results.json')
         
-        if self._is_main_process:
+        if self.is_main():
             with open(results_path, 'w') as f:
                 json.dump(results, f, indent=4)
         
@@ -531,27 +533,24 @@ class BaseClassificationTrainer(ABC):
         return {f"{set}/{k}": v for k, v in metrics.items()}    
     
     
-    def _is_distributed(self) -> bool:
-        return int(os.environ.get("WORLD_SIZE", "1")) > 1
+    def is_distributed(self):
+        return dist.is_available() and dist.is_initialized()
     
+    def is_main(self):
+        return (not self.is_distributed()) or (dist.get_rank() == 0)
+
+    def get_rank(self):
+        return dist.get_rank()
     
-    def _get_local_rank(self) -> int:
+    def get_local_rank(self) -> int:
         return int(os.environ.get("LOCAL_RANK", "0"))
     
+    def is_node_leader(self):
+        if not self.is_distributed():
+            return True
+        local_world_size = torch.cuda.device_count()
+        return dist.get_rank() % local_world_size == 0
     
-    def _setup_distributed(self):
-        if self._is_distributed():
-            if not dist.is_initialized():
-                raise RuntimeError('Initialize `torch.distributed` at the start of the program for distributed training.')
-            self._local_rank = self._get_local_rank()
-            self._rank = dist.get_rank()
-            self._world_size = dist.get_world_size()
-            self._is_main_process = (self._rank == 0)
-        else:
-            self._local_rank = 0
-            self._rank = 0
-            self._world_size = 1
-            self._is_main_process = True
     
     def _compute_total_steps(self) -> int:
         """
