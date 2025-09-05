@@ -26,7 +26,7 @@ dataset:
   name: "cifar10"
   num_classes: &num_classes 10
   img_size: [224, 224]
-  batch_size: 256
+  batch_size: 128
   heldout_conf: 0.02
   valset_ratio: 0.0
   num_workers: 8
@@ -46,7 +46,7 @@ model:
 trainer:
   finetuning:
     mix:
-      max_iterations: 6000
+      max_iterations: 12000
       optimizer_cfg: 
         type: "adamw"
         lr: 1.0e-5
@@ -54,9 +54,9 @@ trainer:
       lr_schedule_cfg:
         type: 'cosann_warmup'
         update_on: 'gradient_step'
-        warmup_steps: 200
-        hold_steps: 4800
-        T_max: 6000
+        warmup_steps: 300
+        hold_steps: 8000
+        T_max: 12000
         eta_min: 0
       early_stopping: False
       validation_freq: -1
@@ -68,7 +68,7 @@ trainer:
       comet_project_name: 'dino-noise-TA'
       seed: *training_seed
     noise:
-      max_iterations: 500
+      max_iterations: 600
       optimizer_cfg: 
         type: "adamw"
         lr: 1.0e-5
@@ -77,8 +77,8 @@ trainer:
         type: 'cosann_warmup'
         update_on: 'gradient_step'
         warmup_steps: 100
-        hold_steps: 150
-        T_max: 500
+        hold_steps: 200
+        T_max: 600
         eta_min: 0
       early_stopping: False
       validation_freq: -1
@@ -90,7 +90,7 @@ trainer:
       comet_project_name: 'dino-noise-TA'
       seed: *training_seed
     clean:
-      max_iterations: 1500
+      max_iterations: 3000
       optimizer_cfg: 
         type: "adamw"
         lr: 1.0e-5
@@ -98,8 +98,8 @@ trainer:
       lr_schedule_cfg:
         type: 'cosann_warmup'
         update_on: 'gradient_step'
-        warmup_steps: 200
-        T_max: 1500
+        warmup_steps: 300
+        T_max: 3000
         eta_min: 1.0e-7
       early_stopping: False
       validation_freq: -1
@@ -112,7 +112,7 @@ trainer:
       seed: *training_seed
 
     heldout:
-      max_iterations: 300
+      max_iterations: 500
       optimizer_cfg: 
         type: "adamw"
         lr: 1.0e-5
@@ -121,8 +121,8 @@ trainer:
         type: 'cosann_warmup'
         update_on: 'gradient_step'
         warmup_steps: 100
-        hold_steps: 100
-        T_max: 300
+        hold_steps: 200
+        T_max: 500
         eta_min: 1.0e-7
       early_stopping: False
       validation_freq: -1
