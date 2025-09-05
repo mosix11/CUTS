@@ -368,7 +368,6 @@ class BaseClassificationTrainer(ABC):
         else:
             outer_iterable = tqdm(range(self.epoch, self.max_epochs), total=self.max_epochs)
 
-
             
         for self.epoch in outer_iterable:
             if self.is_distributed():

@@ -55,7 +55,7 @@ trainer:
         type: 'cosann_warmup'
         update_on: 'gradient_step'
         warmup_steps: 300
-        hold_steps: 10000
+        hold_steps: 9000
         T_max: 13000
         eta_min: 0
       early_stopping: False
@@ -114,7 +114,7 @@ trainer:
     heldout:
       max_iterations: 500
       optimizer_cfg: 
-        type: "adamw"
+        type: "adamw" 
         lr: 1.0e-5
         betas: [0.9, 0.999]
       lr_schedule_cfg:

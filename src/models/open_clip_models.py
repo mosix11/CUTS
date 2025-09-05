@@ -4,8 +4,10 @@ import open_clip
 import torch.nn as nn
 import torch.nn.functional as F
 import torchmetrics
-from torch.amp import autocast
 from . import BaseModel
+
+import torch.distributed as dist
+
 from ..datasets import get_clip_templates
 from ..trainers import utils as trainer_utils
 from pathlib import Path
@@ -79,6 +81,13 @@ class OpenClipImageEncoder(BaseModel):
         self.model_type = model_type
         self.pt_weights = pt_weights
         self.pretrained = True if pt_weights else False
+        
+        if self.is_distributed():
+            if self.is_node_leader():
+                # Construct once to trigger the download into cache
+                _model = OpenClipImageEncoderModule(model_name=model_type, pt_weights=pt_weights, keep_lang=False)
+                del _model
+            dist.barrier()
         
         self.image_encoder = OpenClipImageEncoderModule(model_name=model_type, pt_weights=pt_weights, keep_lang=False)
         self.feature_dim = self.image_encoder.feature_dim
