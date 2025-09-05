@@ -985,6 +985,8 @@ from torch.distributed.elastic.multiprocessing.errors import record
 def main():
     ranks = trainer_utils.setup_distributed()
     
+    dotenv.load_dotenv(".env")
+    
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "-c",
@@ -1007,7 +1009,7 @@ def main():
     )
     args = parser.parse_args()
 
-    dotenv.load_dotenv(".env")
+    
     
     cfg_path = Path('configs/single_experiment/pretrain_on_noisy') / f"{args.config}.yaml"
 

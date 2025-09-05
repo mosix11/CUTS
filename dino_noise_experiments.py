@@ -663,6 +663,8 @@ from torch.distributed.elastic.multiprocessing.errors import record
 @record
 def main():
     ranks = trainer_utils.setup_distributed()
+    
+    dotenv.load_dotenv(".env")
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -689,8 +691,6 @@ def main():
     )
     args = parser.parse_args()
 
-    
-    
     cfg_path = Path('configs/single_experiment/dino_noise_TA') / f"{args.config}.yaml"
 
     if not cfg_path.exists(): raise RuntimeError('The specified config file does not exist.')
