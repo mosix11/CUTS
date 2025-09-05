@@ -1,3 +1,4 @@
+global_seed: 11
 # Config 4 with 20% noise
 # Finetuning from config 7
 training_seed: &training_seed 11

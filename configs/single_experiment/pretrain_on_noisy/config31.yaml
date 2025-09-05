@@ -1,3 +1,4 @@
+global_seed: 11
 # MoG Synthetic 40% noise
 training_seed: &training_seed 22
 dataset_seed: &dataset_seed 22

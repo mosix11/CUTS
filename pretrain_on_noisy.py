@@ -1,11 +1,20 @@
+import os
+PYTHON_HASH_SEED = 0
+os.environ["PYTHONHASHSEED"] = str(PYTHON_HASH_SEED)
+os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8" 
 import comet_ml
+import torch
+
+torch.backends.cudnn.benchmark = False
+torch.use_deterministic_algorithms(True) 
+torch.set_float32_matmul_precision("high")
+
 from src.datasets import dataset_factory
 from src.models import model_factory, TaskVector
 from src.trainers import StandardTrainer, TrainerRLS, utils as trainer_utils
 import matplotlib.pyplot as plt
 import seaborn as sns
 from src.utils import misc_utils
-import torch
 
 import torchvision.transforms.v2 as transformsv2
 from torch.utils.data import Dataset, Subset, ConcatDataset
@@ -972,13 +981,9 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
 
 
 if __name__ == "__main__":
+    ranks = trainer_utils.setup_distributed()
     
-    os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
-    torch.backends.cudnn.enabled = True
-    torch.backends.cudnn.benchmark = False
-    torch.use_deterministic_algorithms(True) 
-    torch.set_float32_matmul_precision("high")
-
+    
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "-c",
@@ -1013,6 +1018,9 @@ if __name__ == "__main__":
     outputs_dir.mkdir(exist_ok=True, parents=True)
     results_dir = Path("results/single_experiment/pretrain_on_noisy").absolute()
     results_dir.mkdir(exist_ok=True, parents=True)
+    
+    global_seed = cfg['global_seed']
+    trainer_utils.seed_everything(base_seed=global_seed, rank=ranks['rank'])
 
     if args.tv:
         apply_tv(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)

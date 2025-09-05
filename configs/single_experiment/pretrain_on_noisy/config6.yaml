@@ -1,3 +1,4 @@
+global_seed: 11
 # Let's see what happens if we fine tune on ground truth noisy samples only aggressively (long training low final learning rate)
 training_seed: &training_seed 11
 dataset_seed: &dataset_seed 11

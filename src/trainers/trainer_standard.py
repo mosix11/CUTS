@@ -47,7 +47,7 @@ class StandardTrainer(BaseClassificationTrainer):
             )
 
         for i, batch in inner_iter:
-            batch = self.prepare_batch(batch)
+            batch = self._prepare_batch(batch)
             input_batch, target_batch, idxs, is_noisy  = self.unpack_batch(batch)
             
             self.optim.zero_grad()
@@ -99,7 +99,7 @@ class StandardTrainer(BaseClassificationTrainer):
         loss_met = misc_utils.AverageMeter()
         
         for batch in dataloader:
-            batch = self.prepare_batch(batch)
+            batch = self._prepare_batch(batch)
             input_batch, target_batch, _, _ = self.unpack_batch(batch)
             
             # Model-specific validation logic
@@ -130,16 +130,15 @@ class StandardTrainer(BaseClassificationTrainer):
             raise ValueError("Invalid set specified. Choose 'Train', 'Val', or 'Test'.")
         
         
-        cm_metric = MulticlassConfusionMatrix(num_classes=num_classes)
-        if self.run_on_gpu:
-            cm_metric.to(self.gpu)
+        cm_metric = MulticlassConfusionMatrix(num_classes=num_classes, sync_on_compute=self._is_distributed())
+        cm_metric.to(self.device)
         
         for i, batch in enumerate(dataloader):
-            batch = self.prepare_batch(batch)
+            batch = self._prepare_batch(batch)
             input_batch, target_batch, idxs, is_noisy = self.unpack_batch(batch)
             
-            model_output = self.model.predict(input_batch) # Get raw model output (logits)
-            predictions = torch.argmax(model_output, dim=-1) # Get predicted class labels
+            model_output = self.model.predict(input_batch)
+            predictions = torch.argmax(model_output, dim=-1) 
             
             cm_metric.update(predictions.detach(), target_batch.detach())
         

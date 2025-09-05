@@ -1,3 +1,4 @@
+global_seed: 11
 # Config 18 with fine tuning in the evaluation mode to disable batch norm stats and dropout
 training_seed: &training_seed 11
 dataset_seed: &dataset_seed 11

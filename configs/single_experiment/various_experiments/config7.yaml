@@ -1,3 +1,4 @@
+global_seed: 11
 # CIFAR10 with ViT small and 40% noise
 training_seed: &training_seed 11
 dataset_seed: &dataset_seed 11

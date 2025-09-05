@@ -7,9 +7,11 @@ from torch.amp import autocast
 from torch.optim.lr_scheduler import MultiStepLR, ReduceLROnPlateau, CosineAnnealingLR, OneCycleLR
 from .custom_lr_schedulers import InverseSquareRootLR, CosineAnnealingWithWarmup
 
-
+import torch.distributed as dist
+from torch.nn.parallel import DistributedDataParallel as DDP
 
 import os
+import warnings
 from pathlib import Path
 import time
 from tqdm import tqdm
@@ -73,20 +75,11 @@ class BaseClassificationTrainer(ABC):
             
         if seed:
             self.seed = seed
-            random.seed(seed)
-            np.random.seed(seed)
-            torch.manual_seed(seed)
-            torch.cuda.manual_seed_all(seed)
+            self.generator = torch.Generator().manual_seed(self.seed)
 
         
-        
-        self.cpu = utils.get_cpu_device()
-        self.gpu = utils.get_gpu_device()
-        if self.gpu == None and run_on_gpu:
-            raise RuntimeError("""GPU device not found!""")
-        self.run_on_gpu = run_on_gpu
+        self._run_on_gpu = run_on_gpu
         self.use_amp = use_amp
-
 
 
         self.max_epochs = max_epochs
@@ -158,8 +151,26 @@ class BaseClassificationTrainer(ABC):
         """
         pass
       
+    
+    
+    def _setup_device(self):
+        if self._run_on_gpu:
+            if self._is_distributed():
+                self.device = torch.device(f"cuda:{self._local_rank}")
+            else:
+                devices = utils.get_gpu_device()
+                if devices == None:
+                    raise RuntimeError('No GPU devices detected. Set `run_on_gpu` to False.')
+                elif isinstance(devices, dict):
+                    warnings.warn(f'Multiple GPU devices where found: {str(devices)}. Using device:0.')
+                    self.device = devices['0']
+                else:
+                    self.device = devices
+        else:
+            self.device = utils.get_cpu_device()
+
         
-    def setup_data_loaders(self, dataset):
+    def _setup_data_loaders(self, dataset):
         self.dataset = dataset
         self.train_dataloader = dataset.get_train_dataloader()
         self.val_dataloader = dataset.get_val_dataloader()
@@ -171,22 +182,25 @@ class BaseClassificationTrainer(ABC):
         self.num_test_batches = len(self.test_dataloader)
         
         
-    def prepare_model(self, state_dict=None):
+    def _prepare_model(self, state_dict=None):
         if state_dict:
             self.model.load_state_dict(state_dict)
-        if self.run_on_gpu:
-            self.model.to(self.gpu)
+
+        self.model.to(self.device)
+
+        if self._is_distributed():
+            # IMPORTANT: wrap AFTER .to(device) and BEFORE creating optimizer
+            self.model = DDP(self.model, device_ids=[self.device.index], output_device=self.device.index, find_unused_parameters=False)
         
-    def prepare_batch(self, batch):
-        if self.run_on_gpu:
-            batch = [tens.to(self.gpu, non_blocking=True) for tens in batch]
-            return batch
-        else: return batch
+    def _prepare_batch(self, batch):
+        batch = [tens.to(self.device, non_blocking=True) for tens in batch]
+        return batch
+
         
         
     
     
-    def configure_optimizers(self, optim_state_dict=None, last_epoch=-1, last_gradient_step=-1):
+    def _configure_optimizers(self, optim_state_dict=None, last_epoch=-1, last_gradient_step=-1):
         optim_cfg = copy.deepcopy(self.optimizer_cfg)
         del optim_cfg['type']
 
@@ -267,7 +281,10 @@ class BaseClassificationTrainer(ABC):
         
         
         
-    def configure_logger(self, experiment_key=None):
+    def _configure_logger(self, experiment_key=None):
+        if not self._is_main_process:
+            self.log_comet = False
+            return
         experiment_config = comet_ml.ExperimentConfig(
             name=self.exp_name,
             tags=self.exp_tags
@@ -284,9 +301,11 @@ class BaseClassificationTrainer(ABC):
             mfile.write(self.comet_experiment.get_key()) 
 
 
-    def save_full_checkpoint(self, path):
+    def _save_full_checkpoint(self, path):
+        if not self._is_main_process:
+            return
         save_dict = {
-            'model_state': self.model.state_dict(),
+            'model_state': self.model.module.state_dict() if self._is_distributed() else self.model.state_dict(),
             'optim_state': self.optim.state_dict(),
             'epoch': self.epoch+1,
             'global_step': self.global_step,
@@ -298,18 +317,20 @@ class BaseClassificationTrainer(ABC):
             save_dict['best_prf'] = self.best_model_perf
         torch.save(save_dict, path)
         
-    def load_full_checkpoint(self, path):
-        checkpoint = torch.load(path, map_location=self.cpu)
-        self.prepare_model(checkpoint["model_state"])
+        
+    def _load_full_checkpoint(self, path):
+        checkpoint = torch.load(path, map_location=self.device)
+        
+        self._prepare_model(checkpoint["model_state"])
         self.iteration_mode = checkpoint.get('iteration_mode', False)
         self.global_step = checkpoint.get('global_step', 0)
         
-        self.configure_optimizers(
+        self._configure_optimizers(
             checkpoint["optim_state"], last_epoch=checkpoint["epoch"], last_gradient_step=self.global_step 
         )
         self.epoch = checkpoint["epoch"]
         if self.log_comet:
-            self.configure_logger(checkpoint["exp_key"])
+            self._configure_logger(checkpoint["exp_key"])
             
         if 'best_prf' in checkpoint:
             self.best_model_perf = checkpoint['best_prf']
@@ -320,7 +341,10 @@ class BaseClassificationTrainer(ABC):
         This is the main "template method". It orchestrates the training process.
         DO NOT OVERRIDE THIS METHOD.
         """
-        self.setup_data_loaders(dataset)
+        self._setup_distributed()
+        self._setup_device()
+        
+        self._setup_data_loaders(dataset)
         self.model = model
         if resume:
             ckp_path = self.checkpoint_dir / Path('resume_ckp.pth')
@@ -328,12 +352,12 @@ class BaseClassificationTrainer(ABC):
                 raise RuntimeError(
                     "There is no checkpoint saved! Set the `resume` flag to False."
                 )
-            self.load_full_checkpoint(ckp_path)
+            self._load_full_checkpoint(ckp_path)
         else:
-            self.prepare_model()
-            self.configure_optimizers()
+            self._prepare_model()
+            self._configure_optimizers()
             if self.log_comet:
-                self.configure_logger()
+                self._configure_logger()
             self.epoch = 0
             self.global_step = 0   
 
@@ -348,6 +372,9 @@ class BaseClassificationTrainer(ABC):
 
             
         for self.epoch in outer_iterable:
+            if self._is_distributed():
+                self.train_dataloader.sampler.set_epoch(self.epoch)
+            
             if (not self.iteration_mode) and isinstance(outer_iterable, tqdm):
                 outer_iterable.set_description(f"Processing Training Epoch {self.epoch + 1}/{self.max_epochs}")
                 
@@ -397,8 +424,9 @@ class BaseClassificationTrainer(ABC):
         # self.save_full_checkpoint(final_ckp_path)
         results_path = self.log_dir / Path('results.json')
         
-        with open(results_path, 'w') as json_file:
-            json.dump(results, json_file, indent=4)
+        if self._is_main_process:
+            with open(results_path, 'w') as f:
+                json.dump(results, f, indent=4)
         
         return results
                    
@@ -437,7 +465,7 @@ class BaseClassificationTrainer(ABC):
 
             # Checkpoint on step frequency
             if self._should_checkpoint_now():
-                self.save_full_checkpoint(self.checkpoint_dir / 'resume_ckp.pth')
+                self._save_full_checkpoint(self.checkpoint_dir / 'resume_ckp.pth')
 
         if self.log_comet and self.iteration_mode:
             self.comet_experiment.log_metrics(train_snapshot, step=self.global_step)
@@ -463,7 +491,7 @@ class BaseClassificationTrainer(ABC):
 
             # Checkpoint on epoch frequency
             if self._should_checkpoint_now():
-                self.save_full_checkpoint(self.checkpoint_dir / 'resume_ckp.pth')
+                self._save_full_checkpoint(self.checkpoint_dir / 'resume_ckp.pth')
 
             # LR scheduler (per-epoch)
             if self.lr_scheduler and not self.lr_sch_step_on_batch:
@@ -506,6 +534,27 @@ class BaseClassificationTrainer(ABC):
         return {f"{set}/{k}": v for k, v in metrics.items()}    
     
     
+    def _is_distributed(self) -> bool:
+        return int(os.environ.get("WORLD_SIZE", "1")) > 1
+    
+    
+    def _get_local_rank(self) -> int:
+        return int(os.environ.get("LOCAL_RANK", "0"))
+    
+    
+    def _setup_distributed(self):
+        if self._is_distributed():
+            if not dist.is_initialized():
+                raise RuntimeError('Initialize `torch.distributed` at the start of the program for distributed training.')
+            self._local_rank = self._get_local_rank()
+            self._rank = dist.get_rank()
+            self._world_size = dist.get_world_size()
+            self._is_main_process = (self._rank == 0)
+        else:
+            self._local_rank = 0
+            self._rank = 0
+            self._world_size = 1
+            self._is_main_process = True
     
     def _compute_total_steps(self) -> int:
         """
@@ -570,7 +619,7 @@ class BaseClassificationTrainer(ABC):
             merged['epoch'] = getattr(self, 'epoch', 0)
             merged['global_step'] = getattr(self, 'global_step', 0)
             self.best_model_perf = merged
-            self.save_full_checkpoint(self.checkpoint_dir / 'best_ckp.pth')
+            self._save_full_checkpoint(self.checkpoint_dir / 'best_ckp.pth')
                 
             
             

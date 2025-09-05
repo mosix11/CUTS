@@ -1,6 +1,11 @@
 import torch
+import random, numpy as np
 from collections import OrderedDict, deque
 import pickle
+import os
+
+import torch.distributed as torch_distributed
+
 def get_gpu_device():
     """
     Returns:
@@ -23,7 +28,38 @@ def get_gpu_device():
 def get_cpu_device():
     return torch.device("cpu")
 
+def setup_distributed():
+    is_distributed = int(os.environ.get("WORLD_SIZE", "1")) > 1
+    
+    if is_distributed:
+        if not torch_distributed.is_initialized():
+            torch_distributed.init_process_group(backend="nccl")
+            print('DDP is initialized.')
+            
+        local_rank = int(os.environ.get("LOCAL_RANK", "0"))
+        rank = torch_distributed.get_rank()
+        torch.cuda.set_device(local_rank)
+        return {
+            'rank': rank,
+            'local_rank': local_rank
+        }
+        
+    else:
+        return {
+            'rank': 0,
+            'local_rank': 0
+        }
+    
 
+def seed_everything(base_seed: int, rank: int = 0) -> dict:
+    """Seed python, numpy, torch CPU+CUDA."""
+    seed = base_seed + rank
+
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    
 
 class EarlyStopping:
     def __init__(self, patience=5, min_delta=0.001, mode='min', verbose=False):

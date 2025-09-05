@@ -4,8 +4,12 @@ from torchvision import datasets
 import torchvision.transforms.v2 as transforms
 from torch.utils.data import Dataset, DataLoader, random_split, Subset
 
+import torch.distributed as dist
+
 from .dataset_wrappers import DatasetWithIndex, LabelRemapper, NoisyClassificationDataset, BinarizedClassificationDataset, PoisonedClassificationDataset
 from .custom_samplers import ClassBalancedBatchSampler
+
+from torch.utils.data.distributed import DistributedSampler
 
 import os
 from pathlib import Path
@@ -58,10 +62,6 @@ class BaseClassificationDataset(ABC):
         self.generator = None
         if seed:
             self.seed = seed
-            random.seed(seed)
-            np.random.seed(seed)
-            torch.manual_seed(seed)
-            torch.cuda.manual_seed_all(seed)
             self.generator = torch.Generator().manual_seed(self.seed)
 
         self._init_loaders()
@@ -399,6 +399,7 @@ class BaseClassificationDataset(ABC):
             return DataLoader(
                 dataset,
                 batch_sampler=sampler,
+                sampler=DistributedSampler(dataset) if self._is_distributed() else None,
                 num_workers=self.num_workers,
                 pin_memory=True,
                 generator=self.generator,
@@ -408,11 +409,20 @@ class BaseClassificationDataset(ABC):
             return DataLoader(
                 dataset,
                 batch_size=self.batch_size,
-                shuffle=shuffle,
+                shuffle=None if self._is_distributed() else shuffle,
+                sampler=DistributedSampler(dataset, shuffle=shuffle) if self._is_distributed() else None,
                 num_workers=self.num_workers,
                 pin_memory=True,
                 generator=self.generator,
             )
+            
+    def _is_distributed(self) -> bool:
+        return int(os.environ.get("WORLD_SIZE", "1")) > 1
+    
+    
+    def _get_local_rank(self) -> int:
+        return int(os.environ.get("LOCAL_RANK", "0"))
+    
         
     def _get_balanced_subset(self, dataset: Dataset, total_size: int, class_subset: list, generator: torch.Generator) -> Subset:
         num_classes = len(class_subset)

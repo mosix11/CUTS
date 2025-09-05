@@ -1,3 +1,4 @@
+global_seed: 11
 # Config 6 with more epochs (100)
 # Changed the resnet model and removed the dropouts after res() layers and only kept the ones after conv layers
 training_seed: &training_seed 11
