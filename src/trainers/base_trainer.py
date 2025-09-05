@@ -40,7 +40,7 @@ class BaseClassificationTrainer(ABC):
     def __init__(
         self,
         outputs_dir: Path = Path("./outputs"),
-        dotenv_path: Path = Path("./.env"),
+        # dotenv_path: Path = Path("./.env"),
         max_epochs: int = None,
         max_iterations: int = None,
         optimizer_cfg: dict = {
@@ -70,8 +70,8 @@ class BaseClassificationTrainer(ABC):
         self.checkpoint_dir = outputs_dir / Path(exp_name) / Path('checkpoint')
         self.checkpoint_dir.mkdir(exist_ok=True, parents=True)
         
-        if dotenv_path.exists():
-            dotenv.load_dotenv('.env')
+        # if dotenv_path.exists():
+        #     dotenv.load_dotenv('.env')
             
         if seed:
             self.seed = seed

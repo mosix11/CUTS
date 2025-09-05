@@ -43,8 +43,16 @@ class DinoV3Classifier(BaseModel):
         else:
             snapshot_download(self.pt_weights, token=os.getenv("HF_TOKEN"))
         
-        self.image_encoder = AutoModel.from_pretrained(pt_weights, local_files_only=True)
-        self.pre_processor = AutoImageProcessor.from_pretrained(pt_weights, local_files_only=True)
+        try:
+            self.image_encoder = AutoModel.from_pretrained(self.pt_weights, local_files_only=True)
+            self.pre_processor = AutoImageProcessor.from_pretrained(self.pt_weights, local_files_only=True)
+        except Exception as e:
+            if self.is_main():
+                raise RuntimeError(
+                    f"Local HF cache missing for {self.pt_weights}. "
+                    f"Ensure snapshot_download ran on each node leader."
+                ) from e
+            raise
         
         feature_dim = self.image_encoder.config.hidden_size
         self.classifier_head = nn.Linear(feature_dim, num_classes)
