@@ -29,7 +29,7 @@ dataset:
   batch_size: 512
   heldout_conf: 0.02
   valset_ratio: 0.0
-  num_workers: 12
+  num_workers: 8
   seed: *dataset_seed
 
 
