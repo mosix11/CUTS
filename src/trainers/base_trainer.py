@@ -384,7 +384,7 @@ class BaseClassificationTrainer(ABC):
             
             
             if self.model_log_call:
-                model_logs = self.model.log_stats()
+                model_logs = self._mm().log_stats()
                 statistics.update(model_logs)
             
             
@@ -512,8 +512,8 @@ class BaseClassificationTrainer(ABC):
         """
         Public-facing evaluation method.
         """
-        self.model.eval()
-        self.model.reset_metrics()
+        self._mm().eval()
+        self._mm().reset_metrics()
         
         if set == 'Train':
             dataloader = self.train_dataloader
