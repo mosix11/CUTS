@@ -6,6 +6,8 @@ from .base_classification_dataset import BaseClassificationDataset
 from typing import Tuple, List, Union, Dict
 from pathlib import Path
 
+import torch.distributed as dist
+
 class SVHN(BaseClassificationDataset):
     def __init__(
         self,
@@ -45,16 +47,37 @@ class SVHN(BaseClassificationDataset):
 
     def load_train_set(self):
         self.train_transforms = self.get_transforms(train=True)
-        return datasets.SVHN(root=self.dataset_dir, split="train", transform=self.train_transforms, download=True)
-    
+        root = self.dataset_dir
+
+        if self.is_distributed():
+            if self.is_node_leader():
+                _ = datasets.SVHN(root=root, split="train", download=True)  # pre-download only
+            dist.barrier()
+            trainset = datasets.SVHN(root=root, split="train", transform=self.train_transforms, download=False)
+        else:
+            trainset = datasets.SVHN(root=root, split="train", transform=self.train_transforms, download=True)
+
+        return trainset
+
     def load_validation_set(self):
         # 531,131 samples in "extra" split which are less curated.
+        # If you decide to use it, mirror the same distributed pattern as above.
         # return datasets.SVHN(root=self.dataset_dir, split="extra", transform=self.get_transforms(train=True), download=True)
         return None
-    
+
     def load_test_set(self):
         self.val_transforms = self.get_transforms(train=False)
-        return datasets.SVHN(root=self.dataset_dir, split="test", transform=self.val_transforms, download=True)
+        root = self.dataset_dir
+
+        if self.is_distributed():
+            if self.is_node_leader():
+                _ = datasets.SVHN(root=root, split="test", download=True)  # pre-download only
+            dist.barrier()
+            testset = datasets.SVHN(root=root, split="test", transform=self.val_transforms, download=False)
+        else:
+            testset = datasets.SVHN(root=root, split="test", transform=self.val_transforms, download=True)
+
+        return testset
 
     def get_transforms(self, train=True):
         if self._train_transforms and train:

@@ -7,6 +7,7 @@ from .base_classification_dataset import BaseClassificationDataset
 from typing import Tuple, List, Union, Dict
 from pathlib import Path
 
+import torch.distributed as dist
 
 class EuroSAT(BaseClassificationDataset):
     DEFAULT_TEST_SIZE = 2700
@@ -105,29 +106,43 @@ class EuroSAT(BaseClassificationDataset):
         return identifier
 
 
+    def _ensure_eurosat_download(self):
+        """Ensure EuroSAT is present locally once (per node in DDP), then sync."""
+        root = self.dataset_dir
+        if self.is_distributed():
+            if self.is_node_leader():
+                _ = datasets.EuroSAT(root=root, transform=None, download=True)
+            dist.barrier()
+        else:
+            _ = datasets.EuroSAT(root=root, transform=None, download=True)
+
     def _base_dataset(self, transform):
-        # EuroSAT in torchvision has no split; it’s a single 27k-sample dataset.
-        # Setting download=True in both calls is fine—download happens once.
-        return datasets.EuroSAT(root=self.dataset_dir, transform=transform, download=True)
+        # EuroSAT has no split; ensure the data is present, then open with download=False
+        self._ensure_eurosat_download()
+        return datasets.EuroSAT(root=self.dataset_dir, transform=transform, download=False)
 
     def _get_split_indices(self):
-        if self._split_indices is not None:
+        if getattr(self, "_split_indices", None) is not None:
             return self._split_indices
 
-        # Build a minimal dataset once to read its length deterministically
-        base_for_len = datasets.EuroSAT(root=self.dataset_dir, transform=None, download=True)
+        # Make sure data is present and length is deterministic across ranks
+        self._ensure_eurosat_download()
+        base_for_len = datasets.EuroSAT(root=self.dataset_dir, transform=None, download=False)
         n = len(base_for_len)  # expected 27000
-        if not (0 < self.test_size < n):
-            raise ValueError(f"Invalid test_size={self.test_size}; must be in (0, {n}).")
 
+        test_size = self.test_size
+        if not (0 < test_size < n):
+            raise ValueError(f"Invalid test_size={test_size}; must be in (0, {n}).")
+
+        seed = self.seed
         g = torch.Generator()
-        g.manual_seed(self.seed)  # deterministic across machines / runs
+        g.manual_seed(seed)  # deterministic across machines / runs
+
         perm = torch.randperm(n, generator=g).tolist()
+        test_idx = perm[:test_size]
+        train_idx = perm[test_size:]
 
-        test_idx = perm[:self.test_size]
-        train_idx = perm[self.test_size:]
-
-        # Keep a stable ordering within each subset (optional but nice)
+        # Stable ordering within each subset (optional but nice)
         test_idx.sort()
         train_idx.sort()
 

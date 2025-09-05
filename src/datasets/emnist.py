@@ -6,6 +6,8 @@ from torch.utils.data import Dataset, DataLoader, random_split, Subset
 from .base_classification_dataset import BaseClassificationDataset
 from .dataset_wrappers import DatasetWithIndex, LabelRemapper, NoisyClassificationDataset, BinarizedClassificationDataset
 
+import torch.distributed as dist
+
 import os
 from pathlib import Path
 import random
@@ -52,14 +54,38 @@ class EMNIST(BaseClassificationDataset):
     # TODO: change the class so it can accept other splits as well
     def load_train_set(self):
         self.train_transforms = self.get_transforms(train=True)
-        return datasets.EMNIST(root=self.dataset_dir, split="letters", train=True, transform=self.train_transforms, download=True)
-    
+        root = self.dataset_dir
+
+        if self.is_distributed():
+            if self.is_node_leader():
+                _ = datasets.EMNIST(root=root, split="letters", train=True, download=True)  # pre-download only
+            dist.barrier()
+            trainset = datasets.EMNIST(root=root, split="letters", train=True,
+                                    transform=self.train_transforms, download=False)
+        else:
+            trainset = datasets.EMNIST(root=root, split="letters", train=True,
+                                    transform=self.train_transforms, download=True)
+
+        return trainset
+
     def load_validation_set(self):
         return None
-    
+
     def load_test_set(self):
         self.val_transforms = self.get_transforms(train=False)
-        return datasets.EMNIST(root=self.dataset_dir, split="letters", train=False, transform=self.val_transforms, download=True)
+        root = self.dataset_dir
+
+        if self.is_distributed():
+            if self.is_node_leader():
+                _ = datasets.EMNIST(root=root, split="letters", train=False, download=True)  # pre-download only
+            dist.barrier()
+            testset = datasets.EMNIST(root=root, split="letters", train=False,
+                                    transform=self.val_transforms, download=False)
+        else:
+            testset = datasets.EMNIST(root=root, split="letters", train=False,
+                                    transform=self.val_transforms, download=True)
+
+        return testset
 
 
     def get_transforms(self, train=True):

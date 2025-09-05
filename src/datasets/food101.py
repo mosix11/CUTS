@@ -6,6 +6,8 @@ from .base_classification_dataset import BaseClassificationDataset
 from typing import Tuple, List, Union, Dict
 from pathlib import Path
 
+import torch.distributed as dist
+
 class Food101(BaseClassificationDataset):
     def __init__(
         self,
@@ -46,16 +48,39 @@ class Food101(BaseClassificationDataset):
 
     def load_train_set(self):
         self.train_transforms = self.get_transforms(train=True)
-        trainset = datasets.Food101(root=self.dataset_dir, split="train", transform=self.train_transforms, download=True)
+        root = self.dataset_dir
+
+        if self.is_distributed():
+            if self.is_node_leader():
+                _ = datasets.Food101(root=root, split="train", download=True)  # pre-download only
+            dist.barrier()
+            trainset = datasets.Food101(root=root, split="train",
+                                        transform=self.train_transforms, download=False)
+        else:
+            trainset = datasets.Food101(root=root, split="train",
+                                        transform=self.train_transforms, download=True)
+
         self._class_names = trainset.classes
         return trainset
-    
+
     def load_validation_set(self):
         return None
-    
+
     def load_test_set(self):
         self.val_transforms = self.get_transforms(train=False)
-        return datasets.Food101(root=self.dataset_dir, split="test", transform=self.val_transforms, download=True)
+        root = self.dataset_dir
+
+        if self.is_distributed():
+            if self.is_node_leader():
+                _ = datasets.Food101(root=root, split="test", download=True)  # pre-download only
+            dist.barrier()
+            testset = datasets.Food101(root=root, split="test",
+                                    transform=self.val_transforms, download=False)
+        else:
+            testset = datasets.Food101(root=root, split="test",
+                                    transform=self.val_transforms, download=True)
+
+        return testset
 
     def get_transforms(self, train=True):
         if self._train_transforms and train:

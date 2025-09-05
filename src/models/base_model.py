@@ -4,8 +4,8 @@ import torch.nn.functional as F
 from torch.amp import autocast
 import torchmetrics
 from abc import ABC, abstractmethod
-
-
+import torch.distributed as dist
+import os
 
 class BaseModel(nn.Module, ABC): 
     """
@@ -55,6 +55,25 @@ class BaseModel(nn.Module, ABC):
         This defines the specific architecture of the model.
         """
         pass
+
+    
+    def is_distributed(self):
+        return dist.is_available() and dist.is_initialized()
+    
+    def is_main(self):
+        return (not self.is_distributed()) or (dist.get_rank() == 0)
+
+    def get_rank(self):
+        return dist.get_rank()
+    
+    def get_local_rank(self) -> int:
+        return int(os.environ.get("LOCAL_RANK", "0"))
+    
+    def is_node_leader(self):
+        if not self.is_distributed():
+            return True
+        local_world_size = torch.cuda.device_count()
+        return dist.get_rank() % local_world_size == 0
 
     def training_step(self, x, y, use_amp=False, return_preds=False):
         """Performs a single training step."""
@@ -109,7 +128,7 @@ class BaseModel(nn.Module, ABC):
             for name, metric in self.metrics.items():
                 metric.reset()
 
-    
+
     
     def _count_trainable_parameters(self):
         """Counts and returns the total number of trainable parameters in the model."""

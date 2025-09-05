@@ -5,6 +5,7 @@ import torchvision.transforms.v2 as transforms
 from .base_classification_dataset import BaseClassificationDataset
 from typing import Tuple, List, Union, Dict
 from pathlib import Path
+import torch.distributed as dist
 
 class CIFAR10(BaseClassificationDataset):
     def __init__(
@@ -45,7 +46,15 @@ class CIFAR10(BaseClassificationDataset):
 
     def load_train_set(self):
         self.train_transforms = self.get_transforms(train=True)
-        trainset = datasets.CIFAR10(root=self.dataset_dir, train=True, transform=self.train_transforms, download=True)
+        root = self.dataset_dir
+        if self.is_distributed():
+            if self.is_node_leader():
+                _ = datasets.CIFAR10(root=root, train=True, transform=self.train_transforms, download=True)
+            dist.barrier()
+            trainset = datasets.CIFAR10(root=root, train=True, transform=self.train_transforms, download=False)
+        else:
+            trainset = datasets.CIFAR10(root=root, train=True, transform=self.train_transforms, download=True)
+                
         self._class_names = trainset.classes
         return trainset
     
@@ -54,7 +63,17 @@ class CIFAR10(BaseClassificationDataset):
     
     def load_test_set(self):
         self.val_transforms = self.get_transforms(train=False)
-        return datasets.CIFAR10(root=self.dataset_dir, train=False, transform=self.val_transforms, download=True)
+        root = self.dataset_dir
+        
+        if self.is_distributed():
+            if self.is_node_leader():
+                _ = datasets.CIFAR10(root=root, train=False, transform=self.val_transforms , download=True)
+            dist.barrier()
+            testset = datasets.CIFAR10(root=root, train=False, transform=self.val_transforms , download=False)
+        else:
+            testset = datasets.CIFAR10(root=root, train=False, transform=self.val_transforms , download=True)
+
+        return testset
 
     def get_transforms(self, train=True):
         if self._train_transforms and train:

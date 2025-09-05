@@ -22,6 +22,7 @@ class OpenClipImageEncoderModule(nn.Module):
     ):
         super().__init__()
 
+        
         (
             self.model,
             self.train_preprocess,

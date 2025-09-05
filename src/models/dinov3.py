@@ -3,7 +3,10 @@ import open_clip
 import torch.nn as nn
 import torch.nn.functional as F
 
+import torch.distributed as dist
+
 from transformers import AutoImageProcessor, AutoModel
+from huggingface_hub import snapshot_download
 import torchvision.transforms.v2 as transforms
 
 import torchmetrics
@@ -14,7 +17,6 @@ from tqdm import tqdm
 
 from typing import Union, List, Callable
 from huggingface_hub import login
-import dotenv
 import os
 from pathlib import Path
 
@@ -26,22 +28,23 @@ class DinoV3Classifier(BaseModel):
         num_classes:int = None,
         loss_fn:nn.Module = None,
         metrics:dict = None,
-        dotenv_path: Path = Path("./.env"),
     ):
         super().__init__(loss_fn=loss_fn, metrics=metrics)
         
         
-        if dotenv_path.exists():
-            dotenv.load_dotenv('.env')
-        else:
-            raise RuntimeError('Please put the Hugging Face token inside .env file.')
-        login(token=os.getenv("HF_TOKEN"))
-        
+
         self.pt_weights = pt_weights
-        print(pt_weights)
         
-        self.image_encoder = AutoModel.from_pretrained(pt_weights)
-        self.pre_processor = AutoImageProcessor.from_pretrained(pt_weights)
+        if self.is_distributed():
+            # download once per node
+            if self.is_node_leader():
+                snapshot_download(self.pt_weights, token=os.getenv("HF_TOKEN"))
+            dist.barrier()
+        else:
+            snapshot_download(self.pt_weights, token=os.getenv("HF_TOKEN"))
+        
+        self.image_encoder = AutoModel.from_pretrained(pt_weights, local_files_only=True)
+        self.pre_processor = AutoImageProcessor.from_pretrained(pt_weights, local_files_only=True)
         
         feature_dim = self.image_encoder.config.hidden_size
         self.classifier_head = nn.Linear(feature_dim, num_classes)

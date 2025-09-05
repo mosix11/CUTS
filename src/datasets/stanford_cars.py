@@ -6,6 +6,7 @@ from .base_classification_dataset import BaseClassificationDataset
 from typing import Tuple, List, Union, Dict
 from pathlib import Path
 
+import torch.distributed as dist
 
 class StanfordCars(BaseClassificationDataset):
     def __init__(

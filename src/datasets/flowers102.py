@@ -6,6 +6,8 @@ from .base_classification_dataset import BaseClassificationDataset
 from typing import Tuple, List, Union, Dict
 from pathlib import Path
 
+import torch.distributed as dist
+
 class Flowers102(BaseClassificationDataset):
     def __init__(
         self,
@@ -45,17 +47,46 @@ class Flowers102(BaseClassificationDataset):
 
     def load_train_set(self):
         self.train_transforms = self.get_transforms(train=True)
-        trainset = datasets.Flowers102(root=self.dataset_dir, split="train", transform=self.train_transforms, download=True)
+        root = self.dataset_dir
+
+        if self.is_distributed():
+            if self.is_node_leader():
+                _ = datasets.Flowers102(root=root, split="train", download=True)  # pre-download only
+            dist.barrier()
+            trainset = datasets.Flowers102(root=root, split="train", transform=self.train_transforms, download=False)
+        else:
+            trainset = datasets.Flowers102(root=root, split="train", transform=self.train_transforms, download=True)
+
         self._class_names = trainset.classes
         return trainset
-    
+
     def load_validation_set(self):
         self.val_transforms = self.get_transforms(train=False)
-        return datasets.Flowers102(root=self.dataset_dir, split="val", transform=self.val_transforms, download=True)
-    
+        root = self.dataset_dir
+
+        if self.is_distributed():
+            if self.is_node_leader():
+                _ = datasets.Flowers102(root=root, split="val", download=True)
+            dist.barrier()
+            valset = datasets.Flowers102(root=root, split="val", transform=self.val_transforms, download=False)
+        else:
+            valset = datasets.Flowers102(root=root, split="val", transform=self.val_transforms, download=True)
+
+        return valset
+
     def load_test_set(self):
         self.val_transforms = self.get_transforms(train=False)
-        return datasets.Flowers102(root=self.dataset_dir, split="test", transform=self.val_transforms, download=True)
+        root = self.dataset_dir
+
+        if self.is_distributed():
+            if self.is_node_leader():
+                _ = datasets.Flowers102(root=root, split="test", download=True)
+            dist.barrier()
+            testset = datasets.Flowers102(root=root, split="test", transform=self.val_transforms, download=False)
+        else:
+            testset = datasets.Flowers102(root=root, split="test", transform=self.val_transforms, download=True)
+
+        return testset
 
     def get_transforms(self, train=True):
         if self._train_transforms and train:

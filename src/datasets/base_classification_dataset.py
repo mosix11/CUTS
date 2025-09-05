@@ -109,6 +109,24 @@ class BaseClassificationDataset(ABC):
         """
         pass
         
+    def is_distributed(self):
+        return dist.is_available() and dist.is_initialized()
+    
+    def is_main(self):
+        return (not self.is_distributed()) or (dist.get_rank() == 0)
+
+    def get_rank(self):
+        return dist.get_rank()
+    
+    def get_local_rank(self) -> int:
+        return int(os.environ.get("LOCAL_RANK", "0"))
+    
+    def is_node_leader(self):
+        if not self.is_distributed():
+            return True
+        local_world_size = torch.cuda.device_count()
+        return dist.get_rank() % local_world_size == 0
+    
     def get_train_dataloader(self):
         return self.train_loader
     
@@ -409,19 +427,16 @@ class BaseClassificationDataset(ABC):
             return DataLoader(
                 dataset,
                 batch_size=self.batch_size,
-                shuffle=None if self._is_distributed() else shuffle,
-                sampler=DistributedSampler(dataset, shuffle=shuffle) if self._is_distributed() else None,
+                shuffle=None if self.is_distributed() else shuffle,
+                sampler=DistributedSampler(dataset, shuffle=shuffle) if self.is_distributed() else None,
                 num_workers=self.num_workers,
                 pin_memory=True,
                 generator=self.generator,
             )
-            
-    def _is_distributed(self) -> bool:
-        return int(os.environ.get("WORLD_SIZE", "1")) > 1
+
     
     
-    def _get_local_rank(self) -> int:
-        return int(os.environ.get("LOCAL_RANK", "0"))
+    
     
         
     def _get_balanced_subset(self, dataset: Dataset, total_size: int, class_subset: list, generator: torch.Generator) -> Subset:

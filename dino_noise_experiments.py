@@ -689,7 +689,7 @@ def main():
     )
     args = parser.parse_args()
 
-    dotenv.load_dotenv(".env")
+    
     
     cfg_path = Path('configs/single_experiment/dino_noise_TA') / f"{args.config}.yaml"
 

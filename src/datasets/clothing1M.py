@@ -6,6 +6,8 @@ from torch.utils.data import Dataset, ConcatDataset
 from .base_classification_dataset import BaseClassificationDataset
 from .dataset_wrappers import DatasetWithIndex, LabelRemapper, NoisyClassificationDataset, BinarizedClassificationDataset
 
+import torch.distributed as dist
+
 import os
 from pathlib import Path
 import random
@@ -75,7 +77,11 @@ class Clothing1M(BaseClassificationDataset):
         dataset_dir.mkdir(exist_ok=True, parents=True)
         self.dataset_dir = dataset_dir
     
-        self._download_dataset()
+    
+        if self.is_distributed():
+            if self.is_node_leader():
+                self._download_dataset()
+            dist.barrier()
          
         
         
@@ -96,6 +102,25 @@ class Clothing1M(BaseClassificationDataset):
             dataset_dir=dataset_dir,
             **kwargs,  
         )
+        
+    def is_distributed(self):
+        return dist.is_available() and dist.is_initialized()
+    
+    def is_main(self):
+        return (not self.is_distributed()) or (dist.get_rank() == 0)
+
+    def get_rank(self):
+        return dist.get_rank()
+    
+    def get_local_rank(self) -> int:
+        return int(os.environ.get("LOCAL_RANK", "0"))
+    
+    def is_node_leader(self):
+        if not self.is_distributed():
+            return True
+        local_world_size = torch.cuda.device_count()
+        return dist.get_rank() % local_world_size == 0
+    
 
 
     def load_train_set(self):

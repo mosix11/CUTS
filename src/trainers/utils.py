@@ -34,7 +34,7 @@ def setup_distributed():
     if is_distributed:
         if not torch_distributed.is_initialized():
             torch_distributed.init_process_group(backend="nccl")
-            print('DDP is initialized.')
+            print(f'DDP is initialized for rank {torch_distributed.get_rank()}')
             
         local_rank = int(os.environ.get("LOCAL_RANK", "0"))
         rank = torch_distributed.get_rank()
