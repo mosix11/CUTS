@@ -329,7 +329,18 @@ class BaseClassificationDataset(ABC):
         
         return Subset(dataset, clean_indices), Subset(dataset, noisy_indices)
     
-    
+
+    def switch_labels_to_clean(self, noisy_set:Dataset):
+        dummy_instance = noisy_set
+        while not isinstance(dummy_instance, (NoisyClassificationDataset, PoisonedClassificationDataset)):
+            dummy_instance = dummy_instance.dataset
+        dummy_instance.switch_to_clean_lables()
+
+    def switch_labels_to_noisy(self, noisy_set:Dataset):
+        dummy_instance = noisy_set
+        while not isinstance(dummy_instance, (NoisyClassificationDataset, PoisonedClassificationDataset)):
+            dummy_instance = dummy_instance.dataset
+        dummy_instance.switch_to_noisy_lables()
     
     def _init_loaders(self):
         train_dataset = self.load_train_set()

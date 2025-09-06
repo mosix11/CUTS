@@ -13,6 +13,7 @@ def prepare_batch(batch, device):
     batch = [tens.to(device) for tens in batch]
     return batch
 
+
 def evaluate_model(
     model:torch.nn.Module,
     dataloader:DataLoader,

@@ -201,20 +201,52 @@ class NoisyClassificationDataset(Dataset):
                 # mark them as noisy
                 self.is_noisy_flags[noisy_indices] = 1.0
                 
+                
+        elif self.noise_type == 'IC':
+            # Define the IC pairs (two-way swaps)
+            if self.dataset_name == 'MNIST':
+                # digits: 1 <-> 7
+                swap_pairs = [(1, 7)]
+            elif self.dataset_name == 'CIFAR10':
+                # CIFAR-10 standard indices: cat=3, dog=5
+                swap_pairs = [(3, 5)]
+            elif self.dataset_name == 'CIFAR100':
+                # torchvision CIFAR-100 fine-label order: maple_tree=47, oak_tree=52
+                swap_pairs = [(47, 52)]
+            else:
+                raise ValueError(f"IC noise not implemented for dataset '{self.dataset_name}'.")
+
+            # Perform two-way swaps per pair
+            for a, b in swap_pairs:
+                idx_a = (original_labels == a).nonzero(as_tuple=True)[0]
+                idx_b = (original_labels == b).nonzero(as_tuple=True)[0]
+
+                if len(idx_a) == 0 or len(idx_b) == 0:
+                    # one of the classes is absent; skip safely
+                    continue
+
+                # Ensure equal swap counts from both sides for a true two-way exchange
+                num_to_swap = min(int(self.noise_rate * len(idx_a)),
+                                int(self.noise_rate * len(idx_b)))
+
+                if num_to_swap > 0:
+                    perm_a = torch.randperm(len(idx_a), generator=self.generator)[:num_to_swap]
+                    perm_b = torch.randperm(len(idx_b), generator=self.generator)[:num_to_swap]
+                    swap_a = idx_a[perm_a]
+                    swap_b = idx_b[perm_b]
+
+                    # Apply the swap
+                    noisy_labels[swap_a] = b
+                    noisy_labels[swap_b] = a
+
+                    # Mark as noisy
+                    self.is_noisy_flags[swap_a] = 1.0
+                    self.is_noisy_flags[swap_b] = 1.0
+                
         elif self.noise_type == 'asymmetric':
             # This now uses the fixed-count method on a per-class basis
             if self.dataset_name is None:
                 raise ValueError("To inject asymmetric noise, you must specify the dataset_name.")
-            
-            # Sub-classing with asymmetric noise is tricky, so we forbid it for now.
-            if self.dataset_name == 'MNIST' and len(self.available_labels) != 10:
-                raise RuntimeError("Asymmetric noise for sub-classed MNIST is not supported.")
-            elif self.dataset_name == 'CIFAR10' and len(self.available_labels) != 10:
-                raise RuntimeError("Asymmetric noise for sub-classed CIFAR-10 is not supported.")
-            elif self.dataset_name == 'CIFAR100' and len(self.available_labels) != 100:
-                raise RuntimeError("Asymmetric noise for sub-classed CIFAR-100 is not supported.")
-            elif self.dataset_name == 'Clothing1M' and len(self.available_labels) != 14:
-                raise RuntimeError("Asymmetric noise for sub-classed Clothing1M is not supported.")
 
             noise_map = {}
             if self.dataset_name == 'MNIST':
