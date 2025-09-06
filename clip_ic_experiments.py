@@ -191,7 +191,7 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
             if strategy['finetuning_set'] == 'Heldout':
                 noise_tv['set'] = 'Heldout'
                 dataset.inject_noise(**noise_tv)
-                hs_clean, hs_noisy = base_dataset.get_clean_noisy_subsets(set='Heldout')
+                hs_clean, hs_noisy = dataset.get_clean_noisy_subsets(set='Heldout')
                 dataset.set_trainset(hs_noisy, shuffle=True)
                 print('size of trainset for finetuning on noise:', len(dataset.get_trainset()))
                 
