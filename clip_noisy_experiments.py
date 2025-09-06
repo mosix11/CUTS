@@ -662,35 +662,48 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     
     
-    ft_tvs_list = list(task_vectors.values())
-    tv_names = list(task_vectors.keys())
+    # ft_tvs_list = list(task_vectors.values())
+    # tv_names = list(task_vectors.keys())
     
-    task_sim = []
-    for i in range(len(ft_tvs_list)):
-        anchor_tv = ft_tvs_list[i]
-        task_sim.append([])
-        for j in range(len(ft_tvs_list)):
-            other_tv = ft_tvs_list[j]
-            cos_sim = anchor_tv.cosine_similarity_flatten(other_tv)
-            task_sim[i].append(cos_sim)
-    task_sim = np.array(task_sim)
+    # task_sim = []
+    # for i in range(len(ft_tvs_list)):
+    #     anchor_tv = ft_tvs_list[i]
+    #     task_sim.append([])
+    #     for j in range(len(ft_tvs_list)):
+    #         other_tv = ft_tvs_list[j]
+    #         cos_sim = anchor_tv.cosine_similarity_flatten(other_tv)
+    #         task_sim[i].append(cos_sim)
+    # task_sim = np.array(task_sim)
     
-    misc_utils.plot_confusion_matrix(
-        title='Task Vector Similarity Matrix',
-        cm=task_sim,
-        class_names=tv_names,
-        color_map='vlag',
-        color_bar=True,
-        vmin= -1.0,
-        vmax= 1.0,
-        x_label='Task Vectors',
-        y_label='Task Vectors',
-        tick_label_font_size=6,
-        filepath=results_dir / 'task_similarities.png',
-        show=False
-    )
+    # misc_utils.plot_confusion_matrix(
+    #     title='Task Vector Similarity Matrix',
+    #     cm=task_sim,
+    #     class_names=tv_names,
+    #     color_map='vlag',
+    #     color_bar=True,
+    #     vmin= -1.0,
+    #     vmax= 1.0,
+    #     x_label='Task Vectors',
+    #     y_label='Task Vectors',
+    #     tick_label_font_size=6,
+    #     filepath=results_dir / 'task_similarities.png',
+    #     show=False
+    # )
 
-
+    # from test_alpha import pick_alpha_weight_only, plot_weight_only_curves
+    # alphas = np.linspace(-0.0, -5.0, 51)
+    
+    
+    # results = pick_alpha_weight_only(
+    #     state0=mix_weights,
+    #     delta=task_vectors['Average TV'].vector,
+    #     alphas=alphas,
+    #     device=gpu
+    # )
+    
+    # print(results['alpha_best'])
+    # plot_weight_only_curves(results)
+    # exit()
     
     # model.load_state_dict(mix_weights, strict=False)
     # fig_comp_pt = embedding_space_analysis.all_plot_comp(
@@ -906,9 +919,9 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     # results_dict = OrderedDict()
     # for alpha in tqdm(np.linspace(-0.05, -1.5, 30)):
-    for alpha in tqdm(np.linspace(-0.1, -2.0, 20)):
+    # for alpha in tqdm(np.linspace(-0.1, -2.0, 20)):
     # for alpha in tqdm(np.linspace(-0.1, -1.5, 15)):
-    # for alpha in tqdm(np.linspace(-0.05, -3.0, 60)):
+    for alpha in tqdm(np.linspace(-0.05, -3.0, 60)):
     
         model.load_state_dict(mix_weights, strict=False)
         task_vectors['Average TV'].apply_to(model, scaling_coef=alpha, strict=False)

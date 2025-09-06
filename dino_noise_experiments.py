@@ -305,17 +305,10 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         dir.mkdir(exist_ok=True, parents=True)
     
     
-    dataset_cfg = cfg['datasets'][0]
-    dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
     
-
-    cfg['model']['datasets_cfgs'] = {dataset_cfg['name']: dataset.get_class_names()} 
     model = model_factory.create_model(cfg['model'])
-    model.freeze_all_heads()
     
-    pt_weights = copy.deepcopy(model.state_dict())
-    pt_weights = OrderedDict((k, v) for k, v in pt_weights.items() if "classifier_heads" not in k)
-    
+    dataset_cfg = cfg['dataset']
     dataset_cfg['train_transforms'] = model.get_val_transforms()
     dataset_cfg['val_transforms'] = model.get_val_transforms()
     dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
@@ -330,23 +323,19 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
 
 
     # Load weights while removing classifier weights from the state dict
-    mix_weights = OrderedDict(
-    (k, v) for k, v in torch.load(
+    mix_weights = torch.load(
         outputs_dir.joinpath(f"mix/weights/ft_weights.pth"),
         map_location='cpu'
-    ).items() if "classifier_heads" not in k)
-    
-    gold_weights = OrderedDict(
-    (k, v) for k, v in torch.load(
+    )
+    gold_weights = torch.load(
         outputs_dir.joinpath(f"clean/weights/ft_weights.pth"),
         map_location='cpu'
-    ).items() if "classifier_heads" not in k)
+    )
     
-    ft_ho_clean_weights = OrderedDict(
-    (k, v) for k, v in torch.load(
+    ft_ho_clean_weights = torch.load(
         outputs_dir.joinpath(f"finetune_clean/weights/ft_weights.pth"),
         map_location='cpu'
-    ).items() if "classifier_heads" not in k)
+    )
     
     
     # ft_gradient_ascent_weights = OrderedDict(
@@ -359,11 +348,10 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     for noise_tv in cfg['strategy']['noise']['finetuning']:
         ft_expr_dir = outputs_dir / f"finetune_{noise_tv['noise_rate']}_{noise_tv['seed']}"
-        n_weights = OrderedDict(
-        (k, v) for k, v in torch.load(
+        n_weights = torch.load(
             ft_expr_dir.joinpath(f"weights/ft_weights.pth"),
             map_location='cpu'
-        ).items() if "classifier_heads" not in k)
+        )
         noise_weights[f"{noise_tv['noise_rate']*100:.0f}% Noise, {noise_tv['seed']} Seed"] = n_weights
         
     
@@ -420,6 +408,57 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         show=False
     )
 
+
+
+    def get_model_weight_norms(state_dict, norm_type=2):
+        """
+        Compute overall norm of all parameters and per-layer norms.
+        
+        Args:
+            state_dict (dict): model.state_dict() or a loaded state_dict
+            norm_type (int or float): type of norm (default: 2 for L2 norm)
+
+        Returns:
+            overall_norm (float): norm of all parameters concatenated
+            layer_norms (dict): mapping from layer name -> norm value
+        """
+        layer_norms = {}
+        all_params = []
+
+        for name, param in state_dict.items():
+            if not torch.is_tensor(param):  # skip buffers like num_batches_tracked
+                continue
+            param_norm = param.norm(norm_type).item()
+            layer_norms[name] = param_norm
+            all_params.append(param.view(-1))
+
+        overall_norm = torch.norm(torch.cat(all_params), p=norm_type).item()
+        return overall_norm, layer_norms
+    
+    
+    from test_alpha import pick_alpha_weight_only, plot_weight_only_curves
+    alphas = np.linspace(-0.0, -5.0, 51)
+    
+    
+    results = pick_alpha_weight_only(
+        state0=mix_weights,
+        delta=task_vectors['Average TV'].vector,
+        alphas=alphas,
+        device=gpu
+    )
+    
+    print(results['alpha_best'])
+    plot_weight_only_curves(results)
+    # for alpha in np.linspace(-0.0, -5.0, 51):
+        # model.load_state_dict(mix_weights, strict=False)
+        # task_vectors['Average TV'].apply_to(model, scaling_coef=alpha, strict=False)
+        
+    #     overall_norm_1, layer_norm_1 = get_model_weight_norms(model.state_dict(), norm_type=1)
+    #     overall_norm_2, layer_norms_2 = get_model_weight_norms(model.state_dict(), norm_type=2)
+        
+    #     print(f'{alpha:.1f}', overall_norm_1, overall_norm_2)
+    
+    exit()
 
     
     # model.load_state_dict(mix_weights, strict=False)

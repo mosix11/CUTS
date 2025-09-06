@@ -363,38 +363,52 @@ class BaseClassificationTrainer(ABC):
         self.grad_scaler = GradScaler("cuda", enabled=self.use_amp)
         self.early_stopping_activated = False
             
-        if self.iteration_mode:
-            outer_iterable = range(self.epoch, 10**12)  # effectively unbounded; we'll break on max_iterations
-        else:
-            outer_iterable = tqdm(range(self.epoch, self.max_epochs), total=self.max_epochs)
-
-            
-        for self.epoch in outer_iterable:
-            if self.is_distributed():
-                self.train_dataloader.sampler.set_epoch(self.epoch)
-            
-            if (not self.iteration_mode) and isinstance(outer_iterable, tqdm):
-                outer_iterable.set_description(f"Processing Training Epoch {self.epoch + 1}/{self.max_epochs}")
+        self._tqdm_bar = None
+        if self.is_main():
+            if self.iteration_mode:
+                remaining = self.max_iterations - self.global_step
+                self._tqdm_bar = tqdm(
+                    total=remaining,
+                    desc="Training (steps)",
+                    dynamic_ncols=True
+                )
+            else:
+                remaining_epochs = self.max_epochs - self.epoch
+                self._tqdm_bar = tqdm(
+                    total=remaining_epochs,
+                    desc=f"Training (epochs)",
+                    dynamic_ncols=True
+                )
                 
-            if self.early_stopping and self.early_stopping_activated: break
+        outer_iterable = range(self.epoch, 10**12) if self.iteration_mode else range(self.epoch, self.max_epochs)
+        try:
+            for self.epoch in outer_iterable:
+                if self.is_distributed():
+                    self.train_dataloader.sampler.set_epoch(self.epoch)
 
-            # Call the abstract training method (implemented by subclass)
-            statistics = self._fit_epoch()
-            
-            
-            if self.model_log_call:
-                model_logs = self._mm().log_stats()
-                statistics.update(model_logs)
-            
-            
-            self.after_epoch_end(
-                epoch_train_stats=statistics,
-                epoch_train_loss=statistics.get('Train/Loss') if isinstance(statistics, dict) else None
-            )
-                
-           
-            if self.iteration_mode and self.global_step >= self.max_iterations:
-                break
+                if self.early_stopping and self.early_stopping_activated:
+                    break
+
+                statistics = self._fit_epoch()
+
+                if self.model_log_call:
+                    model_logs = self._mm().log_stats()
+                    statistics.update(model_logs)
+
+                self.after_epoch_end(
+                    epoch_train_stats=statistics,
+                    epoch_train_loss=statistics.get('Train/Loss') if isinstance(statistics, dict) else None
+                )
+
+                if (not self.iteration_mode) and self.is_main() and self._tqdm_bar is not None:
+                    self._tqdm_bar.update(1)
+                    self._tqdm_bar.set_postfix_str(f"epoch={self.epoch+1}/{self.max_epochs}")
+
+                if self.iteration_mode and self.global_step >= self.max_iterations:
+                    break
+        finally:
+            if self._tqdm_bar is not None:
+                self._tqdm_bar.close()
 
         print('Training is finished!')
         # Final evaluation, saving, etc.
@@ -441,10 +455,9 @@ class BaseClassificationTrainer(ABC):
         - Stepping per-step schedulers (including ReduceLROnPlateau with step metric)
         - Iteration-mode validation and checkpoint triggers
         """
-        # 1) Count step
+
         self.global_step += 1
 
-        # 2) LR scheduler (per-step)
         if self.lr_scheduler and self.lr_sch_step_on_batch:
             if isinstance(self.lr_scheduler, ReduceLROnPlateau):
                 # If user chose per-step plateau (unusual), feed the current step loss
@@ -454,7 +467,22 @@ class BaseClassificationTrainer(ABC):
             else:
                 self.lr_scheduler.step()
 
-        # 3) Iteration-mode triggers
+        
+        if self.iteration_mode and self.is_main() and self._tqdm_bar is not None:
+            # prevent over-update when resuming near the end
+            remaining = self.max_iterations - (self._tqdm_bar.n + 1)
+            self._tqdm_bar.update(1 if remaining >= 0 else 0)
+            try:
+                loss = train_snapshot.get('Train/Loss', None)
+                postfix = []
+                if loss is not None:
+                    postfix.append(f"loss={loss:.4f}")
+                if postfix:
+                    self._tqdm_bar.set_postfix_str(", ".join(postfix))
+            except Exception:
+                pass
+        
+        
         if self.iteration_mode:
             # Validation on step frequency
             if self._should_validate_now():

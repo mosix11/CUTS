@@ -39,12 +39,6 @@ class StandardTrainer(BaseClassificationTrainer):
         epoch_train_loss = misc_utils.AverageMeter()
 
         inner_iter = enumerate(self.train_dataloader)
-        if self.iteration_mode:
-            inner_iter = tqdm(
-                enumerate(self.train_dataloader),
-                total=self.num_train_batches,
-                desc=f"Epoch {self.epoch + 1} — steps",
-            )
 
         for i, batch in inner_iter:
             batch = self._prepare_batch(batch)
