@@ -48,7 +48,7 @@ def show_poisoned_samples(dataset, n=9, unnormalize=False):
     plt.show()
     
     
-ds = CIFAR10(normalize_imgs=False, seed=42)
+ds = CIFAR100(normalize_imgs=False, seed=42)
 ds.inject_poison(set='Train', rate=0.02, target_class=0, margin=(10,6), seed=99)
 # ds = MNIST(normalize_imgs=True, seed=42)
 # ds.inject_poison(set='Train', rate=0.02, target_class=0, margin=3, seed=99)

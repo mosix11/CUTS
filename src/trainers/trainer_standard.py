@@ -36,6 +36,9 @@ class StandardTrainer(BaseClassificationTrainer):
         """
         Implementation of the training loop for a single epoch.
         """
+        
+        self._mm().train()
+        
         epoch_train_loss = misc_utils.AverageMeter()
 
         inner_iter = enumerate(self.train_dataloader)
@@ -46,7 +49,6 @@ class StandardTrainer(BaseClassificationTrainer):
             
             self.optim.zero_grad()
                     
-                
             loss = self._mm().training_step(input_batch, target_batch, self.use_amp)
             
             if self.use_amp:

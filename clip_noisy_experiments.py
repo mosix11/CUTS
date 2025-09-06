@@ -659,8 +659,35 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     task_vectors['Random Vector'] = task_vectors['Average TV'].generate_random_vector_with_same_layer_norms(seed=11)
 
+    def average_elementwise_division(state_dict_a, state_dict_b, eps=1e-8):
+        """
+        Computes the average of elementwise division across tensors 
+        in two state dicts (a / b).
+        
+        Args:
+            state_dict_a: dict[str, Tensor]
+            state_dict_b: dict[str, Tensor]
+            eps: small value to avoid division by zero
+        
+        Returns:
+            float: overall average
+        """
+        ratios = []
+        for key in state_dict_a.keys():
+            if key not in state_dict_b:
+                continue  # skip if not in both
+            
+            t1, t2 = state_dict_a[key], state_dict_b[key]
+            if not torch.is_tensor(t1) or not torch.is_tensor(t2):
+                continue  # skip non-tensors (like metadata)
+            
+            ratio = (t1 / (t2 + eps)).float().mean().item()
+            ratios.append(ratio)
+        
+        return sum(ratios) / len(ratios) if ratios else None
     
-    
+    print(average_elementwise_division(task_vectors['Average TV'].vector, mix_weights))
+    exit()
     
     # ft_tvs_list = list(task_vectors.values())
     # tv_names = list(task_vectors.keys())

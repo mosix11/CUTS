@@ -118,7 +118,6 @@ def show_poisoned_samples(dataset, n=9, unnormalize=False):
         if unnormalize:
             img = img * cifar_std + cifar_mean
             
-        print(type(img))
         img = img.clamp(0,1)
         if img.shape[0] == 1:  # grayscale
             ax.imshow(img.squeeze(0).cpu(), cmap="gray")
@@ -132,24 +131,17 @@ def show_poisoned_samples(dataset, n=9, unnormalize=False):
     
     
 def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
+    cfg['trainer']['pretraining']['comet_api_key'] = os.getenv("COMET_API_KEY")
     cfg['trainer']['finetuning']['comet_api_key'] = os.getenv("COMET_API_KEY")
     
+    augmentations = [
+        transformsv2.RandomCrop(224, padding=4),
+    ]
     
-    dataset_cfg = cfg['datasets'][0]
-    base_dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
     
-
-    cfg['model']['datasets_cfgs'] = {dataset_cfg['name']: base_dataset.get_class_names()} 
-    base_model = model_factory.create_model(cfg['model'])
-    base_model.freeze_all_heads()
+    base_dataset, num_classes = dataset_factory.create_dataset(cfg['dataset'], augmentations)
+    base_model = model_factory.create_model(cfg['model'], num_classes)
     
-    dataset_cfg['train_transforms'] = base_model.get_train_transforms()
-    dataset_cfg['val_transforms'] = base_model.get_val_transforms()
-    base_dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
-    
-    print(dataset_cfg['train_transforms'])
-    print(dataset_cfg['val_transforms'])
-    exit()
     
     strategy = cfg['strategy']
     base_dataset.inject_poison(**strategy['poison']['pretraining'])
@@ -169,14 +161,9 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
         plots_dir.mkdir(exist_ok=True, parents=True)
         
         
-        finetuning_cfg = None
-        if 'mix' in cfg['trainer']['finetuning']:
-            finetuning_cfg = cfg['trainer']['finetuning']['mix']
-            finetuning_cfg['comet_api_key'] =  os.getenv("COMET_API_KEY")
-        else: finetuning_cfg = cfg['trainer']['finetuning']
         trainer = StandardTrainer(
             outputs_dir=outputs_dir,
-            **finetuning_cfg,
+            **cfg['trainer']['pretraining'],
             exp_name=experiment_name,
             exp_tags=None,
         )
@@ -201,14 +188,9 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
         plots_dir = experiment_dir / Path("plots")
         plots_dir.mkdir(exist_ok=True, parents=True)
         
-        finetuning_cfg = None
-        if 'clean' in cfg['trainer']['finetuning']:
-            finetuning_cfg = cfg['trainer']['finetuning']['clean']
-            finetuning_cfg['comet_api_key'] =  os.getenv("COMET_API_KEY")
-        else: finetuning_cfg = cfg['trainer']['finetuning']
         trainer = StandardTrainer(
             outputs_dir=outputs_dir,
-            **finetuning_cfg,
+            **cfg['trainer']['pretraining'],
             exp_name=experiment_name,
             exp_tags=None,
         )
@@ -241,63 +223,16 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
         plots_dir = experiment_dir / Path("plots")
         plots_dir.mkdir(exist_ok=True, parents=True)
         
-        finetuning_cfg = None
-        if 'heldout' in cfg['trainer']['finetuning']:
-            finetuning_cfg = cfg['trainer']['finetuning']['heldout']
-            finetuning_cfg['comet_api_key'] =  os.getenv("COMET_API_KEY")
-        else: finetuning_cfg = cfg['trainer']['finetuning']
-        
         trainer = StandardTrainer(
             outputs_dir=outputs_dir,
-            **finetuning_cfg,
+            **cfg['trainer']['finetuning'],
             exp_name=experiment_name,
             exp_tags=None,
         )
         
         results = trainer.fit(model, dataset, resume=False)
         torch.save(model.state_dict(), weights_dir / Path("ft_weights.pth"))
-        
-    # # Gradient Ascent Baseline
-    # if not outputs_dir.joinpath(f"{cfg_name}/gradient_ascent/weights/ft_weights.pth").exists():
-    #     dataset = copy.deepcopy(base_dataset)
-    #     model = copy.deepcopy(base_model)
-        
-    #     mix_model_ckp_path = outputs_dir/ Path(f"{cfg_name}/mix") / Path('weights/ft_weights.pth')
-    #     checkpoint = torch.load(mix_model_ckp_path)
-    #     model.load_state_dict(checkpoint)
-        
-        
-    #     dataset.set_trainset(dataset.get_heldoutset(), shuffle=True)
-        
-    #     experiment_name = f"{cfg_name}/gradient_ascent"
-    #     experiment_dir = outputs_dir / Path(experiment_name)
-
-    #     weights_dir = experiment_dir / Path("weights")
-    #     weights_dir.mkdir(exist_ok=True, parents=True)
-
-    #     plots_dir = experiment_dir / Path("plots")
-    #     plots_dir.mkdir(exist_ok=True, parents=True)
-        
-    #     if strategy['finetuning_set'] == 'Heldout':
-    #         dataset.set_trainset(dataset.get_heldoutset(), shuffle=True)
-    #         dataset.inject_noise(**strategy['noise']['finetuning'][0])
-            
-    #     finetuning_cfg = None
-    #     if 'gradient_ascent' in cfg['trainer']['finetuning']:
-    #         finetuning_cfg = cfg['trainer']['finetuning']['gradient_ascent']
-    #         finetuning_cfg['comet_api_key'] =  os.getenv("COMET_API_KEY")
-    #     else: finetuning_cfg = cfg['trainer']['finetuning']
-        
-    #     trainer = GradientAscentTrainer(
-    #         outputs_dir=outputs_dir,
-    #         **finetuning_cfg,
-    #         exp_name=experiment_name,
-    #         exp_tags=None,
-    #     )
-        
-    #     results = trainer.fit(model, dataset, resume=False)
-    #     torch.save(model.state_dict(), weights_dir / Path("ft_weights.pth"))
-        
+  
         
     for idx, poison_tv in enumerate(strategy['poison']['finetuning']):
         if not outputs_dir.joinpath(f"{cfg_name}/finetune_{poison_tv['rate']}_{poison_tv['seed']}/weights/ft_weights.pth").exists():
@@ -320,15 +255,22 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
             if strategy['finetuning_set'] == 'Heldout':
                 dataset.set_trainset(dataset.get_heldoutset(), shuffle=True)
                 dataset.inject_poison(**poison_tv)
-                
-            finetuning_cfg = None
-            if 'poison' in cfg['trainer']['finetuning']:
-                finetuning_cfg = cfg['trainer']['finetuning']['poison']
-                finetuning_cfg['comet_api_key'] =  os.getenv("COMET_API_KEY")
-            else: finetuning_cfg = cfg['trainer']['finetuning']
+            
+            # def freeze_batchnorm(module, freeze_affine=True):
+            #     for m in module.modules():
+            #         if isinstance(m, torch.nn.modules.batchnorm._BatchNorm):
+            #             print(m)
+            #             m.eval()                           # use running stats
+            #             if freeze_affine:
+            #                 if m.weight is not None: m.weight.requires_grad_(False)
+            #                 if m.bias   is not None: m.bias.requires_grad_(False)
+
+            # freeze_batchnorm(model)
+            # exit()
+
             trainer = StandardTrainer(
                 outputs_dir=outputs_dir,
-                **finetuning_cfg,
+                **cfg['trainer']['finetuning'],
                 exp_name=experiment_name,
                 exp_tags=None,
             )
@@ -365,21 +307,9 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         dir.mkdir(exist_ok=True, parents=True)
     
     
-    dataset_cfg = cfg['datasets'][0]
-    dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
+    dataset, num_classes = dataset_factory.create_dataset(cfg['dataset'])
+    model = model_factory.create_model(cfg['model'], num_classes)
     
-
-    cfg['model']['datasets_cfgs'] = {dataset_cfg['name']: dataset.get_class_names()} 
-    model = model_factory.create_model(cfg['model'])
-    model.freeze_all_heads()
-    
-    pt_weights = copy.deepcopy(model.state_dict())
-    pt_weights = OrderedDict((k, v) for k, v in pt_weights.items() if "classifier_heads" not in k)
-    
-    dataset_cfg['train_transforms'] = model.get_val_transforms()
-    dataset_cfg['val_transforms'] = model.get_val_transforms()
-    
-    dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
     
     dataset.reset_train_dl(shuffle=False)
     
@@ -395,23 +325,20 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
 
 
     # Load weights while removing classifier weights from the state dict
-    mix_weights = OrderedDict(
-    (k, v) for k, v in torch.load(
+    mix_weights = torch.load(
         outputs_dir.joinpath(f"mix/weights/ft_weights.pth"),
         map_location='cpu'
-    ).items() if "classifier_heads" not in k)
+    )
     
-    gold_weights = OrderedDict(
-    (k, v) for k, v in torch.load(
+    gold_weights = torch.load(
         outputs_dir.joinpath(f"clean/weights/ft_weights.pth"),
         map_location='cpu'
-    ).items() if "classifier_heads" not in k)
+    )
     
-    ft_ho_clean_weights = OrderedDict(
-    (k, v) for k, v in torch.load(
+    ft_ho_clean_weights = torch.load(
         outputs_dir.joinpath(f"finetune_clean/weights/ft_weights.pth"),
         map_location='cpu'
-    ).items() if "classifier_heads" not in k)
+    )
     
     
     # ft_gradient_ascent_weights = OrderedDict(
@@ -424,11 +351,10 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     for poison_tv in cfg['strategy']['poison']['finetuning']:
         ft_expr_dir = outputs_dir / f"finetune_{poison_tv['rate']}_{poison_tv['seed']}"
-        n_weights = OrderedDict(
-        (k, v) for k, v in torch.load(
+        n_weights = torch.load(
             ft_expr_dir.joinpath(f"weights/ft_weights.pth"),
             map_location='cpu'
-        ).items() if "classifier_heads" not in k)
+        )
         poison_weights[f"{poison_tv['rate']*100:.0f}% Noise, {poison_tv['seed']} Seed"] = n_weights
         
     
@@ -758,14 +684,14 @@ def main():
 
     dotenv.load_dotenv(".env")
     
-    cfg_path = Path('configs/single_experiment/clip_poison_TA') / f"{args.config}.yaml"
+    cfg_path = Path('configs/single_experiment/regular_poison_TA') / f"{args.config}.yaml"
 
     if not cfg_path.exists(): raise RuntimeError('The specified config file does not exist.')
     with open(cfg_path, 'r') as file:
         cfg = yaml.full_load(file)
 
-    outputs_dir = Path("outputs/single_experiment/clip_poison_TA").absolute()
-    results_dir = Path("results/single_experiment/clip_poison_TA").absolute()
+    outputs_dir = Path("outputs/single_experiment/regular_poison_TA").absolute()
+    results_dir = Path("results/single_experiment/regular_poison_TA").absolute()
     results_dir.mkdir(exist_ok=True, parents=True)
 
     global_seed = cfg['global_seed']

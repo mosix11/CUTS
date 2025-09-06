@@ -388,7 +388,7 @@ class BaseClassificationTrainer(ABC):
 
                 if self.early_stopping and self.early_stopping_activated:
                     break
-
+                
                 statistics = self._fit_epoch()
 
                 if self.model_log_call:
@@ -402,7 +402,7 @@ class BaseClassificationTrainer(ABC):
 
                 if (not self.iteration_mode) and self.is_main() and self._tqdm_bar is not None:
                     self._tqdm_bar.update(1)
-                    self._tqdm_bar.set_postfix_str(f"epoch={self.epoch+1}/{self.max_epochs}")
+                    self._tqdm_bar.set_postfix_str(f"loss={statistics.get('Train/Loss'):.4f}")
 
                 if self.iteration_mode and self.global_step >= self.max_iterations:
                     break
