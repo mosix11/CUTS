@@ -83,7 +83,7 @@ trainer:
       comet_project_name: 'clip-IC-TA'
       seed: *training_seed
     clean:
-      max_iterations: 3000
+      max_iterations: 4000
       optimizer_cfg: 
         type: "adamw"
         lr: 1.0e-5
@@ -93,7 +93,7 @@ trainer:
         update_on: 'gradient_step'
         warmup_steps: 300
         hold_steps: 700
-        T_max: 3000
+        T_max: 4000
         eta_min: 0
       early_stopping: False
       validation_freq: -1
