@@ -147,9 +147,6 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
     dataset_cfg['val_transforms'] = base_model.get_val_transforms()
     base_dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
     
-    print(dataset_cfg['train_transforms'])
-    print(dataset_cfg['val_transforms'])
-    exit()
     
     strategy = cfg['strategy']
     base_dataset.inject_poison(**strategy['poison']['pretraining'])
