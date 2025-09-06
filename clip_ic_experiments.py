@@ -260,7 +260,12 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     strategy = cfg['strategy']
     dataset.inject_noise(**strategy['noise']['pretraining'])
-
+    
+    noise_tv = strategy['noise']['finetuning'][0]
+    noise_tv['set'] = 'Heldout'
+    dataset.inject_noise(**noise_tv)
+    hs_clean, hs_noisy = dataset.get_clean_noisy_subsets(set='Heldout')
+    dataset.set_heldoutset(hs_noisy)
 
 
     # Load weights while removing classifier weights from the state dict
@@ -283,11 +288,6 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     ).items() if "classifier_heads" not in k)
     
     
-    # ft_gradient_ascent_weights = OrderedDict(
-    # (k, v) for k, v in torch.load(
-    #     outputs_dir.joinpath(f"gradient_ascent/weights/ft_weights.pth"),
-    #     map_location='cpu'
-    # ).items() if "classifier_heads" not in k)
     
     noise_weights = OrderedDict()
     
@@ -323,36 +323,6 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     task_vectors['Random Vector'] = task_vectors['Average TV'].generate_random_vector_with_same_layer_norms(seed=11)
 
-    def average_elementwise_division(state_dict_a, state_dict_b, eps=1e-8):
-        """
-        Computes the average of elementwise division across tensors 
-        in two state dicts (a / b).
-        
-        Args:
-            state_dict_a: dict[str, Tensor]
-            state_dict_b: dict[str, Tensor]
-            eps: small value to avoid division by zero
-        
-        Returns:
-            float: overall average
-        """
-        ratios = []
-        for key in state_dict_a.keys():
-            if key not in state_dict_b:
-                continue  # skip if not in both
-            
-            t1, t2 = state_dict_a[key], state_dict_b[key]
-            if not torch.is_tensor(t1) or not torch.is_tensor(t2):
-                continue  # skip non-tensors (like metadata)
-            
-            ratio = (t1 / (t2 + eps)).float().mean().item()
-            ratios.append(ratio)
-        
-        return sum(ratios) / len(ratios) if ratios else None
-    
-    print(average_elementwise_division(task_vectors['Average TV'].vector, mix_weights))
-    exit()
-    
     # ft_tvs_list = list(task_vectors.values())
     # tv_names = list(task_vectors.keys())
     
@@ -590,36 +560,39 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
 
     model.load_state_dict(mix_weights, strict=False)
     mix_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+    mix_ho_results, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
     mix_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
     
     
     model.load_state_dict(gold_weights, strict=False)
     gold_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+    gold_ho_results, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
     gold_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
     
     model.load_state_dict(ft_ho_clean_weights, strict=False)
     ft_ho_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+    ft_ho_ho_results, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
     ft_ho_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
     
     
     results_dict = OrderedDict()
     
-    results_dict['Mix'] = {'test_results': mix_test_results, 'train_results': mix_train_results}
-    results_dict['Gold'] = {'test_results': gold_test_results, 'train_results': gold_train_results}
-    results_dict['FT HO Clean'] = {'test_results': ft_ho_test_results, 'train_results': ft_ho_train_results}
+    results_dict['Mix'] = {'test_results': mix_test_results, 'ho_results': mix_ho_results, 'train_results': mix_train_results}
+    results_dict['Gold'] = {'test_results': gold_test_results, 'ho_results': gold_ho_results, 'train_results': gold_train_results}
+    results_dict['FT HO Clean'] = {'test_results': ft_ho_test_results, 'ho_results': ft_ho_ho_results, 'train_results': ft_ho_train_results}
     
     # results_dict = OrderedDict()
     # for alpha in tqdm(np.linspace(-0.05, -1.5, 30)):
     # for alpha in tqdm(np.linspace(-0.1, -2.0, 20)):
-    # for alpha in tqdm(np.linspace(-0.1, -1.5, 15)):
-    for alpha in tqdm(np.linspace(-0.05, -3.0, 60)):
+    for alpha in tqdm(np.linspace(-0.1, -1.5, 15)):
     
         model.load_state_dict(mix_weights, strict=False)
         task_vectors['Average TV'].apply_to(model, scaling_coef=alpha, strict=False)
         tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+        tv_ho_resutls, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
         tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
 
-        results_dict[alpha] = {'test_results': tv_test_results, 'train_results': tv_train_results}
+        results_dict[alpha] = {'test_results': tv_test_results, 'ho_results': tv_ho_resutls, 'train_results': tv_train_results}
     
     with open(results_dir / 'metrics.json' , 'w') as json_file:
         json.dump(results_dict, json_file, indent=4)
