@@ -82,6 +82,8 @@ class Clothing1M(BaseClassificationDataset):
             if self.is_node_leader():
                 self._download_dataset()
             dist.barrier()
+        else:
+            self._download_dataset()
          
         
         
@@ -100,6 +102,7 @@ class Clothing1M(BaseClassificationDataset):
         super().__init__(
             dataset_name='Clothing1M',
             dataset_dir=dataset_dir,
+            num_classes=14,
             **kwargs,  
         )
         
