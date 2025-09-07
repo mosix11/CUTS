@@ -16,6 +16,11 @@ strategy:
         noise_type: 'IC'
         seed: 12
 
+      - set: 'Train'
+        noise_rate: 1.0
+        noise_type: 'IC'
+        seed: 12
+
 
 datasets:
   - name: "cifar10"

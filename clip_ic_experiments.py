@@ -171,7 +171,8 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
         
         
     for idx, noise_tv in enumerate(strategy['noise']['finetuning']):
-        if not outputs_dir.joinpath(f"{cfg_name}/finetune_{noise_tv['noise_rate']}_{noise_tv['seed']}/weights/ft_weights.pth").exists():
+        target_class = 3 if idx == 0 else 5
+        if not outputs_dir.joinpath(f"{cfg_name}/finetune_{noise_tv['noise_rate']}_{noise_tv['seed']}_{target_class}/weights/ft_weights.pth").exists():
             dataset = copy.deepcopy(base_dataset)
             model = copy.deepcopy(base_model)
             
@@ -179,7 +180,7 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
             checkpoint = torch.load(mix_model_ckp_path)
             model.load_state_dict(checkpoint)
             
-            experiment_name = f"{cfg_name}/finetune_{noise_tv['noise_rate']}_{noise_tv['seed']}"
+            experiment_name = f"{cfg_name}/finetune_{noise_tv['noise_rate']}_{noise_tv['seed']}_{target_class}"
             experiment_dir = outputs_dir / Path(experiment_name)
 
             weights_dir = experiment_dir / Path("weights")
@@ -188,12 +189,26 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
             plots_dir = experiment_dir / Path("plots")
             plots_dir.mkdir(exist_ok=True, parents=True)
             
+            # if strategy['finetuning_set'] == 'Heldout':
+            #     noise_tv['set'] = 'Heldout'
+            #     dataset.inject_noise(**noise_tv)
+            #     hs_clean, hs_noisy = dataset.get_clean_noisy_subsets(set='Heldout')
+            #     dataset.set_trainset(hs_noisy, shuffle=True)
+            #     print('size of trainset for finetuning on noise:', len(dataset.get_trainset()))
+            
             if strategy['finetuning_set'] == 'Heldout':
                 noise_tv['set'] = 'Heldout'
                 dataset.inject_noise(**noise_tv)
                 hs_clean, hs_noisy = dataset.get_clean_noisy_subsets(set='Heldout')
+                indices = []
+                for idx, sample in enumerate(hs_noisy):
+                    x, y, _, _ = sample
+                    if y == target_class:
+                        indices.append(idx)
+                hs_noisy = Subset(hs_noisy, indices)
                 dataset.set_trainset(hs_noisy, shuffle=True)
                 print('size of trainset for finetuning on noise:', len(dataset.get_trainset()))
+            
                 
             finetuning_cfg = None
             if 'noise' in cfg['trainer']['finetuning']:
