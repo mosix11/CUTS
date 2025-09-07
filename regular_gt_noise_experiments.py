@@ -222,8 +222,8 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
             num_discover = int(discovery_rate * num_noisy)
             rand_indices = torch.randperm(num_noisy)[:num_discover]
             noisy_discovery_set = Subset(noisy_set, rand_indices)
-            
-            
+            dataset.set_trainset(noisy_discovery_set, shuffle=True)
+
 
             trainer = StandardTrainer(
                 outputs_dir=outputs_dir,
