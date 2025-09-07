@@ -58,7 +58,7 @@ trainer:
     max_epochs: 200
     optimizer_cfg: 
       type: "adamw"
-      lr: 1.0e-4
+      lr: 1.0e-6
       betas: [0.9, 0.999]
     lr_schedule_cfg:
       type: 'cosann_warmup'
