@@ -231,7 +231,7 @@ class BaseClassificationDataset(ABC):
         dataset = BinarizedClassificationDataset(dataset, target_class)
         self._set_set(set, dataset)
         
-    def inject_noise(self, set='Train', noise_rate=0.0, noise_type='symmetric', T_mat=None, target_class=None, seed=None, generator=None):
+    def inject_noise(self, set='Train', **kwargs):
         dataset = self._get_set(set)
         
         if isinstance(dataset, Subset):
@@ -246,14 +246,9 @@ class BaseClassificationDataset(ABC):
         dataset = NoisyClassificationDataset(
             dataset=dataset,
             dataset_name=self.__class__.__name__,
-            noise_rate=noise_rate,
-            noise_type=noise_type,
-            T_mat=T_mat,
-            seed=seed,
             num_classes=len(self.available_classes),
-            target_class=target_class,
             available_labels=self.class_subset,
-            generator=generator
+            **kwargs
         )
         
         if self.remap_labels and self.class_subset:

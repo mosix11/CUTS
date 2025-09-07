@@ -81,8 +81,6 @@ def eval_model_on_tvs(model, taskvectors, results_dict, cfg, dataset, num_classe
     return results    
 
 
-import matplotlib.pyplot as plt
-
 
 def show_poisoned_samples(dataset, n=9, unnormalize=False):
     """

@@ -64,6 +64,7 @@ class NoisyClassificationDataset(Dataset):
         noise_rate: float = 0.2,
         num_classes:int = None,
         target_class:int = None, # Only needed for 'constant' noise
+        class_swap: Tuple[int, int] | List[int] = None, # Only for IC, only two integers allowed
         available_labels: list = None,
         seed=None,
         generator=None
@@ -73,6 +74,7 @@ class NoisyClassificationDataset(Dataset):
         self.dataset_name = dataset_name
         self.noise_type = noise_type
         self.noise_rate = noise_rate
+        self.class_swap = class_swap
         
         if available_labels is None:
             self.available_labels = list(range(num_classes))
@@ -206,13 +208,22 @@ class NoisyClassificationDataset(Dataset):
             # Define the IC pairs (two-way swaps)
             if self.dataset_name == 'MNIST':
                 # digits: 1 <-> 7
-                swap_pairs = [(1, 7)]
+                if self.class_swap:
+                    swap_pairs = [tuple(self.class_swap)]
+                else:
+                    swap_pairs = [(1, 7)]
             elif self.dataset_name == 'CIFAR10':
                 # CIFAR-10 standard indices: cat=3, dog=5
-                swap_pairs = [(3, 5)]
+                if self.class_swap:
+                    swap_pairs = [tuple(self.class_swap)]
+                else:
+                    swap_pairs = [(3, 5)]
             elif self.dataset_name == 'CIFAR100':
                 # torchvision CIFAR-100 fine-label order: maple_tree=47, oak_tree=52
-                swap_pairs = [(47, 52)]
+                if self.class_swap:
+                    swap_pairs = [tuple(self.class_swap)]
+                else:
+                    swap_pairs = [(47, 52)]
             else:
                 raise ValueError(f"IC noise not implemented for dataset '{self.dataset_name}'.")
 

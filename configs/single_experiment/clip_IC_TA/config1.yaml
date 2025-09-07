@@ -9,16 +9,13 @@ strategy:
       set: 'Train'
       noise_rate: 0.1
       noise_type: 'IC'
+      class_swap: [3, 5]
       seed: 8
     finetuning:
       - set: 'Train'
         noise_rate: 1.0
         noise_type: 'IC'
-        seed: 12
-
-      - set: 'Train'
-        noise_rate: 1.0
-        noise_type: 'IC'
+        class_swap: [3, 5]
         seed: 12
 
 

@@ -41,6 +41,52 @@ from helper_funcs import evaluate_model, eval_model_on_clean_noise_splits, searc
 from src.utils import weight_norm_analysis
 
 
+def show_poisoned_samples(dataset, n=9, unnormalize=False):
+    """
+    Show `n` poisoned samples from a DatasetWithIndex-wrapped dataset.
+    dataset: your ds.get_trainset() or similar
+    unnormalize: if True, try to undo CIFAR-10 normalization for visualization
+    """
+
+    # Collect poisoned samples
+    poisoned_imgs = []
+    poisoned_labels = []
+    for idx in range(len(dataset)):
+        x, y, *_rest = dataset[idx]
+        # last element in your tuple is is_poison flag
+        is_poison = _rest[-1].item() if torch.is_tensor(_rest[-1]) else bool(_rest[-1])
+        if is_poison:
+            poisoned_imgs.append(x)
+            poisoned_labels.append(y)
+            if len(poisoned_imgs) >= n:
+                break
+
+    if not poisoned_imgs:
+        print("No poisoned samples found!")
+        return
+
+    # CIFAR-10 normalization parameters
+    cifar_mean = torch.tensor([0.4914, 0.4822, 0.4465]).view(3,1,1)
+    cifar_std  = torch.tensor([0.2023, 0.1994, 0.2010]).view(3,1,1)
+
+    # Plot grid
+    fig, axes = plt.subplots(3, 3, figsize=(8,8))
+    for ax, img, label in zip(axes.flat, poisoned_imgs, poisoned_labels):
+        if unnormalize:
+            img = img * cifar_std + cifar_mean
+            
+        print(type(img))
+        img = img.clamp(0,1)
+        if img.shape[0] == 1:  # grayscale
+            ax.imshow(img.squeeze(0).cpu(), cmap="gray")
+        else:
+            ax.imshow(img.permute(1,2,0).cpu())
+        ax.set_title(f"Label={label}", fontsize=10)
+        ax.axis("off")
+
+    plt.tight_layout()
+    plt.show()
+
 def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     cfg['trainer']['finetuning']['comet_api_key'] = os.getenv("COMET_API_KEY")
     
@@ -60,8 +106,15 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
     strategy = cfg['strategy']
     base_dataset.inject_noise(**strategy['noise']['pretraining'])
     
+    # noise_tv = strategy['noise']['finetuning'][0]
+    # noise_tv['set'] = 'Heldout'
+    # base_dataset.inject_noise(**noise_tv)
+    # hs_clean, hs_noisy = base_dataset.get_clean_noisy_subsets(set='Heldout')
     
-    
+    # show_poisoned_samples(base_dataset.get_trainset(), unnormalize=True)
+    # # base_dataset.switch_labels_to_clean(hs_noisy)
+    # # show_poisoned_samples(hs_noisy)
+    # exit()
     
     if not outputs_dir.joinpath(f"{cfg_name}/mix/weights/ft_weights.pth").exists():
         dataset = copy.deepcopy(base_dataset)
@@ -171,8 +224,7 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
         
         
     for idx, noise_tv in enumerate(strategy['noise']['finetuning']):
-        target_class = 3 if idx == 0 else 5
-        if not outputs_dir.joinpath(f"{cfg_name}/finetune_{noise_tv['noise_rate']}_{noise_tv['seed']}_{target_class}/weights/ft_weights.pth").exists():
+        if not outputs_dir.joinpath(f"{cfg_name}/finetune_{noise_tv['noise_rate']}_{noise_tv['seed']}/weights/ft_weights.pth").exists():
             dataset = copy.deepcopy(base_dataset)
             model = copy.deepcopy(base_model)
             
@@ -180,7 +232,7 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
             checkpoint = torch.load(mix_model_ckp_path)
             model.load_state_dict(checkpoint)
             
-            experiment_name = f"{cfg_name}/finetune_{noise_tv['noise_rate']}_{noise_tv['seed']}_{target_class}"
+            experiment_name = f"{cfg_name}/finetune_{noise_tv['noise_rate']}_{noise_tv['seed']}"
             experiment_dir = outputs_dir / Path(experiment_name)
 
             weights_dir = experiment_dir / Path("weights")
@@ -189,26 +241,12 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
             plots_dir = experiment_dir / Path("plots")
             plots_dir.mkdir(exist_ok=True, parents=True)
             
-            # if strategy['finetuning_set'] == 'Heldout':
-            #     noise_tv['set'] = 'Heldout'
-            #     dataset.inject_noise(**noise_tv)
-            #     hs_clean, hs_noisy = dataset.get_clean_noisy_subsets(set='Heldout')
-            #     dataset.set_trainset(hs_noisy, shuffle=True)
-            #     print('size of trainset for finetuning on noise:', len(dataset.get_trainset()))
-            
             if strategy['finetuning_set'] == 'Heldout':
                 noise_tv['set'] = 'Heldout'
                 dataset.inject_noise(**noise_tv)
                 hs_clean, hs_noisy = dataset.get_clean_noisy_subsets(set='Heldout')
-                indices = []
-                for idx, sample in enumerate(hs_noisy):
-                    x, y, _, _ = sample
-                    if y == target_class:
-                        indices.append(idx)
-                hs_noisy = Subset(hs_noisy, indices)
                 dataset.set_trainset(hs_noisy, shuffle=True)
                 print('size of trainset for finetuning on noise:', len(dataset.get_trainset()))
-            
                 
             finetuning_cfg = None
             if 'noise' in cfg['trainer']['finetuning']:
