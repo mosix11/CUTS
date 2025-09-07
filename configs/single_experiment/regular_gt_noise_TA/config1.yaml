@@ -55,7 +55,7 @@ trainer:
     comet_project_name: 'regular-gt-noise-TA'
     seed: *training_seed
   finetuning:
-    max_epochs: 200
+    max_epochs: 400
     optimizer_cfg: 
       type: "adamw"
       lr: 1.0e-6
@@ -64,8 +64,8 @@ trainer:
       type: 'cosann_warmup'
       update_on: 'epoch'
       warmup_steps: 30
-      hold_steps: 120
-      T_max: 200
+      hold_steps: 170
+      T_max: 400
       eta_min: 0
     early_stopping: False
     validation_freq: -1
