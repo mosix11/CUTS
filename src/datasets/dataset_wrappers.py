@@ -61,7 +61,7 @@ class NoisyClassificationDataset(Dataset):
         dataset_name:str=None,
         noise_type:str = 'symmetric', # between 'symmetric', 'asymmetric', and 'constant'
         T_mat: np.ndarray = None, # only for noise_type='T_matrix'
-        noise_rate: float = 0.2,
+        noise_rate: float | int = 0.0,
         num_classes:int = None,
         target_class:int = None, # Only needed for 'constant' noise
         class_swap: Tuple[int, int] | List[int] = None, # Only for IC, only two integers allowed
@@ -73,8 +73,25 @@ class NoisyClassificationDataset(Dataset):
         self.dataset = dataset
         self.dataset_name = dataset_name
         self.noise_type = noise_type
-        self.noise_rate = noise_rate
         self.class_swap = class_swap
+        
+        
+        # --- Handle noise_rate normalization ---
+        dataset_len = len(self.dataset)
+        if isinstance(noise_rate, float):
+            if not (0.0 <= noise_rate <= 1.0):
+                raise ValueError("If noise_rate is float, it must be between 0 and 1.")
+            self.noise_rate = noise_rate
+            self.num_noisy_samples = int(noise_rate * dataset_len)
+        elif isinstance(noise_rate, int):
+            if not (0 <= noise_rate <= dataset_len):
+                raise ValueError(f"If noise_rate is int, it must be between 0 and {dataset_len}.")
+            self.noise_rate = noise_rate / dataset_len  # keep a normalized version too
+            self.num_noisy_samples = noise_rate
+        else:
+            raise TypeError("noise_rate must be either float (fraction) or int (count).")
+        
+        
         
         if available_labels is None:
             self.available_labels = list(range(num_classes))
@@ -176,33 +193,27 @@ class NoisyClassificationDataset(Dataset):
         noisy_labels = original_labels.clone()
         self.is_noisy_flags = torch.zeros(len(original_labels))
 
-        if not (self.noise_rate > 0.0 and self.noise_rate <= 1.0):
+
+                
+        if self.num_noisy_samples == 0:
+            self.noisy_labels = noisy_labels
             return
         
         if self.noise_type == 'symmetric':
-            # This already uses the fixed-count method on the whole dataset
-            num_noisy_labels = int(self.noise_rate * len(original_labels))
-            noisy_indices = torch.randperm(len(original_labels), generator=self.generator)[:num_noisy_labels]
-
+            noisy_indices = torch.randperm(len(original_labels), generator=self.generator)[:self.num_noisy_samples]
             for idx in noisy_indices:
                 current_label = original_labels[idx].item()
                 possible_flips = [l for l in self.available_labels if l != current_label]
-                
                 if possible_flips:
                     rand_idx = torch.randint(0, len(possible_flips), (1,), generator=self.generator).item()
                     noisy_labels[idx] = possible_flips[rand_idx]
                     self.is_noisy_flags[idx] = 1.0
+
         elif self.noise_type == 'constant':
-            # how many labels to corrupt
-            num_noisy = int(self.noise_rate * len(original_labels))
-            if num_noisy > 0:
-                # pick that many random indices
-                noisy_indices = torch.randperm(len(original_labels), generator=self.generator)[:num_noisy]
-                # set them all to the single target class
+            if self.num_noisy_samples > 0:
+                noisy_indices = torch.randperm(len(original_labels), generator=self.generator)[:self.num_noisy_samples]
                 noisy_labels[noisy_indices] = self.target_class
-                # mark them as noisy
                 self.is_noisy_flags[noisy_indices] = 1.0
-                
                 
         elif self.noise_type == 'IC':
             # Define the IC pairs (two-way swaps)
@@ -433,7 +444,7 @@ class PoisonedClassificationDataset(Dataset):
     def __init__(
         self,
         dataset: Dataset,
-        rate: float,
+        rate: float | int = 0,
         target_class: int = 0,
         trigger_percent: float = 0.003,      # 0.3%
         margin: Union[int, Tuple[int, int]] = 0,  # NEW
@@ -472,12 +483,25 @@ class PoisonedClassificationDataset(Dataset):
             print('Overwriting the original transforms on poisoned data!')
             self._orig_transform = transforms
 
-        # Precompute poisoned indices over the visible dataset
         n = len(self.dataset)
-        k = int(round(rate * n))
-        if k > 0:
+        if isinstance(rate, float):
+            if not (0.0 <= rate <= 1.0):
+                raise ValueError("If 'rate' is float, it must be in [0, 1].")
+            self.rate_fraction = rate
+            self.num_poisoned = int(round(rate * n))
+        elif isinstance(rate, int):
+            if not (0 <= rate <= n):
+                raise ValueError(f"If 'rate' is int, it must be in [0, {n}].")
+            self.num_poisoned = rate
+            # keep a normalized fraction for reference / logging
+            self.rate_fraction = (rate / n) if n > 0 else 0.0
+        else:
+            raise TypeError("'rate' must be float (fraction) or int (count).")
+
+        # Precompute poisoned indices over the visible dataset
+        if self.num_poisoned > 0:
             perm = torch.randperm(n, generator=self.generator)
-            self._poisoned_visible_indices = set(perm[:k].tolist())
+            self._poisoned_visible_indices = set(perm[:self.num_poisoned].tolist())
         else:
             self._poisoned_visible_indices = set()
             
