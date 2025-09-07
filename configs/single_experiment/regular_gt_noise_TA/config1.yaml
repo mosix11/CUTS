@@ -74,5 +74,5 @@ trainer:
     run_on_gpu: True
     use_amp: True
     log_comet: True
-    comet_project_name: 'egular-gt-noise-TA'
+    comet_project_name: 'regular-gt-noise-TA'
     seed: *training_seed
