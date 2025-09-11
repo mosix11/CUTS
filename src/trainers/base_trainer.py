@@ -64,12 +64,16 @@ class BaseClassificationTrainer(ABC):
     ):
         outputs_dir.mkdir(exist_ok=True)
         self.outputs_dir = outputs_dir
-        self.log_dir = outputs_dir / Path(exp_name) / Path('log')
-        self.log_dir.mkdir(exist_ok=True, parents=True)
-        self.checkpoint_dir = outputs_dir / Path(exp_name) / Path('checkpoint')
-        self.checkpoint_dir.mkdir(exist_ok=True, parents=True)
+        self._log_dir = outputs_dir / Path(exp_name) / Path('log')
+        self._log_dir.mkdir(exist_ok=True, parents=True)
+        self._checkpoint_dir = outputs_dir / Path(exp_name) / Path('checkpoint')
+        self._checkpoint_dir.mkdir(exist_ok=True, parents=True)
+        self._weights_dir = outputs_dir / Path(exp_name) / Path("weights")
+        self._weights_dir.mkdir(exist_ok=True, parents=True)
+        self._plots_dir = outputs_dir / Path(exp_name) / Path("plots")
+        self._plots_dir.mkdir(exist_ok=True, parents=True)
         
-            
+
         if seed:
             self.seed = seed
             self.generator = torch.Generator().manual_seed(self.seed)
@@ -297,7 +301,7 @@ class BaseClassificationTrainer(ABC):
             online=True,
             experiment_config=experiment_config
         )
-        with open(self.log_dir / Path('comet_exp_key'), 'w') as mfile:
+        with open(self._log_dir / Path('comet_exp_key'), 'w') as mfile:
             mfile.write(self.comet_experiment.get_key()) 
 
 
@@ -346,7 +350,7 @@ class BaseClassificationTrainer(ABC):
         self._setup_data_loaders(dataset)
         self.model = model
         if resume:
-            ckp_path = self.checkpoint_dir / Path('resume_ckp.pth')
+            ckp_path = self._checkpoint_dir / Path('resume_ckp.pth')
             if not ckp_path.exists():
                 raise RuntimeError(
                     "There is no checkpoint saved! Set the `resume` flag to False."
@@ -411,6 +415,9 @@ class BaseClassificationTrainer(ABC):
                 self._tqdm_bar.close()
 
         print('Training is finished!')
+        torch.save(self._mm().state_dict(), self._weights_dir / Path("final_weights.pth"))  
+        print('Final model\'s weights are saved!')
+        
         # Final evaluation, saving, etc.
         final_results = {}
         final_results.update(self.evaluate(set='Train'))
@@ -432,9 +439,7 @@ class BaseClassificationTrainer(ABC):
             self.comet_experiment.log_parameters(results, nested_support=True)
             self.comet_experiment.end()
         
-        # final_ckp_path = self.checkpoint_dir / Path('final_ckp.pth')
-        # self.save_full_checkpoint(final_ckp_path)
-        results_path = self.log_dir / Path('results.json')
+        results_path = self._log_dir / Path('results.json')
         
         if self.is_main():
             with open(results_path, 'w') as f:
@@ -491,7 +496,7 @@ class BaseClassificationTrainer(ABC):
 
             # Checkpoint on step frequency
             if self._should_checkpoint_now():
-                self._save_full_checkpoint(self.checkpoint_dir / 'resume_ckp.pth')
+                self._save_full_checkpoint(self._checkpoint_dir / 'resume_ckp.pth')
 
         if self.log_comet and self.iteration_mode:
             self.comet_experiment.log_metrics(train_snapshot, step=self.global_step)
@@ -517,7 +522,7 @@ class BaseClassificationTrainer(ABC):
 
             # Checkpoint on epoch frequency
             if self._should_checkpoint_now():
-                self._save_full_checkpoint(self.checkpoint_dir / 'resume_ckp.pth')
+                self._save_full_checkpoint(self._checkpoint_dir / 'resume_ckp.pth')
 
             # LR scheduler (per-epoch)
             if self.lr_scheduler and not self.lr_sch_step_on_batch:
@@ -642,7 +647,7 @@ class BaseClassificationTrainer(ABC):
             merged['epoch'] = getattr(self, 'epoch', 0)
             merged['global_step'] = getattr(self, 'global_step', 0)
             self.best_model_perf = merged
-            self._save_full_checkpoint(self.checkpoint_dir / 'best_ckp.pth')
+            self._save_full_checkpoint(self._checkpoint_dir / 'best_ckp.pth')
                 
             
             
