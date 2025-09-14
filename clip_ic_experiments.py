@@ -404,30 +404,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     #     show=False
     # )
 
-    # from test_alpha import pick_alpha_weight_only, plot_weight_only_curves
-    # alphas = np.linspace(-0.0, -5.0, 51)
-    
-    
-    # results = pick_alpha_weight_only(
-    #     state0=mix_weights,
-    #     delta=task_vectors['Average TV'].vector,
-    #     alphas=alphas,
-    #     device=gpu
-    # )
-    
-    # print(results['alpha_best'])
-    # plot_weight_only_curves(results)
-    # exit()
-    
-    # model.load_state_dict(mix_weights, strict=False)
-    # fig_comp_pt = embedding_space_analysis.all_plot_comp(
-    #     feature_extractor=model.get_image_encoder(),
-    #     dataloader=dataset_clean.get_train_dataloader(),
-    #     device=gpu,
-    #     class_names=dataset.get_class_names(),
-    # )
-    
-    # fig_comp_pt.savefig(results_dirs['embed_plots'] / "comp_pt.png", bbox_inches="tight")
+
     
     
     # task_vectors['Average TV'].apply_to(model, scaling_coef=-1.0, strict=False)
@@ -576,7 +553,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     #             w.append_data(fr)
             
     # figs_pca = []
-    # for alpha in np.linspace(0.0, -2.0, 9):
+    # for alpha in np.round(np.linspace(0.0, -2.0, 9), 1):
     #     model.load_state_dict(mix_weights, strict=False)
     #     if alpha != 0.0:
     #         task_vectors['Average TV'].apply_to(model, scaling_coef=alpha, strict=False)
@@ -637,7 +614,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # results_dict = OrderedDict()
     # for alpha in tqdm(np.linspace(-0.05, -1.5, 30)):
     # for alpha in tqdm(np.linspace(-0.1, -2.0, 20)):
-    for alpha in tqdm(np.linspace(-0.1, -1.5, 15)):
+    for alpha in tqdm(np.round(np.linspace(-0.1, -1.5, 15), 1)):
     
         model.load_state_dict(mix_weights, strict=False)
         task_vectors['Average TV'].apply_to(model, scaling_coef=alpha, strict=False)

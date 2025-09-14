@@ -288,7 +288,17 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
         model.load_state_dict(checkpoint)
         
         
-        dataset.set_trainset(dataset.get_heldoutset(), shuffle=True)
+        noise_tv = strategy['noise']['finetuning'][0]
+        # For asymmetric noise, we only consider the noisy samples (only a subset of classes are swapped.)
+        if noise_tv['noise_type'] == 'asymmetric':
+            noise_tv['set'] = 'Heldout'
+            dataset.inject_noise(**noise_tv)
+            hs_clean, hs_noisy = dataset.get_clean_noisy_subsets(set='Heldout')
+            dataset.switch_labels_to_clean(hs_noisy)
+            
+            dataset.set_trainset(hs_noisy, shuffle=True)
+        else:
+            dataset.set_trainset(dataset.get_heldoutset(), shuffle=True)
         
         experiment_name = f"{cfg_name}/finetune_clean"
         experiment_dir = outputs_dir / Path(experiment_name)
@@ -376,8 +386,15 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
             plots_dir.mkdir(exist_ok=True, parents=True)
             
             if strategy['finetuning_set'] == 'Heldout':
-                dataset.set_trainset(dataset.get_heldoutset(), shuffle=True)
-                dataset.inject_noise(**noise_tv)
+                # For asymmetric noise, we only consider the noisy samples (only a subset of classes are swapped.)
+                if noise_tv['noise_type'] == 'asymmetric':
+                    noise_tv['set'] = 'Heldout'
+                    dataset.inject_noise(**noise_tv)
+                    hs_clean, hs_noisy = dataset.get_clean_noisy_subsets(set='Heldout')
+                    dataset.set_trainset(hs_noisy, shuffle=True)
+                else:
+                    dataset.set_trainset(dataset.get_heldoutset(), shuffle=True)
+                    dataset.inject_noise(**noise_tv)
                 
             finetuning_cfg = None
             if 'noise' in cfg['trainer']['finetuning']:
@@ -531,7 +548,7 @@ def apply_tv_gt(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     results_dict['Noise'] = {'test_results': noise_test_results, 'train_results': noise_train_results}
     
 
-    for alpha in tqdm(np.linspace(-0.1, -1.0, 10)):
+    for alpha in tqdm(np.round(np.linspace(-0.1, -1.0, 10), 1)):
     
         model.load_state_dict(ft_weights['mix'], strict=False)
         task_vectors['noise'].apply_to(model, scaling_coef=alpha, strict=False)
@@ -659,66 +676,63 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     task_vectors['Random Vector'] = task_vectors['Average TV'].generate_random_vector_with_same_layer_norms(seed=11)
 
-    def average_elementwise_division(state_dict_a, state_dict_b, eps=1e-8):
-        """
-        Computes the average of elementwise division across tensors 
-        in two state dicts (a / b).
-        
-        Args:
-            state_dict_a: dict[str, Tensor]
-            state_dict_b: dict[str, Tensor]
-            eps: small value to avoid division by zero
-        
-        Returns:
-            float: overall average
-        """
-        ratios = []
-        for key in state_dict_a.keys():
-            if key not in state_dict_b:
-                continue  # skip if not in both
-            
-            t1, t2 = state_dict_a[key], state_dict_b[key]
-            if not torch.is_tensor(t1) or not torch.is_tensor(t2):
-                continue  # skip non-tensors (like metadata)
-            
-            ratio = (t1 / (t2 + eps)).float().mean().item()
-            ratios.append(ratio)
-        
-        return sum(ratios) / len(ratios) if ratios else None
-    
-    print(average_elementwise_division(task_vectors['Average TV'].vector, mix_weights))
-    exit()
-    
-    # ft_tvs_list = list(task_vectors.values())
-    # tv_names = list(task_vectors.keys())
-    
-    # task_sim = []
-    # for i in range(len(ft_tvs_list)):
-    #     anchor_tv = ft_tvs_list[i]
-    #     task_sim.append([])
-    #     for j in range(len(ft_tvs_list)):
-    #         other_tv = ft_tvs_list[j]
-    #         cos_sim = anchor_tv.cosine_similarity_flatten(other_tv)
-    #         task_sim[i].append(cos_sim)
-    # task_sim = np.array(task_sim)
-    
-    # misc_utils.plot_confusion_matrix(
-    #     title='Task Vector Similarity Matrix',
-    #     cm=task_sim,
-    #     class_names=tv_names,
-    #     color_map='vlag',
-    #     color_bar=True,
-    #     vmin= -1.0,
-    #     vmax= 1.0,
-    #     x_label='Task Vectors',
-    #     y_label='Task Vectors',
-    #     tick_label_font_size=6,
-    #     filepath=results_dir / 'task_similarities.png',
-    #     show=False
-    # )
 
-    # from test_alpha import pick_alpha_weight_only, plot_weight_only_curves
-    # alphas = np.linspace(-0.0, -5.0, 51)
+    
+    ft_tvs_list = list(task_vectors.values())
+    tv_names = list(task_vectors.keys())
+    
+    task_sim = []
+    for i in range(len(ft_tvs_list)):
+        anchor_tv = ft_tvs_list[i]
+        task_sim.append([])
+        for j in range(len(ft_tvs_list)):
+            other_tv = ft_tvs_list[j]
+            cos_sim = anchor_tv.cosine_similarity_flatten(other_tv)
+            task_sim[i].append(cos_sim)
+    task_sim = np.array(task_sim)
+    
+    misc_utils.plot_confusion_matrix(
+        title='Task Vector Similarity Matrix',
+        cm=task_sim,
+        class_names=tv_names,
+        color_map='vlag',
+        color_bar=True,
+        vmin= -1.0,
+        vmax= 1.0,
+        x_label='Task Vectors',
+        y_label='Task Vectors',
+        tick_label_font_size=6,
+        filepath=results_dir / 'task_similarities.png',
+        show=False
+    )
+
+    
+    from test_alpha import select_alpha_star, plot_alpha_metrics
+    
+    best, records, alpha_best = select_alpha_star(
+        model=model,
+        feature_extractor=model.get_image_encoder(),
+        classifier=model.get_active_head(),
+        state0=mix_weights,
+        taskvector=task_vectors['Average TV'],
+        unlabeled_loader=dataset_clean.get_heldout_dataloader(),
+        # K=dataset.get_num_classes(),
+        alphas=np.round(np.linspace(-0.1, -3.0, 30), 1),
+        device=gpu
+    )
+    print(alpha_best)
+
+    # Plot and show per-metric best α lines
+    plot_alpha_metrics(
+        records,
+        weights=(2.0, 1.5, 1.0),
+        title_prefix="Noisy-Repair α-search (proxy-U)",
+        save_prefix="outputs/alpha_search_run1",
+        show=True,
+        alpha_best=alpha_best,
+    )
+
+
     
     
     # results = pick_alpha_weight_only(
@@ -889,7 +903,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     #             w.append_data(fr)
             
     # figs_pca = []
-    # for alpha in np.linspace(0.0, -2.0, 9):
+    # for alpha in np.round(np.linspace(0.0, -4.0, 9), 1):
     #     model.load_state_dict(mix_weights, strict=False)
     #     if alpha != 0.0:
     #         task_vectors['Average TV'].apply_to(model, scaling_coef=alpha, strict=False)
@@ -903,10 +917,30 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     #     figs_pca.append(fig_pca)
         
     # big_fig = combine_figures(figs_pca, ncols=3, nrows=3)
-    # big_fig.savefig(results_dirs['embed_plots'] / "pca_evol.png", bbox_inches="tight")
+    # big_fig.savefig(results_dirs['embed_plots'] / "pca_evol_tr.png", bbox_inches="tight")
     
-    # make_gif(figs_pca, results_dirs['embed_plots'] / "pca_evol.gif", duration=5.0)
-    # exit()
+    # make_gif(figs_pca, results_dirs['embed_plots'] / "pca_evol_tr.gif", duration=5.0)
+    
+    
+    # figs_pca = []
+    # for alpha in np.round(np.linspace(0.0, -4.0, 9), 1):
+    #     model.load_state_dict(mix_weights, strict=False)
+    #     if alpha != 0.0:
+    #         task_vectors['Average TV'].apply_to(model, scaling_coef=alpha, strict=False)
+    #     fig_pca = embedding_space_analysis.pca_plot(
+    #         feature_extractor=model.get_image_encoder(),
+    #         dataloader=dataset_clean.get_heldout_dataloader(),
+    #         device=gpu,
+    #         class_names=dataset_clean.get_class_names(),
+    #         dataset_name=dataset_clean.dataset_name
+    #     )
+    #     figs_pca.append(fig_pca)
+        
+    # big_fig = combine_figures(figs_pca, ncols=3, nrows=3)
+    # big_fig.savefig(results_dirs['embed_plots'] / "pca_evol_ho.png", bbox_inches="tight")
+    
+    # make_gif(figs_pca, results_dirs['embed_plots'] / "pca_evol_ho.gif", duration=5.0)
+
     
     # model.load_state_dict(gold_weights, strict=False)
     # fig_pca_gold = embedding_space_analysis.pca_plot(
@@ -920,7 +954,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # fig_pca_gold.savefig(results_dirs['embed_plots'] / "pca_gold.png", bbox_inches="tight")
 
     
-    # exit()
+    exit()
     
     
 
@@ -948,7 +982,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # for alpha in tqdm(np.linspace(-0.05, -1.5, 30)):
     # for alpha in tqdm(np.linspace(-0.1, -2.0, 20)):
     # for alpha in tqdm(np.linspace(-0.1, -1.5, 15)):
-    for alpha in tqdm(np.linspace(-0.05, -3.0, 60)):
+    for alpha in tqdm(np.round(np.linspace(-0.05, -3.0, 60), 1)):
     
         model.load_state_dict(mix_weights, strict=False)
         task_vectors['Average TV'].apply_to(model, scaling_coef=alpha, strict=False)

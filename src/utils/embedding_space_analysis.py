@@ -28,14 +28,6 @@ def extract_features(
     feature_extractor.eval()
     feats, labels = [], []
     
-    # indices = []
-    # for batch in dataloader:
-    #     x, y, idx = batch
-    #     indices.extend(idx)
-    
-    # print(indices)
-    # exit()
-    
     for batch in tqdm(dataloader, desc="Extracting features", leave=False):
         
         batch = prepare_batch(batch, device)
