@@ -610,8 +610,8 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     dataset.reset_train_dl(shuffle=False)
     
     
-    
-    noise_tv = cfg['strategy']['noise']['finetuning'][0]
+    strategy = cfg['strategy']
+    noise_tv = strategy['noise']['finetuning'][0]
     # For asymmetric noise, we only consider the noisy samples (only a subset of classes are swapped.)
     if noise_tv['noise_type'] == 'asymmetric':
         noise_tv['set'] = 'Heldout'
@@ -625,7 +625,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     dataset_clean = copy.deepcopy(dataset)
     
     
-    strategy = cfg['strategy']
+    
     dataset.inject_noise(**strategy['noise']['pretraining'])
     ho_set = dataset.get_heldoutset()
     dataset.switch_labels_to_noisy(ho_set)
@@ -998,10 +998,10 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # for alpha in tqdm(np.linspace(-0.05, -1.5, 30)):
     # for alpha in tqdm(np.linspace(-0.1, -2.0, 20)):
     # for alpha in tqdm(np.linspace(-0.1, -1.5, 15)):
-    if cfg['strategy']['noise']['finetuning'][0]['noise_type'] == 'asymmetric':
-        alphas = tqdm(np.round(np.linspace(-0.05, -2.0, 40), 1))
+    if strategy['noise']['finetuning'][0]['noise_type'] == 'asymmetric':
+        alphas = tqdm(np.round(np.linspace(-0.05, -2.0, 40), 2))
     else:
-        alphas = tqdm(np.round(np.linspace(-0.05, -3.0, 60), 1))
+        alphas = tqdm(np.round(np.linspace(-0.05, -3.0, 60), 2))
     for alpha in alphas:
     
         model.load_state_dict(mix_weights, strict=False)

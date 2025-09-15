@@ -415,7 +415,7 @@ class BaseClassificationTrainer(ABC):
                 self._tqdm_bar.close()
 
         print('Training is finished!')
-        torch.save(self._mm().state_dict(), self._weights_dir / Path("final_weights.pth"))  
+        # torch.save(self._mm().state_dict(), self._weights_dir / Path("final_weights.pth"))  
         print('Final model\'s weights are saved!')
         
         # Final evaluation, saving, etc.
