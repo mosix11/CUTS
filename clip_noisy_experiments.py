@@ -609,10 +609,27 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     dataset.reset_train_dl(shuffle=False)
     
+    
+    
+    noise_tv = cfg['strategy']['noise']['finetuning'][0]
+    # For asymmetric noise, we only consider the noisy samples (only a subset of classes are swapped.)
+    if noise_tv['noise_type'] == 'asymmetric':
+        noise_tv['set'] = 'Heldout'
+        dataset.inject_noise(**noise_tv)
+        hs_clean, hs_noisy = dataset.get_clean_noisy_subsets(set='Heldout')
+        dataset.switch_labels_to_clean(hs_noisy)
+        
+        dataset.set_heldoutset(hs_noisy, shuffle=False)
+
+
     dataset_clean = copy.deepcopy(dataset)
+    
     
     strategy = cfg['strategy']
     dataset.inject_noise(**strategy['noise']['pretraining'])
+    ho_set = dataset.get_heldoutset()
+    dataset.switch_labels_to_noisy(ho_set)
+    dataset.set_heldoutset(ho_set)
 
 
 
@@ -707,30 +724,30 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     )
 
     
-    from test_alpha import select_alpha_star, plot_alpha_metrics
+    # from test_alpha import select_alpha_star, plot_alpha_metrics
     
-    best, records, alpha_best = select_alpha_star(
-        model=model,
-        feature_extractor=model.get_image_encoder(),
-        classifier=model.get_active_head(),
-        state0=mix_weights,
-        taskvector=task_vectors['Average TV'],
-        unlabeled_loader=dataset_clean.get_heldout_dataloader(),
-        # K=dataset.get_num_classes(),
-        alphas=np.round(np.linspace(-0.1, -3.0, 30), 1),
-        device=gpu
-    )
-    print(alpha_best)
+    # best, records, alpha_best = select_alpha_star(
+    #     model=model,
+    #     feature_extractor=model.get_image_encoder(),
+    #     classifier=model.get_active_head(),
+    #     state0=mix_weights,
+    #     taskvector=task_vectors['Average TV'],
+    #     unlabeled_loader=dataset_clean.get_heldout_dataloader(),
+    #     # K=dataset.get_num_classes(),
+    #     alphas=np.round(np.linspace(-0.1, -3.0, 30), 1),
+    #     device=gpu
+    # )
+    # print(alpha_best)
 
-    # Plot and show per-metric best α lines
-    plot_alpha_metrics(
-        records,
-        weights=(2.0, 1.5, 1.0),
-        title_prefix="Noisy-Repair α-search (proxy-U)",
-        save_prefix="outputs/alpha_search_run1",
-        show=True,
-        alpha_best=alpha_best,
-    )
+    # # Plot and show per-metric best α lines
+    # plot_alpha_metrics(
+    #     records,
+    #     weights=(2.0, 1.5, 1.0),
+    #     title_prefix="Noisy-Repair α-search (proxy-U)",
+    #     save_prefix="outputs/alpha_search_run1",
+    #     show=True,
+    #     alpha_best=alpha_best,
+    # )
 
 
     
@@ -953,8 +970,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     # fig_pca_gold.savefig(results_dirs['embed_plots'] / "pca_gold.png", bbox_inches="tight")
 
-    
-    exit()
+    # exit()
     
     
 
@@ -982,7 +998,11 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # for alpha in tqdm(np.linspace(-0.05, -1.5, 30)):
     # for alpha in tqdm(np.linspace(-0.1, -2.0, 20)):
     # for alpha in tqdm(np.linspace(-0.1, -1.5, 15)):
-    for alpha in tqdm(np.round(np.linspace(-0.05, -3.0, 60), 1)):
+    if cfg['strategy']['noise']['finetuning'][0]['noise_type'] == 'asymmetric':
+        alphas = tqdm(np.round(np.linspace(-0.05, -2.0, 40), 1))
+    else:
+        alphas = tqdm(np.round(np.linspace(-0.05, -3.0, 60), 1))
+    for alpha in alphas:
     
         model.load_state_dict(mix_weights, strict=False)
         task_vectors['Average TV'].apply_to(model, scaling_coef=alpha, strict=False)
