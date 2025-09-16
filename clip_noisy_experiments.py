@@ -39,6 +39,7 @@ import imageio.v2 as imageio
 from src.utils import embedding_space_analysis
 from helper_funcs import evaluate_model, eval_model_on_clean_noise_splits, search_optimal_coefficient, get_confusion_matrix, row_normalize
 from src.utils import weight_norm_analysis
+from WD_analysis import apply_WD_analysis
 
 def eval_model_on_tvs(model, taskvectors, results_dict, cfg, dataset, num_classes, device):
     
@@ -484,6 +485,7 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
 
 def apply_tv_gt(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     training_seed = cfg['training_seed']
+    dataset_seed = cfg['dataset_seed']
     if training_seed:
         random.seed(training_seed)
         np.random.seed(training_seed)
@@ -633,8 +635,9 @@ def apply_tv_gt(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     #     json.dump(results_dict, json_file, indent=4)
 
 
-def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
+def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str, separate_seeds:int):
     training_seed = cfg['training_seed']
+    dataset_seed = cfg['dataset_seed']
     if training_seed:
         random.seed(training_seed)
         np.random.seed(training_seed)
@@ -729,15 +732,14 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     noise_weights = OrderedDict()
     
-    for noise_tv in cfg['strategy']['noise']['finetuning']:
+    for noise_tv in strategy['noise']['finetuning']:
         ft_expr_dir = outputs_dir / f"finetune_{noise_tv['noise_rate']}_{noise_tv['seed']}"
         n_weights = OrderedDict(
         (k, v) for k, v in torch.load(
             ft_expr_dir.joinpath(f"weights/ft_weights.pth"),
             map_location='cpu'
         ).items() if "classifier_heads" not in k)
-        noise_weights[f"{noise_tv['noise_rate']*100:.0f}% Noise, {noise_tv['seed']} Seed"] = n_weights
-        break
+        noise_weights[f"Seed {noise_tv['seed']}"] = n_weights
     
             
     task_vectors = OrderedDict()
@@ -746,25 +748,28 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         
     if len(task_vectors) == 1:
         only_tv = task_vectors.popitem(last=False)[1]
-        task_vectors['Average TV'] = only_tv
+        task_vectors['Average'] = only_tv
     else:
-        task_vectors['Average TV'] = TaskVector.mean(task_vectors)
+        task_vectors['Average'] = TaskVector.mean(task_vectors)
         
-    task_vectors['Average TV Pruned 0.4'] = task_vectors['Average TV'].prune_small_weights(rate=0.4)
-    task_vectors['Average TV Pruned 0.6'] = task_vectors['Average TV'].prune_small_weights(rate=0.6)
-    task_vectors['Average TV Pruned 0.8'] = task_vectors['Average TV'].prune_small_weights(rate=0.8)
-    task_vectors['Average TV Pruned 0.9'] = task_vectors['Average TV'].prune_small_weights(rate=0.9)
-    task_vectors['Average TV Pruned 0.95'] = task_vectors['Average TV'].prune_small_weights(rate=0.95)
-    task_vectors['Average TV Pruned 0.99'] = task_vectors['Average TV'].prune_small_weights(rate=0.99)
+    # task_vectors['Average Pruned 0.4'] = task_vectors['Average'].prune_small_weights(rate=0.4)
+    # task_vectors['Average Pruned 0.6'] = task_vectors['Average'].prune_small_weights(rate=0.6)
+    # task_vectors['Average Pruned 0.8'] = task_vectors['Average'].prune_small_weights(rate=0.8)
+    # task_vectors['Average Pruned 0.9'] = task_vectors['Average'].prune_small_weights(rate=0.9)
+    # task_vectors['Average Pruned 0.95'] = task_vectors['Average'].prune_small_weights(rate=0.95)
+    # task_vectors['Average Pruned 0.99'] = task_vectors['Average'].prune_small_weights(rate=0.99)
     
     task_vectors['Clean'] = TaskVector(mix_weights, ft_ho_clean_weights)
     
-    task_vectors['Random Vector'] = task_vectors['Average TV'].generate_random_vector_with_same_layer_norms(seed=11)
+    task_vectors['Random Vector'] = task_vectors['Average'].generate_random_vector_with_same_layer_norms(seed=training_seed)
 
 
     
     ft_tvs_list = list(task_vectors.values())
     tv_names = list(task_vectors.keys())
+    
+    print(tv_names)
+    exit()
     
     task_sim = []
     for i in range(len(ft_tvs_list)):
@@ -799,7 +804,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     #     feature_extractor=model.get_image_encoder(),
     #     classifier=model.get_active_head(),
     #     state0=mix_weights,
-    #     taskvector=task_vectors['Average TV'],
+    #     taskvector=task_vectors['Average'],
     #     unlabeled_loader=dataset_clean.get_heldout_dataloader(),
     #     # K=dataset.get_num_classes(),
     #     alphas=np.round(np.linspace(-0.1, -2.0, 20), 1),
@@ -822,7 +827,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     # results = pick_alpha_weight_only(
     #     state0=mix_weights,
-    #     delta=task_vectors['Average TV'].vector,
+    #     delta=task_vectors['Average'].vector,
     #     alphas=alphas,
     #     device=gpu
     # )
@@ -842,7 +847,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # fig_comp_pt.savefig(results_dirs['embed_plots'] / "comp_pt.png", bbox_inches="tight")
     
     
-    # task_vectors['Average TV'].apply_to(model, scaling_coef=-1.0, strict=False)
+    # task_vectors['Average'].apply_to(model, scaling_coef=-1.0, strict=False)
     # fig_comp_AVG_1 = embedding_space_analysis.all_plot_comp(
     #     feature_extractor=model.get_image_encoder(),
     #     dataloader=dataset_clean.get_train_dataloader(),
@@ -875,7 +880,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     # fig_umap_pt.savefig(results_dirs['embed_plots'] / "umap_pt.png", bbox_inches="tight")
     
-    # task_vectors['Average TV'].apply_to(model, scaling_coef=-1.0, strict=False)
+    # task_vectors['Average'].apply_to(model, scaling_coef=-1.0, strict=False)
     # fig_umap_AVG_1 = embedding_space_analysis.umap_plot(
     #     feature_extractor=model.get_image_encoder(),
     #     dataloader=dataset_clean.get_train_dataloader(),
@@ -911,7 +916,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     # fig_tsne_pt.savefig(results_dirs['embed_plots'] / "tsne_pt.png", bbox_inches="tight")
     
-    # task_vectors['Average TV'].apply_to(model, scaling_coef=-1.0, strict=False)
+    # task_vectors['Average'].apply_to(model, scaling_coef=-1.0, strict=False)
     # fig_tsne_AVG_1 = embedding_space_analysis.tsne_plot(
     #     feature_extractor=model.get_image_encoder(),
     #     dataloader=dataset_clean.get_train_dataloader(),
@@ -943,7 +948,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     # fig_pca_pt.savefig(results_dirs['embed_plots'] / "pca_pt.png", bbox_inches="tight")
     
-    # task_vectors['Average TV'].apply_to(model, scaling_coef=-1.0, strict=False)
+    # task_vectors['Average'].apply_to(model, scaling_coef=-1.0, strict=False)
     # fig_pca_AVG_1 = embedding_space_analysis.pca_plot(
     #     feature_extractor=model.get_image_encoder(),
     #     dataloader=dataset_clean.get_train_dataloader(),
@@ -991,7 +996,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # for alpha in np.round(np.linspace(0.0, -4.0, 9), 1):
     #     model.load_state_dict(mix_weights, strict=False)
     #     if alpha != 0.0:
-    #         task_vectors['Average TV'].apply_to(model, scaling_coef=alpha, strict=False)
+    #         task_vectors['Average'].apply_to(model, scaling_coef=alpha, strict=False)
     #     fig_pca = embedding_space_analysis.pca_plot(
     #         feature_extractor=model.get_image_encoder(),
     #         dataloader=dataset_clean.get_train_dataloader(),
@@ -1011,7 +1016,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # for alpha in np.round(np.linspace(0.0, -4.0, 9), 1):
     #     model.load_state_dict(mix_weights, strict=False)
     #     if alpha != 0.0:
-    #         task_vectors['Average TV'].apply_to(model, scaling_coef=alpha, strict=False)
+    #         task_vectors['Average'].apply_to(model, scaling_coef=alpha, strict=False)
     #     fig_pca = embedding_space_analysis.pca_plot(
     #         feature_extractor=model.get_image_encoder(),
     #         dataloader=dataset_clean.get_heldout_dataloader(),
@@ -1042,52 +1047,97 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     
 
-    model.load_state_dict(mix_weights, strict=False)
-    mix_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-    mix_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
-    
-    
-    model.load_state_dict(gold_weights, strict=False)
-    gold_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-    gold_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
-    
-    model.load_state_dict(ft_ho_clean_weights, strict=False)
-    ft_ho_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-    ft_ho_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+
     
     
     results_dict = OrderedDict()
-    
-    results_dict['Mix'] = {'test_results': mix_test_results, 'train_results': mix_train_results}
-    results_dict['Gold'] = {'test_results': gold_test_results, 'train_results': gold_train_results}
-    results_dict['FT HO Clean'] = {'test_results': ft_ho_test_results, 'train_results': ft_ho_train_results}
-    
-    # results_dict = OrderedDict()
-    # for alpha in tqdm(np.linspace(-0.05, -1.5, 30)):
-    # for alpha in tqdm(np.linspace(-0.1, -2.0, 20)):
-    # for alpha in tqdm(np.linspace(-0.1, -1.5, 15)):
-    if strategy['noise']['finetuning'][0]['noise_type'] == 'asymmetric':
-        alphas = tqdm(np.round(np.linspace(-0.05, -2.0, 40), 2))
-    else:
-        alphas = tqdm(np.round(np.linspace(0.1, 1.0, 10), 2))
-        # alphas = tqdm(np.round(np.linspace(-0.05, -3.0, 60), 2))
-    for alpha in alphas:
-    
+    if not results_dir.joinpath('metrics.json').exists():
+        target_vectors = copy.deepcopy(task_vectors)
+        target_vectors.pop('Random Vector')
+        target_vectors.pop('Clean')
+        
+        
         model.load_state_dict(mix_weights, strict=False)
-        task_vectors['Average TV'].apply_to(model, scaling_coef=alpha, strict=False)
-        tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-        tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
-        tv_ho_results, _, _  = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
+        mix_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+        mix_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+        
+        
+        model.load_state_dict(gold_weights, strict=False)
+        gold_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+        gold_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+        
+        model.load_state_dict(ft_ho_clean_weights, strict=False)
+        ft_ho_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+        ft_ho_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+        
+        results_dict['Mix'] = {'test_results': mix_test_results, 'train_results': mix_train_results}
+        results_dict['Gold'] = {'test_results': gold_test_results, 'train_results': gold_train_results}
+        results_dict['FT HO Clean'] = {'test_results': ft_ho_test_results, 'train_results': ft_ho_train_results}
+        
+        
+        for tv_name, target_vector in target_vectors.items():
+            results_dict[tv_name] = OrderedDict()
+            
+            if strategy['noise']['finetuning'][0]['noise_type'] == 'asymmetric':
+                alphas = tqdm(np.round(np.linspace(-0.05, -2.0, 40), 2))
+            else:
+                # for alpha in tqdm(np.linspace(-0.05, -1.5, 30)):
+                # for alpha in tqdm(np.linspace(-0.1, -2.0, 20)):
+                # for alpha in tqdm(np.linspace(-0.1, -1.5, 15)):
+                alphas = tqdm(np.round(np.linspace(-0.05, -3.0, 60), 2))
+            for alpha in alphas:
+                
+                model.load_state_dict(mix_weights, strict=False)
+                target_vector.apply_to(model, scaling_coef=alpha, strict=False)
+                tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+                tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+                tv_ho_results, _, _  = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
 
-        results_dict[alpha] = {'test_results': tv_test_results, 'heldout_resutls':tv_ho_results, 'train_results': tv_train_results}
+                results_dict[tv_name][alpha] = {'test_results': tv_test_results, 'heldout_resutls':tv_ho_results, 'train_results': tv_train_results}
+            
+        with open(results_dir / 'metrics.json' , 'w') as json_file:
+            json.dump(results_dict, json_file, indent=4)
+    else:
+        with open(results_dir / "metrics.json", "r") as json_file:
+            results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
     
-    with open(results_dir / 'metrics_t_noise12.json' , 'w') as json_file:
-        json.dump(results_dict, json_file, indent=4)
+    # Weight Space Disentanglemet Analysis
+    clean_train_ds, noisy_train_ds = dataset.get_clean_noisy_subsets('Train')
+    subset_size  = 2048
+    def random_subset(ds, k, seed: int):
+        k = min(k, len(ds))
+        g = torch.Generator().manual_seed(seed)
+        idx = torch.randperm(len(ds), generator=g)[:k].tolist()
+        return Subset(ds, idx)
+
+    clean_subset = random_subset(clean_train_ds, subset_size, dataset_seed)
+    noisy_subset = random_subset(noisy_train_ds, subset_size, dataset_seed + 1)
     
-    # print(results_dict)
+    records = []
+    for a_str, res in results_dict.items():
+        if a_str in ['Mix', 'Gold', 'FT HO Clean']: continue
+        a = float(a_str) if not isinstance(a_str, (int, float)) else a_str
+        test_acc  = res["test_results"]["ACC"]
+        test_loss = res["test_results"]["Loss"]
+        noisy_acc = res["train_results"]["noisy_set"]["ACC"]
+        records.append((a, test_acc, test_loss, noisy_acc))
+    alpha_max_test_acc = max(records, key=lambda x: x[1])[0]
+    alpha_min_test_loss = min(records, key=lambda x: x[2])[0]
+
+    forgetting_threshold = 0.10
+    alpha_forgetting_thrsh = None
+    for a, _, _, noisy_acc in sorted(records, key=lambda x: x[0], reverse=True):
+        if noisy_acc <= forgetting_threshold:
+            alpha_forgetting_thrsh = a
+            break
+        
+    # print(alpha_max_test_acc, alpha_min_test_loss, alpha_forgetting_thrsh)
     
-    # with open(results_dir / 'tv_metrics.json' , 'w') as json_file:
-    #     json.dump(results_dict, json_file, indent=4)
+    noise_vector = task_vectors['Average']
+    
+    
+    
+    
     
     
 
@@ -1126,9 +1176,10 @@ def main():
     parser.add_argument(
         "-t",
         "--tv",
-        help="Apply task vectors to an already trained and finetuned experiment.",
+        help="Apply task vectors to an already trained and finetuned model.",
         action="store_true",
     )
+    
     args = parser.parse_args()
 
     dotenv.load_dotenv(".env")

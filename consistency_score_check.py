@@ -312,16 +312,17 @@ def apply(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     consistency_scores = None
     if dataset_cfg['name'] == 'cifar10':
         original_dataset = CIFAR10()
-        consistency_scores = np.load('cifar10-cscores.npz')['scores']
+        consistency_scores = np.load('consistency_scorse/cifar10-cscores.npz')['scores']
         cs_lbls = np.load('cifar10-cscores.npz')['labels']
     elif dataset_cfg['name'] == 'cifar100':
         original_dataset = CIFAR100()
-        consistency_scores = np.load('cifar100-cscores.npz')['scores']
+        consistency_scores = np.load('consistency_scorse/cifar100-cscores.npz')['scores']
         cs_lbls = np.load('cifar100-cscores.npz')['labels']
     elif dataset_cfg['name'] == 'mnist':
         original_dataset = MNIST()
-        consistency_scores = np.load('cifar100-cscores.npz')['scores']
-        cs_lbls = np.load('cifar100-cscores.npz')['labels']
+        # TODO find the cons score for MNIST with matching samples indices with torch version.
+        # consistency_scores = np.load('consistency_scorse/cifar100-cscores.npz')['scores']
+        # cs_lbls = np.load('cifar100-cscores.npz')['labels']
     original_dataset.reset_train_dl(shuffle=False)
     
     train_indices = np.array(dataset.get_train_indices())

@@ -1,10 +1,8 @@
-CONFIGS=(config70 config71 config72 config73 config74)   # your configs
-MAX_JOBS=5                          # how many concurrent runs
-
+CONFIGS=(config70 config71 config72 config73 config74)   
+MAX_JOBS=5                          
 mkdir -p logs
 
 for cfg in "${CONFIGS[@]}"; do
-  # throttle concurrency
   while [ "$(jobs -pr | wc -l)" -ge "$MAX_JOBS" ]; do sleep 1; done
 
   CUDA_VISIBLE_DEVICES=0 \
