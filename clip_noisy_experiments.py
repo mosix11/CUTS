@@ -283,13 +283,6 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
     strategy = cfg['strategy']
     base_dataset.inject_noise(**strategy['noise']['pretraining'])
     
-    noise_tv = strategy['noise']['finetuning'][0]
-    noise_tv['set'] = 'Heldout'
-    base_dataset.inject_noise(**noise_tv)
-    
-    show_first_nine(base_dataset.get_heldoutset())
-    
-    exit()
 
     
     if not outputs_dir.joinpath(f"{cfg_name}/mix/weights/ft_weights.pth").exists():
