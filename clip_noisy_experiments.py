@@ -1097,7 +1097,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     else:
         with open(results_dir / "metrics.json", "r") as json_file:
             results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
-    
+    exit()
     # Weight Space Disentanglemet Analysis
     clean_train_ds, noisy_train_ds = dataset.get_clean_noisy_subsets('Train')
     subset_size  = 2048
@@ -1130,9 +1130,9 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         
     # print(alpha_max_test_acc, alpha_min_test_loss, alpha_forgetting_thrsh)
     
-    mix_vector = TaskVector(pt_weights, mix_weights)
-    noise_vector = task_vectors['Average'] * 
-    noise_vector *= 
+    # mix_vector = TaskVector(pt_weights, mix_weights)
+    # noise_vector = task_vectors['Average'] * 
+    # noise_vector *= 
     
     
     
