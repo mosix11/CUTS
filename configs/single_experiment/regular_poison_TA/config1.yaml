@@ -20,13 +20,6 @@ strategy:
         margin: 2
         seed: 10
 
-    finetuning:
-      - set: 'Train'
-        rate: 1.0
-        target_class: 0
-        trigger_percent: 0.03
-        margin: 2
-        seed: 12
 
 
 dataset:

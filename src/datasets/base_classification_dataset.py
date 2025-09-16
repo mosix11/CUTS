@@ -331,8 +331,8 @@ class BaseClassificationDataset(ABC):
             dummy_instance = dummy_instance.dataset
         dummy_instance.switch_to_clean_lables()
 
-    def switch_labels_to_noisy(self, noisy_set:Dataset):
-        dummy_instance = noisy_set
+    def switch_labels_to_noisy(self, clean_set:Dataset):
+        dummy_instance = clean_set
         while not isinstance(dummy_instance, (NoisyClassificationDataset, PoisonedClassificationDataset)):
             dummy_instance = dummy_instance.dataset
         dummy_instance.switch_to_noisy_lables()

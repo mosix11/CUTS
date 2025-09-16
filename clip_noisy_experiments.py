@@ -194,7 +194,75 @@ def finetune_models_gt(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name
         
         results = trainer.fit(model, dataset, resume=False)
         torch.save(model.state_dict(), weights_dir / Path("ft_weights.pth"))        
-    
+  
+def show_first_nine(dataset):
+    import numpy as np
+    import torch
+    import matplotlib.pyplot as plt
+    from PIL import Image
+
+    def _find_classes(ds):
+        # Walk through wrappers (e.g., Subset or your NoisyClassificationDataset)
+        seen = set()
+        cur = ds
+        for _ in range(5):
+            if id(cur) in seen:
+                break
+            seen.add(id(cur))
+            if hasattr(cur, "classes") and isinstance(cur.classes, (list, tuple)):
+                return list(cur.classes)
+            cur = getattr(cur, "dataset", None)
+            if cur is None:
+                break
+        return None
+
+    classes = _find_classes(dataset)
+
+    def _to_numpy_image(x):
+        # Accepts PIL.Image or torch.Tensor
+        if isinstance(x, Image.Image):
+            arr = np.array(x)
+        elif torch.is_tensor(x):
+            t = x.detach().cpu()
+            if t.ndim == 3 and t.shape[0] in (1, 3, 4):  # CHW -> HWC
+                t = t.permute(1, 2, 0)
+            arr = t.numpy()
+        else:
+            arr = np.array(x)
+
+        # For floats, just clip to [0,1] so imshow can display (no denorm)
+        if np.issubdtype(arr.dtype, np.floating):
+            arr = np.clip(arr, 0.0, 1.0)
+
+        # If single-channel with trailing dim, squeeze it
+        if arr.ndim == 3 and arr.shape[2] == 1:
+            arr = arr[:, :, 0]
+
+        return arr
+
+    n = min(9, len(dataset))
+    cols, rows = 3, 3
+    fig, axes = plt.subplots(rows, cols, figsize=(9, 9))
+    axes = axes.ravel()
+
+    for i in range(9):
+        ax = axes[i]
+        if i < n:
+            sample = dataset[i]
+            img, label = sample[:2]
+            if torch.is_tensor(label):
+                label = label.item()
+
+            title = str(label)
+            if classes is not None and isinstance(label, (int, np.integer)) and 0 <= label < len(classes):
+                title = f"{label}: {classes[label]}"
+
+            ax.imshow(_to_numpy_image(img))
+            ax.set_title(title, fontsize=11)
+        ax.axis("off")
+
+    plt.tight_layout()
+    plt.show()  
     
 def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     cfg['trainer']['finetuning']['comet_api_key'] = os.getenv("COMET_API_KEY")
@@ -214,6 +282,14 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
     
     strategy = cfg['strategy']
     base_dataset.inject_noise(**strategy['noise']['pretraining'])
+    
+    noise_tv = strategy['noise']['finetuning'][0]
+    noise_tv['set'] = 'Heldout'
+    base_dataset.inject_noise(**noise_tv)
+    
+    show_first_nine(base_dataset.get_heldoutset())
+    
+    exit()
 
     
     if not outputs_dir.joinpath(f"{cfg_name}/mix/weights/ft_weights.pth").exists():
@@ -612,26 +688,25 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     strategy = cfg['strategy']
     noise_tv = strategy['noise']['finetuning'][0]
+    noise_tv['set'] = 'Heldout'
     # For asymmetric noise, we only consider the noisy samples (only a subset of classes are swapped.)
     if noise_tv['noise_type'] == 'asymmetric':
-        noise_tv['set'] = 'Heldout'
         dataset.inject_noise(**noise_tv)
         hs_clean, hs_noisy = dataset.get_clean_noisy_subsets(set='Heldout')
         dataset.switch_labels_to_clean(hs_noisy)
         
         dataset.set_heldoutset(hs_noisy, shuffle=False)
-
-
-    dataset_clean = copy.deepcopy(dataset)
     
+        dataset_clean = copy.deepcopy(dataset)
     
-    
-    dataset.inject_noise(**strategy['noise']['pretraining'])
-    ho_set = dataset.get_heldoutset()
-    dataset.switch_labels_to_noisy(ho_set)
-    dataset.set_heldoutset(ho_set)
-
-
+        dataset.inject_noise(**strategy['noise']['pretraining'])
+        ho_set = dataset.get_heldoutset()
+        dataset.switch_labels_to_noisy(ho_set)
+        dataset.set_heldoutset(ho_set)
+    else:
+        dataset_clean = copy.deepcopy(dataset)
+        dataset.inject_noise(**strategy['noise']['pretraining'])
+        dataset.inject_noise(**noise_tv)
 
     # Load weights while removing classifier weights from the state dict
     mix_weights = OrderedDict(
@@ -669,7 +744,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             map_location='cpu'
         ).items() if "classifier_heads" not in k)
         noise_weights[f"{noise_tv['noise_rate']*100:.0f}% Noise, {noise_tv['seed']} Seed"] = n_weights
-        
+        break
     
             
     task_vectors = OrderedDict()
@@ -734,7 +809,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     #     taskvector=task_vectors['Average TV'],
     #     unlabeled_loader=dataset_clean.get_heldout_dataloader(),
     #     # K=dataset.get_num_classes(),
-    #     alphas=np.round(np.linspace(-0.1, -3.0, 30), 1),
+    #     alphas=np.round(np.linspace(-0.1, -2.0, 20), 1),
     #     device=gpu
     # )
     # print(alpha_best)
@@ -750,7 +825,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # )
 
 
-    
+    # exit()
     
     # results = pick_alpha_weight_only(
     #     state0=mix_weights,
@@ -1001,17 +1076,19 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     if strategy['noise']['finetuning'][0]['noise_type'] == 'asymmetric':
         alphas = tqdm(np.round(np.linspace(-0.05, -2.0, 40), 2))
     else:
-        alphas = tqdm(np.round(np.linspace(-0.05, -3.0, 60), 2))
+        alphas = tqdm(np.round(np.linspace(0.1, 1.0, 10), 2))
+        # alphas = tqdm(np.round(np.linspace(-0.05, -3.0, 60), 2))
     for alpha in alphas:
     
         model.load_state_dict(mix_weights, strict=False)
         task_vectors['Average TV'].apply_to(model, scaling_coef=alpha, strict=False)
         tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
         tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+        tv_ho_results, _, _  = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
 
-        results_dict[alpha] = {'test_results': tv_test_results, 'train_results': tv_train_results}
+        results_dict[alpha] = {'test_results': tv_test_results, 'heldout_resutls':tv_ho_results, 'train_results': tv_train_results}
     
-    with open(results_dir / 'metrics.json' , 'w') as json_file:
+    with open(results_dir / 'metrics_t_noise12.json' , 'w') as json_file:
         json.dump(results_dict, json_file, indent=4)
     
     # print(results_dict)
