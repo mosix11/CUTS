@@ -767,10 +767,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     ft_tvs_list = list(task_vectors.values())
     tv_names = list(task_vectors.keys())
-    
-    print(tv_names)
-    exit()
-    
+
     task_sim = []
     for i in range(len(ft_tvs_list)):
         anchor_tv = ft_tvs_list[i]
@@ -1133,7 +1130,9 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         
     # print(alpha_max_test_acc, alpha_min_test_loss, alpha_forgetting_thrsh)
     
-    noise_vector = task_vectors['Average']
+    mix_vector = TaskVector(pt_weights, mix_weights)
+    noise_vector = task_vectors['Average'] * 
+    noise_vector *= 
     
     
     
