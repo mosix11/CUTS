@@ -635,7 +635,7 @@ def apply_tv_gt(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     #     json.dump(results_dict, json_file, indent=4)
 
 
-def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str, separate_seeds:int):
+def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     training_seed = cfg['training_seed']
     dataset_seed = cfg['dataset_seed']
     if training_seed:
