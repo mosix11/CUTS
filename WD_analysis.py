@@ -24,10 +24,10 @@ def _build_dataloader(dataset, batch_size):
 
 def apply_WD_analysis(
     model: torch.nn.Module,           # θ_pre (initialization model)
-    taskvector1: "TaskVector",        # τ_1  (e.g., clean)
-    support_tv1: "Dataset",           # μ_1
-    taskvector2: "TaskVector",        # τ_2  (e.g., triggered)
-    support_tv2: "Dataset",           # μ_2
+    taskvector1: TaskVector,          # τ_1  (e.g., clean)
+    support_tv1: Dataset,             # μ_1
+    taskvector2: TaskVector,          # τ_2  (e.g., triggered)
+    support_tv2: Dataset,             # μ_2
     alhpa_range: tuple,               # (min_alpha, max_alpha)
     step: float,                      # grid step
     batch_size: int,
