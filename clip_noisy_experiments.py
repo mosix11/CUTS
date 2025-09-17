@@ -1178,19 +1178,19 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
 
     # Weight Space Disentanglemet Analysis
-    clean_train_ds, noisy_train_ds = dataset.get_clean_noisy_subsets('Train')
-    subset_size  = 2048
-    def random_subset(ds, k, seed: int):
-        k = min(k, len(ds))
-        g = torch.Generator().manual_seed(seed)
-        idx = torch.randperm(len(ds), generator=g)[:k].tolist()
-        return Subset(ds, idx)
+    # clean_train_ds, noisy_train_ds = dataset.get_clean_noisy_subsets('Train')
+    # subset_size  = 2048
+    # def random_subset(ds, k, seed: int):
+    #     k = min(k, len(ds))
+    #     g = torch.Generator().manual_seed(seed)
+    #     idx = torch.randperm(len(ds), generator=g)[:k].tolist()
+    #     return Subset(ds, idx)
 
-    clean_subset = random_subset(clean_train_ds, subset_size, dataset_seed)
-    noisy_subset = random_subset(noisy_train_ds, subset_size, dataset_seed + 1)
+    # clean_subset = random_subset(clean_train_ds, subset_size, dataset_seed)
+    # noisy_subset = random_subset(noisy_train_ds, subset_size, dataset_seed + 1)
     
     records = []
-    for a_str, res in results_dict.items():
+    for a_str, res in results_dict['Seed 10'].items():
         if a_str in ['Mix', 'Gold', 'FT HO Clean']: continue
         a = float(a_str) if not isinstance(a_str, (int, float)) else a_str
         test_acc  = res["test_results"]["ACC"]
@@ -1200,7 +1200,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     alpha_max_test_acc = max(records, key=lambda x: x[1])[0]
     alpha_min_test_loss = min(records, key=lambda x: x[2])[0]
 
-    forgetting_threshold = 0.10
+    forgetting_threshold = 0.08
     alpha_forgetting_thrsh = None
     for a, _, _, noisy_acc in sorted(records, key=lambda x: x[0], reverse=True):
         if noisy_acc <= forgetting_threshold:
@@ -1242,22 +1242,43 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     # exit()
     
-    model.load_state_dict(pt_weights, strict=False)
-    wd_results = apply_WD_analysis(
+    # model.load_state_dict(pt_weights, strict=False)
+    # wd_results = apply_WD_analysis(
+    #     model=model,
+    #     taskvector1=clean_vector,
+    #     support_tv1=clean_subset,
+    #     taskvector2=noise_vector,
+    #     support_tv2=noisy_subset,
+    #     alhpa_range=(-3.0, 3.0),
+    #     step=0.3,
+    #     batch_size=512,
+    #     device=gpu
+    # )
+    # with open(results_dir / "WD.pkl", "wb") as f:
+    #     pickle.dump(wd_results, f)
+    
+    subset_size  = 2048
+    def random_subset(ds, k, seed: int):
+        k = min(k, len(ds))
+        g = torch.Generator().manual_seed(seed)
+        idx = torch.randperm(len(ds), generator=g)[:k].tolist()
+        return Subset(ds, idx)
+
+    test_subset = random_subset(dataset.get_testset(), subset_size, dataset_seed)
+    
+    wd_results = apply_WD_antitask_analysis(
         model=model,
-        taskvector1=clean_vector,
-        support_tv1=clean_subset,
-        taskvector2=noise_vector,
-        support_tv2=noisy_subset,
-        alhpa_range=(-3.0, 3.0),
-        step=0.3,
+        clean_tv=clean_vector,
+        noise_tv=noise_vector,
+        testset=test_subset,
+        alpha_range=(0, 2),
+        step=0.05,
         batch_size=512,
-        device=gpu
+        device=gpu,
+        metric='loss',
     )
-    with open(results_dir / "WD.pkl", "wb") as f:
+    with open(results_dir / "WD_AT2.pkl", "wb") as f:
         pickle.dump(wd_results, f)
-    
-    
     
     
 
