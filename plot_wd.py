@@ -94,12 +94,119 @@ def plot_wd_pickle(
 
 
 
-plot_wd_pickle(
-    "results/single_experiment/clip_noise_TA/config28/WD.pkl",
-    tv1_label=r"$\alpha_c$",
-    tv2_label=r"$\alpha_t$",
-    title=r"$\xi(\alpha_c,\alpha_t)$ — CIFAR-10",
-    percent=True,
-    cmap="viridis",
-    save_path="wd_heatmap.png",
-)
+def plot_antitask_wd_maps(pickle_path):
+    """
+    Plot key 2D maps from apply_WD_antitask_analysis() in one figure.
+
+    Expected keys in `res`:
+      'alphas', 'risk_base', 'risk_c_only', 'risk_n_only',
+      'risk_map', 'delta_c', 'delta_n', 'interaction', 'wd_map', 'best'
+    """
+    
+    with open(pickle_path, "rb") as f:
+        res = pickle.load(f)
+    
+    alphas = np.asarray(res["alphas"], dtype=float)
+    risk_base = float(res["risk_base"])
+    risk_c_only = np.asarray(res["risk_c_only"], dtype=float)   # [W]
+    risk_n_only = np.asarray(res["risk_n_only"], dtype=float)   # [H]
+    risk_map = np.asarray(res["risk_map"], dtype=float)         # [H,W]
+    delta_c = np.asarray(res["delta_c"], dtype=float)           # [W]
+    delta_n = np.asarray(res["delta_n"], dtype=float)           # [H]
+    interaction = np.asarray(res["interaction"], dtype=float)   # [H,W]
+    wd_map = np.asarray(res["wd_map"], dtype=float)             # [H,W]
+    best = res.get("best", None)
+
+    H, W = risk_map.shape
+    assert H == len(alphas) and W == len(alphas), "Maps should be len(alphas)×len(alphas)."
+
+    # Build an additive (no-interaction) risk prediction and the normalization denom map
+    # \hat R_add(αc, αn) = R(αc,0) + R(0,αn) - R(0,0)
+    R_add = (risk_n_only[:, None] + risk_c_only[None, :] - risk_base).astype(np.float32)
+    denom = (np.abs(delta_n)[:, None] + np.abs(delta_c)[None, :]).astype(np.float32)  # |Δc|+|Δn|
+
+    # Nice aligned edges for pcolormesh so ticks sit on alpha values
+    if len(alphas) > 1:
+        step = float(np.mean(np.diff(alphas)))
+    else:
+        step = 1.0
+    edges = np.r_[alphas[0] - step/2, alphas + step/2]
+    Xe, Ye = np.meshgrid(edges, edges)
+
+    # Helpers
+    def _heat(ax, Z, title, cbar_label=None, vmin=None, vmax=None, mark_best=False):
+        hm = ax.pcolormesh(Xe, Ye, Z, shading="auto", vmin=vmin, vmax=vmax)
+        ax.set_xlabel(r"$\alpha_c$")  # x-axis: clean vector scale
+        ax.set_ylabel(r"$\alpha_n$")  # y-axis: noise vector scale
+        ax.set_xlim(edges[0], edges[-1])
+        ax.set_ylim(edges[0], edges[-1])
+        ax.set_title(title)
+        # tick thinning to avoid clutter
+        if len(alphas) > 1:
+            tick_every = max(1, len(alphas)//8)
+            ticks = alphas[::tick_every]
+            ax.set_xticks(ticks)
+            ax.set_yticks(ticks)
+        cbar = plt.colorbar(hm, ax=ax)
+        if cbar_label:
+            cbar.set_label(cbar_label)
+        if mark_best and best is not None:
+            ax.plot([best["alpha_c"]], [best["alpha_n"]],
+                    marker="o", markersize=4, markeredgecolor="white",
+                    markerfacecolor="none", linewidth=0)
+
+    # Figure layout: 2 rows × 3 columns
+    fig, axs = plt.subplots(2, 3, figsize=(13, 8), dpi=130)
+    ax11, ax12, ax13 = axs[0]
+    ax21, ax22, ax23 = axs[1]
+
+    # Choose color ranges for comparability where it helps
+    # (risk-like maps share a common vmin/vmax)
+    risk_like = np.concatenate([risk_map.ravel(), R_add.ravel()])
+    vmin_risk = float(np.nanmin(risk_like))
+    vmax_risk = float(np.nanmax(risk_like))
+
+    _heat(ax11, risk_map,          r"Measured risk $R(\alpha_c,\alpha_n)$",
+          cbar_label="Risk", vmin=vmin_risk, vmax=vmax_risk, mark_best=False)
+
+    _heat(ax12, R_add,             r"Additive prediction $\hat R_{\mathrm{add}}$",
+          cbar_label="Risk", vmin=vmin_risk, vmax=vmax_risk, mark_best=False)
+
+    # Interaction can be positive/negative; center colormap around 0
+    max_abs_I = float(np.nanmax(np.abs(interaction)))
+    _heat(ax13, interaction,       r"Interaction $I=R-\hat R_{\mathrm{add}}$",
+          cbar_label="Interaction", vmin=-max_abs_I, vmax=max_abs_I, mark_best=False)
+
+    # Denominator map used in ξ normalization (|Δc|+|Δn|)
+    _heat(ax21, denom,             r"Normalization map $|\Delta_c|+|\Delta_n|$",
+          cbar_label="Magnitude", vmin=0.0, vmax=float(np.nanmax(denom)), mark_best=False)
+
+    # Normalized disentanglement error ξ_anti (lower is better)
+    _heat(ax22, wd_map,            r"Normalized WD $\xi_{\mathrm{anti}}$",
+          cbar_label=r"$\xi_{\mathrm{anti}}$", vmin=0.0, vmax=float(np.nanmax(wd_map)), mark_best=True)
+
+    # Residual = measured - additive (another way to show interaction sign/scale)
+    # (Duplicate of interaction numerically, but sometimes nice to see with different scaling.)
+    _heat(ax23, risk_map - R_add,  r"Residual $R-\hat R_{\mathrm{add}}$",
+          cbar_label="Residual", vmin=-max_abs_I, vmax=max_abs_I, mark_best=False)
+
+    fig.suptitle("Task vs. Anti-task Weight Disentanglement Maps", y=0.995, fontsize=12)
+    fig.tight_layout()
+    return fig, axs
+
+
+# plot_wd_pickle(
+#     # "results/single_experiment/clip_noise_TA/config28/WD.pkl",
+#     # "results/single_experiment/clip_poison_TA/config2/WD.pkl",
+#     "results/single_experiment/clip_noise_TA/config7/WD.pkl",
+#     tv1_label=r"$\alpha_c$",
+#     tv2_label=r"$\alpha_t$",
+#     title=r"$\xi(\alpha_c,\alpha_t)$ — CIFAR-10",
+#     percent=True,
+#     cmap="viridis",
+#     save_path="wd_heatmap3.png",
+# )
+
+
+fig, axs = plot_antitask_wd_maps('results/single_experiment/clip_noise_TA/config7/WD_AT.pkl')
+plt.show()

@@ -117,6 +117,137 @@ def apply_WD_analysis(
     }
 
 
+def apply_WD_antitask_analysis(
+    model: torch.nn.Module,            # θ_pre
+    clean_tv: TaskVector,            # τ_c (clean task vector)
+    noise_tv: TaskVector,            # τ_n (noise / anti-task vector)
+    testset: Dataset,                # same support for both
+    alpha_range: tuple,                # (min_alpha, max_alpha)
+    step: float,                       # grid step
+    batch_size: int,
+    device: torch.device,
+    metric: str = "loss",              # "loss" (recommended) or "error"
+    eps: float = 1e-8
+):
+    """
+    Returns:
+      {
+        "alphas": np.ndarray,             # 1D grid of alphas
+        "risk_base": float,               # R(0,0)
+        "risk_c_only": np.ndarray,        # R(α_c,0) [W]
+        "risk_n_only": np.ndarray,        # R(0,α_n) [H]
+        "risk_map": np.ndarray,           # R(α_c,α_n) [H,W]
+        "delta_c": np.ndarray,            # Δ_c(α_c) = R(α_c,0)-R(0,0) [W]
+        "delta_n": np.ndarray,            # Δ_n(α_n) = R(0,α_n)-R(0,0) [H]
+        "interaction": np.ndarray,        # I(α_c,α_n) [H,W]
+        "wd_map": np.ndarray,             # ξ_anti(α_c,α_n) [H,W]
+        "best": {"alpha_c": float, "alpha_n": float, "wd": float}
+      }
+    """
+    # -------------------------
+    # helpers
+    # -------------------------
+    def _risk_from_metrics(metrics):
+        if metric == "loss":
+            # expect metrics["loss"]
+            return float(metrics["Loss"])
+        elif metric == "error":
+            # expect metrics["acc"]
+            return float(1.0 - metrics["ACC"])
+        else:
+            raise ValueError("metric must be 'loss' or 'error'.")
+
+    def _eval_model(m, dl):
+        metrics, preds, labels = evaluate_model(m, dl, device)  # your API
+        return _risk_from_metrics(metrics)
+
+    # -------------------------
+    # prep
+    # -------------------------
+    alphas = np.arange(alpha_range[0], alpha_range[1] + step, step, dtype=float)
+    H = W = len(alphas)
+
+    test_dl = _build_dataloader(testset, batch_size)  # ensure shuffle=False
+
+    risk_map   = np.zeros((H, W), dtype=np.float32)   # R(α_c,α_n)
+    interaction = np.zeros_like(risk_map)             # I(α_c,α_n)
+    wd_map     = np.zeros_like(risk_map)              # ξ_anti
+
+    # Base risk R(0,0)
+    base_model = copy.deepcopy(model).to(device)
+    risk_base = _eval_model(base_model, test_dl)
+    del base_model
+    if device.type == "cuda":
+        torch.cuda.empty_cache()
+
+    # Precompute axis terms: R(α_c,0) and R(0,α_n)
+    risk_c_only = np.zeros(W, dtype=np.float32)
+    risk_n_only = np.zeros(H, dtype=np.float32)
+
+    # R(α_c,0)
+    for xi, a_c in enumerate(tqdm(alphas, desc="Precompute clean axis", leave=False)):
+        m_c = copy.deepcopy(model).to(device)
+        clean_tv.apply_to(m_c, scaling_coef=float(a_c), strict=False)
+        risk_c_only[xi] = _eval_model(m_c, test_dl)
+        del m_c
+        if device.type == "cuda":
+            torch.cuda.empty_cache()
+
+    # R(0,α_n)
+    for yi, a_n in enumerate(tqdm(alphas, desc="Precompute noise axis", leave=False)):
+        m_n = copy.deepcopy(model).to(device)
+        noise_tv.apply_to(m_n, scaling_coef=float(a_n), strict=False)
+        risk_n_only[yi] = _eval_model(m_n, test_dl)
+        del m_n
+        if device.type == "cuda":
+            torch.cuda.empty_cache()
+
+    delta_c = risk_c_only - risk_base    # Δ_c(α_c)
+    delta_n = risk_n_only - risk_base    # Δ_n(α_n)
+
+    # -------------------------
+    # full grid + interaction + normalized WD
+    # -------------------------
+    pbar = tqdm(total=H*W, desc="Grid (clean, noise)")
+    for yi, a_n in enumerate(alphas):            # rows: α_n
+        for xi, a_c in enumerate(alphas):        # cols: α_c
+            m_cn = copy.deepcopy(model).to(device)
+            clean_tv.apply_to(m_cn, scaling_coef=float(a_c), strict=False)
+            noise_tv.apply_to(m_cn, scaling_coef=float(a_n), strict=False)
+            r_cn = _eval_model(m_cn, test_dl)    # R(α_c,α_n)
+            del m_cn
+            if device.type == "cuda":
+                torch.cuda.empty_cache()
+
+            risk_map[yi, xi] = r_cn
+
+            # I(α_c,α_n) = R(α_c,α_n) - R(α_c,0) - R(0,α_n) + R(0,0)
+            I = r_cn - risk_c_only[xi] - risk_n_only[yi] + risk_base
+            interaction[yi, xi] = I
+
+            denom = abs(delta_c[xi]) + abs(delta_n[yi]) + eps
+            wd_map[yi, xi] = float(abs(I) / denom) if denom > eps else 0.0
+
+            pbar.update(1)
+    pbar.close()
+
+    # Best (minimum disentanglement error)
+    iy, ix = np.unravel_index(np.argmin(wd_map), wd_map.shape)
+    best = {"alpha_c": float(alphas[ix]), "alpha_n": float(alphas[iy]), "wd": float(wd_map[iy, ix])}
+
+    return {
+        "alphas": alphas,
+        "risk_base": float(risk_base),
+        "risk_c_only": risk_c_only,
+        "risk_n_only": risk_n_only,
+        "risk_map": risk_map,
+        "delta_c": delta_c,
+        "delta_n": delta_n,
+        "interaction": interaction,
+        "wd_map": wd_map,
+        "best": best,
+    }
+
 # def apply_WD_analysis(
 #     model:torch.nn.Module, # This is the initialization model (before training on mix)
 #     taskvector1: TaskVector,

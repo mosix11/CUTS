@@ -39,7 +39,7 @@ import imageio.v2 as imageio
 from src.utils import embedding_space_analysis
 from helper_funcs import evaluate_model, eval_model_on_clean_noise_splits, search_optimal_coefficient, get_confusion_matrix, row_normalize
 from src.utils import weight_norm_analysis
-from WD_analysis import apply_WD_analysis
+from WD_analysis import apply_WD_analysis, apply_WD_antitask_analysis
 
 def eval_model_on_tvs(model, taskvectors, results_dict, cfg, dataset, num_classes, device):
     
@@ -507,7 +507,8 @@ def apply_tv_gt(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     results_dirs['metrics'] = results_dir / 'metrics'    
     for dir in results_dirs.values():
         dir.mkdir(exist_ok=True, parents=True)
-    
+        
+
     
     dataset_cfg = cfg['datasets'][0]
     noise_cfg = dataset_cfg.pop('noise_cfg')
@@ -525,6 +526,9 @@ def apply_tv_gt(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     dataset_cfg['val_transforms'] = model.get_val_transforms()
     dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
     
+    dataset.reset_train_dl(shuffle=False)
+    
+    dataset_clean = copy.deepcopy(dataset)
     
     dataset.inject_noise(**noise_cfg)
 
@@ -555,10 +559,9 @@ def apply_tv_gt(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     for task_name, finetuend_weights in ft_weights.items():
         task_vectors[task_name] = TaskVector(pt_weights, finetuend_weights)
 
-    sum_clean_noise_TV = TaskVector.sum([task_vectors['clean'] + task_vectors['noise']])
-    avg_clean_noise_TV = TaskVector.mean([task_vectors['clean'] + task_vectors['noise']])
+    sum_clean_noise_TV = TaskVector.sum([task_vectors['clean'], task_vectors['noise']])
+    avg_clean_noise_TV = TaskVector.mean([task_vectors['clean'], task_vectors['noise']])
     goal_TV = task_vectors['mix'] - (task_vectors['noise'])
-    
     
     
     ft_tvs_list = list(task_vectors.values())
@@ -591,45 +594,121 @@ def apply_tv_gt(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         show=False
     )
 
+    # results_dict = OrderedDict()
+    # for alpha in tqdm(np.round(np.linspace(0.1, 1.0, 10), 1)):
+    
+    #     model.load_state_dict(pt_weights, strict=False)
+    #     task_vectors['mix'].apply_to(model, scaling_coef=alpha, strict=False)
+    #     tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+    #     tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+
+    #     results_dict[alpha] = {'test_results': tv_test_results, 'train_results': tv_train_results}
+    
+    # with open(results_dirs['metrics'] / 'metrics_mtl.json' , 'w') as json_file:
+    #     json.dump(results_dict, json_file, indent=4)
 
     
-    model.load_state_dict(pt_weights, strict=False)
-    pt_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-    pt_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+    # clean_train_ds, noisy_train_ds = dataset.get_clean_noisy_subsets('Train')
+    # subset_size  = 2048
+    # def random_subset(ds, k, seed: int):
+    #     k = min(k, len(ds))
+    #     g = torch.Generator().manual_seed(seed)
+    #     idx = torch.randperm(len(ds), generator=g)[:k].tolist()
+    #     return Subset(ds, idx)
+
+    # clean_subset = random_subset(clean_train_ds, subset_size, dataset_seed)
+    # noisy_subset = random_subset(noisy_train_ds, subset_size, dataset_seed + 1)
     
-    model.load_state_dict(ft_weights['mix'], strict=False)
-    mix_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-    mix_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+    # model.load_state_dict(pt_weights, strict=False)
+    # wd_results = apply_WD_analysis(
+    #     model=model,
+    #     taskvector1=task_vectors['clean'],
+    #     support_tv1=clean_subset,
+    #     taskvector2=task_vectors['noise'],
+    #     support_tv2=noisy_subset,
+    #     alhpa_range=(-2.0, 2.0),
+    #     step=0.4,
+    #     batch_size=512,
+    #     device=gpu
+    # )
+    # with open(results_dir / "WD.pkl", "wb") as f:
+    #     pickle.dump(wd_results, f)
+
+    subset_size  = 2048
+    def random_subset(ds, k, seed: int):
+        k = min(k, len(ds))
+        g = torch.Generator().manual_seed(seed)
+        idx = torch.randperm(len(ds), generator=g)[:k].tolist()
+        return Subset(ds, idx)
+
+    test_subset = random_subset(dataset.get_testset(), subset_size, dataset_seed)
     
-    model.load_state_dict(ft_weights['noise'], strict=False)
-    noise_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-    noise_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+    wd_results = apply_WD_antitask_analysis(
+        model=model,
+        clean_tv=task_vectors['clean'],
+        noise_tv=task_vectors['noise'],
+        testset=test_subset,
+        alpha_range=(0, 2.8),
+        step=0.4,
+        batch_size=512,
+        device=gpu,
+        metric='loss',
+    )
+    with open(results_dir / "WD_AT2.pkl", "wb") as f:
+        pickle.dump(wd_results, f)
+
+    # model.load_state_dict(pt_weights, strict=False)
+    # sum_clean_noise_TV.apply_to(model, scaling_coef=1.0, strict=False)
+    # sum_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+    # print(sum_test_results)
+    # sum_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+    # print(sum_train_results)
     
-    model.load_state_dict(ft_weights['clean'], strict=False)
-    clean_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-    clean_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+    # model.load_state_dict(pt_weights, strict=False)
+    # avg_clean_noise_TV.apply_to(model, scaling_coef=1.0, strict=False)
+    # avg_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+    # print(avg_test_results)
+    # avg_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+    # print(avg_train_results)
     
-    model.load_state_dict(pt_weights, strict=False)
     
-    results_dict = OrderedDict()
+    # model.load_state_dict(pt_weights, strict=False)
+    # pt_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+    # pt_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
     
-    results_dict['Pretrain'] = {'test_results': pt_test_results, 'train_results': pt_train_results}
-    results_dict['Mix'] = {'test_results': mix_test_results, 'train_results': mix_train_results}
-    results_dict['Clean'] = {'test_results': clean_test_results, 'train_results': clean_train_results}
-    results_dict['Noise'] = {'test_results': noise_test_results, 'train_results': noise_train_results}
+    # model.load_state_dict(ft_weights['mix'], strict=False)
+    # mix_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+    # mix_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+    
+    # model.load_state_dict(ft_weights['noise'], strict=False)
+    # noise_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+    # noise_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+    
+    # model.load_state_dict(ft_weights['clean'], strict=False)
+    # clean_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+    # clean_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+    
+    # model.load_state_dict(pt_weights, strict=False)
+    
+    # results_dict = OrderedDict()
+    
+    # results_dict['Pretrain'] = {'test_results': pt_test_results, 'train_results': pt_train_results}
+    # results_dict['Mix'] = {'test_results': mix_test_results, 'train_results': mix_train_results}
+    # results_dict['Clean'] = {'test_results': clean_test_results, 'train_results': clean_train_results}
+    # results_dict['Noise'] = {'test_results': noise_test_results, 'train_results': noise_train_results}
     
 
-    for alpha in tqdm(np.round(np.linspace(-0.1, -1.0, 10), 1)):
+    # for alpha in tqdm(np.round(np.linspace(-0.1, -1.0, 10), 1)):
     
-        model.load_state_dict(ft_weights['mix'], strict=False)
-        task_vectors['noise'].apply_to(model, scaling_coef=alpha, strict=False)
-        tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-        tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+    #     model.load_state_dict(ft_weights['mix'], strict=False)
+    #     task_vectors['noise'].apply_to(model, scaling_coef=alpha, strict=False)
+    #     tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+    #     tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
 
-        results_dict[alpha] = {'test_results': tv_test_results, 'train_results': tv_train_results}
+    #     results_dict[alpha] = {'test_results': tv_test_results, 'train_results': tv_train_results}
     
-    with open(results_dirs['metrics'] / 'metrics.json' , 'w') as json_file:
-        json.dump(results_dict, json_file, indent=4)
+    # with open(results_dirs['metrics'] / 'metrics.json' , 'w') as json_file:
+    #     json.dump(results_dict, json_file, indent=4)
     
     # with open(results_dir / 'tv_metrics.json' , 'w') as json_file:
     #     json.dump(results_dict, json_file, indent=4)
@@ -1153,15 +1232,15 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
     # print(tv_train_results)
     
-    model.load_state_dict(pt_weights, strict=False)
-    sum_tv = clean_vector + noise_vector
-    sum_tv.apply_to(model, scaling_coef=1.0, strict=False)
-    tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-    print(tv_test_results)
-    tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
-    print(tv_train_results)
+    # model.load_state_dict(pt_weights, strict=False)
+    # sum_tv = clean_vector + noise_vector
+    # sum_tv.apply_to(model, scaling_coef=1.0, strict=False)
+    # tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+    # print(tv_test_results)
+    # tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+    # print(tv_train_results)
     
-    exit()
+    # exit()
     
     model.load_state_dict(pt_weights, strict=False)
     wd_results = apply_WD_analysis(
