@@ -1213,7 +1213,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         'Alpha Forget Threshold:', alpha_forgetting_thrsh
         )
     mix_vector = TaskVector(pt_weights, mix_weights)
-    noise_vector = task_vectors['Average'] * alpha_forgetting_thrsh * -1 # alpha is negative
+    noise_vector = task_vectors['Seed 10'] * alpha_forgetting_thrsh * -1 # alpha is negative
     clean_vector = mix_vector - noise_vector
     
     # model.load_state_dict(pt_weights, strict=False)

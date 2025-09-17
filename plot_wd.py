@@ -105,7 +105,7 @@ def plot_antitask_wd_maps(pickle_path):
     
     with open(pickle_path, "rb") as f:
         res = pickle.load(f)
-    
+            
     alphas = np.asarray(res["alphas"], dtype=float)
     risk_base = float(res["risk_base"])
     risk_c_only = np.asarray(res["risk_c_only"], dtype=float)   # [W]
