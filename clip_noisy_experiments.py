@@ -1128,11 +1128,40 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             alpha_forgetting_thrsh = a
             break
         
-    # print(alpha_max_test_acc, alpha_min_test_loss, alpha_forgetting_thrsh)
-    
+    print(
+        'Alpha Max Test ACC:', alpha_max_test_acc,
+        'Apha Min Test Loss:', alpha_min_test_loss,
+        'Alpha Forget Threshold:', alpha_forgetting_thrsh
+        )
     mix_vector = TaskVector(pt_weights, mix_weights)
     noise_vector = task_vectors['Average'] * alpha_forgetting_thrsh * -1 # alpha is negative
     clean_vector = mix_vector - noise_vector
+    
+    # model.load_state_dict(pt_weights, strict=False)
+    # clean_vector.apply_to(model, scaling_coef=1.0, strict=False)
+    # tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+    # print(tv_test_results)
+    # tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+    # print(tv_train_results)
+    
+    # model.load_state_dict(pt_weights, strict=False)
+    # noise_vector.apply_to(model, scaling_coef=1.0, strict=False)
+    # tv_hot_results, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
+    # print(tv_hot_results)
+    # tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+    # print(tv_test_results)
+    # tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+    # print(tv_train_results)
+    
+    model.load_state_dict(pt_weights, strict=False)
+    sum_tv = clean_vector + noise_vector
+    sum_tv.apply_to(model, scaling_coef=1.0, strict=False)
+    tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+    print(tv_test_results)
+    tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+    print(tv_train_results)
+    
+    exit()
     
     model.load_state_dict(pt_weights, strict=False)
     wd_results = apply_WD_analysis(
