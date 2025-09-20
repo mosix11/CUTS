@@ -106,16 +106,6 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
     strategy = cfg['strategy']
     base_dataset.inject_noise(**strategy['noise']['pretraining'])
     
-    # noise_tv = strategy['noise']['finetuning'][0]
-    # noise_tv['set'] = 'Heldout'
-    # base_dataset.inject_noise(**noise_tv)
-    # hs_clean, hs_noisy = base_dataset.get_clean_noisy_subsets(set='Heldout')
-    
-    # show_poisoned_samples(base_dataset.get_trainset(), unnormalize=True)
-    # # base_dataset.switch_labels_to_clean(hs_noisy)
-    # # show_poisoned_samples(hs_noisy)
-    # exit()
-    
     if not outputs_dir.joinpath(f"{cfg_name}/mix/weights/ft_weights.pth").exists():
         dataset = copy.deepcopy(base_dataset)
         model = copy.deepcopy(base_model)
@@ -314,11 +304,12 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     strategy = cfg['strategy']
     dataset.inject_noise(**strategy['noise']['pretraining'])
     
+    
     noise_tv = strategy['noise']['finetuning'][0]
     noise_tv['set'] = 'Heldout'
     dataset.inject_noise(**noise_tv)
     hs_clean, hs_noisy = dataset.get_clean_noisy_subsets(set='Heldout')
-    dataset.set_heldoutset(hs_noisy)
+    dataset.switch_labels_to_clean(hs_noisy)
 
 
     # Load weights while removing classifier weights from the state dict
@@ -614,7 +605,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # results_dict = OrderedDict()
     # for alpha in tqdm(np.linspace(-0.05, -1.5, 30)):
     # for alpha in tqdm(np.linspace(-0.1, -2.0, 20)):
-    for alpha in tqdm(np.round(np.linspace(-0.1, -1.5, 15), 1)):
+    for alpha in tqdm(np.round(np.linspace(-0.05, -1.5, 30), 2)):
     
         model.load_state_dict(mix_weights, strict=False)
         task_vectors['Average TV'].apply_to(model, scaling_coef=alpha, strict=False)

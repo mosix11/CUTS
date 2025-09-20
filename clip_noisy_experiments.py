@@ -1148,26 +1148,26 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
             
             
-    from test_alpha import select_alpha_star, plot_alpha_metrics
-    
-    best, records, alpha_best = select_alpha_star(
-        model=model,
-        feature_extractor=model.get_image_encoder(),
-        classifier=model.get_active_head(),
-        state0=mix_weights,
-        taskvector=task_vectors['Average'],
-        unlabeled_loader=dataset_clean.get_heldout_dataloader(),
-        # K=dataset.get_num_classes(),
-        alphas=np.round(np.linspace(-0.1, -2.0, 20), 1),
-        device=gpu
-    )
-    alpha_kNN = alpha_best['alpha_kNN']
-    alpha_s4 = alpha_best['alpha_S4']
+    if 'alpha_kNN' not in results_dict:        
+        from test_alpha import select_alpha_star, plot_alpha_metrics
+        best, records, alpha_best = select_alpha_star(
+            model=model,
+            feature_extractor=model.get_image_encoder(),
+            classifier=model.get_active_head(),
+            state0=mix_weights,
+            taskvector=task_vectors['Average'],
+            unlabeled_loader=dataset_clean.get_heldout_dataloader(),
+            # K=dataset.get_num_classes(),
+            alphas=np.round(np.linspace(-0.1, -2.0, 20), 1),
+            device=gpu
+        )
+        alpha_kNN = alpha_best['alpha_kNN']
+        alpha_s4 = alpha_best['alpha_S4']
 
-    results_dict['alpha_KNN'] = alpha_kNN
-    results_dict['alpha_s4'] = alpha_s4
-    with open(results_dir / 'metrics.json' , 'w') as json_file:
-        json.dump(results_dict, json_file, indent=4)
+        results_dict['alpha_KNN'] = alpha_kNN
+        results_dict['alpha_s4'] = alpha_s4
+        with open(results_dir / 'metrics.json' , 'w') as json_file:
+            json.dump(results_dict, json_file, indent=4)
 
     
     exit()

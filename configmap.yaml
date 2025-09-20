@@ -1,33 +1,80 @@
 clip_models:
   MNIST:
-    symmetric:
-      10: 'config25'
-      20: 'config24'
-      40: 'config3'
-      60: 'config23'
-      80: 'config13'
-    asymmetric:
-      40: 'config20'
-  
+    ho_2:
+      symmetric:
+        10: 'config37'
+        20: 'config38'
+        40: 'config39'
+        60: 'config40'
+        80: 'config41'
+      asymmetric:
+        20:
+        40:
+      poison: 'config1'
+      ic:
+        '1-7': 'config2' # numbers
+    ho_10:
+      symmetric:
+        10: 'config25'
+        20: 'config24'
+        40: 'config3'
+        60: 'config23'
+        80: 'config13'
+      asymmetric:
+        40: 'config20'
+
   CIFAR10:
-    symmetric:
-      10: 'config16'
-      20: 'config14'
-      40: 'config1'
-      60: 'config11'
-      80: 'config21'
-    asymmetric:
-      40: 'config18'
+    ho_2:
+      symmetric:
+        10: 'config32'
+        20: 'config30'
+        40: 'config26'
+        60: 'config28'
+        80: 'config35'
+      asymmetric:
+        20: 'config44'
+        40: 'config42'
+      poison: 'config2'
+      ic:
+        '3-5': 'config1' # cat dog
+        '6-9': 'config4' # frog truck
+
+
+    ho_10:
+      symmetric:
+        10: 'config16'
+        20: 'config14'
+        40: 'config1'
+        60: 'config11'
+        80: 'config21'
+      asymmetric:
+        40: 'config18'
 
   CIFAR100:
-    symmetric:
-      10: 'config17'
-      20: 'config15'
-      40: 'config2'
-      60: 'config12'
-      80: 'config22'
-    asymmetric:
-      40: 'config19'
+    ho_2:
+      symmetric:
+        10: 'config34'
+        20: 'config31'
+        40: 'config27'
+        60: 'config29'
+        80: 'config36'
+      asymmetric:
+        20: 'config45'
+        40: 'config43'
+      poison: 'config3'
+      ic:
+        '47-52': 'config1' # maple tre - oak tree
+        '0-24': 'config4' # apple cockroach
+
+    ho_10:
+      symmetric:
+        10: 'config17'
+        20: 'config15'
+        40: 'config2'
+        60: 'config12'
+        80: 'config22'
+      asymmetric:
+        40: 'config19'
 
 
 
