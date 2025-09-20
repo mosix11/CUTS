@@ -55,7 +55,7 @@ trainer:
         type: 'cosann_warmup'
         update_on: 'gradient_step'
         warmup_steps: 300
-        hold_steps: 9000
+        hold_steps: 5000
         T_max: 15000
         eta_min: 0
       early_stopping: False
