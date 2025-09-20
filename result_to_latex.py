@@ -10,7 +10,7 @@ from collections import OrderedDict
 from typing import Dict, Any, Optional, Tuple, List
 
 
-def load_metrics(config_dir: Path) -> Optional[Dict[str, Any]]:
+def _load_metrics(config_dir: Path) -> Optional[Dict[str, Any]]:
     fpath = config_dir / 'metrics.json'
     if fpath.exists():
         try:
@@ -21,6 +21,59 @@ def load_metrics(config_dir: Path) -> Optional[Dict[str, Any]]:
         
     return None
 
+def _get_test_acc(block: Dict[str, Any]) -> Optional[float]:
+    try:
+        return float(block["test_results"]["ACC"])
+    except Exception:
+        return None
+
+def _get_train_clean_acc(block: Dict[str, Any]) -> Optional[float]:
+    try:
+        return float(block["train_results"]["clean_set"]["ACC"])
+    except Exception:
+        return None
+    
+def _get_train_clean_destruction_rate(block: Dict[str, Any]) -> Optional[float]:
+    return 1 - _get_train_clean_acc(block)
+
+def _get_train_noisy_acc(block: Dict[str, Any]) -> Optional[float]:
+    try:
+        return float(block["train_results"]["noisy_set"]["ACC"])
+    except Exception:
+        return None
+    
+def _get_train_noisy_forget_rate(block: Dict[str, Any]) -> Optional[float]:
+    return 1 - _get_train_noisy_acc(block)
+
+def _get_train_healing_acc(block: Dict[str, Any]) -> Optional[float]:
+    try:
+        return float(block["train_results"]["healing_noise"]["ACC"])
+    except Exception:
+        return None
+
+
+def _collect_alpha_metrics(metrics: Dict[str, Any]) -> Dict[float, Dict]:
+        alpha_metrics: Dict[float, Dict] = OrderedDict()
+        for k, v in metrics.items():
+            if k in {"Mix", "Gold", "FT HO Clean"}:
+                continue
+            try:
+                alpha = float(k)
+            except Exception:
+                continue
+            alpha = round(alpha, 2)
+            alpha_metrics[alpha] = OrderedDict()
+            
+            alpha_metrics['utility'] = _get_test_acc(v)
+            alpha_metrics['forget_rate'] = _get_train_noisy_forget_rate(v)
+            alpha_metrics['destruction_rate'] = _get_train_clean_destruction_rate(v)
+            alpha_metrics['healing_rate'] = _get_train_healing_acc(v)
+            
+            acc = get_test_acc(v)
+            if acc is not None:
+                alpha_accs.append((alpha, acc))
+        return alpha_accs
+
 
 def generate_clip_symmetric_noise_table(results_dir:Path, cfgmap:OrderedDict):
     dataset_order = ["MNIST", "CIFAR10", "CIFAR100"]
@@ -28,12 +81,6 @@ def generate_clip_symmetric_noise_table(results_dir:Path, cfgmap:OrderedDict):
 
     # ---------- helpers ----------
     
-
-    def get_test_acc(block: Dict[str, Any]) -> Optional[float]:
-        try:
-            return float(block["test_results"]["ACC"])
-        except Exception:
-            return None
 
     def collect_alpha_accs(metrics: Dict[str, Any]) -> List[Tuple[float, float]]:
         alpha_accs: List[Tuple[float, float]] = []
@@ -85,7 +132,7 @@ def generate_clip_symmetric_noise_table(results_dir:Path, cfgmap:OrderedDict):
             if not config:
                 continue
 
-            metrics = load_metrics(config)
+            metrics = load_metrics(results_dir/config)
             if not metrics:
                 continue
 
