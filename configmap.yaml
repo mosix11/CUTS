@@ -76,7 +76,8 @@ clip_models:
       asymmetric:
         40: 'config19'
 
-
+DINO:
+  
 
 regular_models:
   MNIST:

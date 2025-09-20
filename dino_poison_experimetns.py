@@ -46,7 +46,6 @@ from WD_analysis import apply_WD_analysis
 
 
 
-
 def show_poisoned_samples(dataset, n=9, unnormalize=False):
     """
     Show `n` poisoned samples from a DatasetWithIndex-wrapped dataset.
@@ -97,15 +96,9 @@ def show_poisoned_samples(dataset, n=9, unnormalize=False):
 def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     cfg['trainer']['finetuning']['comet_api_key'] = os.getenv("COMET_API_KEY")
     
-    
-    dataset_cfg = cfg['datasets'][0]
-    base_dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
-    
-
-    cfg['model']['datasets_cfgs'] = {dataset_cfg['name']: base_dataset.get_class_names()} 
     base_model = model_factory.create_model(cfg['model'])
-    base_model.freeze_all_heads()
     
+    dataset_cfg = cfg['dataset']
     dataset_cfg['train_transforms'] = base_model.get_train_transforms()
     dataset_cfg['val_transforms'] = base_model.get_val_transforms()
     base_dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
@@ -216,47 +209,6 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
         
         results = trainer.fit(model, dataset, resume=False)
         torch.save(model.state_dict(), weights_dir / Path("ft_weights.pth"))
-        
-    # # Gradient Ascent Baseline
-    # if not outputs_dir.joinpath(f"{cfg_name}/gradient_ascent/weights/ft_weights.pth").exists():
-    #     dataset = copy.deepcopy(base_dataset)
-    #     model = copy.deepcopy(base_model)
-        
-    #     mix_model_ckp_path = outputs_dir/ Path(f"{cfg_name}/mix") / Path('weights/ft_weights.pth')
-    #     checkpoint = torch.load(mix_model_ckp_path)
-    #     model.load_state_dict(checkpoint)
-        
-        
-    #     dataset.set_trainset(dataset.get_heldoutset(), shuffle=True)
-        
-    #     experiment_name = f"{cfg_name}/gradient_ascent"
-    #     experiment_dir = outputs_dir / Path(experiment_name)
-
-    #     weights_dir = experiment_dir / Path("weights")
-    #     weights_dir.mkdir(exist_ok=True, parents=True)
-
-    #     plots_dir = experiment_dir / Path("plots")
-    #     plots_dir.mkdir(exist_ok=True, parents=True)
-        
-    #     if strategy['finetuning_set'] == 'Heldout':
-    #         dataset.set_trainset(dataset.get_heldoutset(), shuffle=True)
-    #         dataset.inject_noise(**strategy['noise']['finetuning'][0])
-            
-    #     finetuning_cfg = None
-    #     if 'gradient_ascent' in cfg['trainer']['finetuning']:
-    #         finetuning_cfg = cfg['trainer']['finetuning']['gradient_ascent']
-    #         finetuning_cfg['comet_api_key'] =  os.getenv("COMET_API_KEY")
-    #     else: finetuning_cfg = cfg['trainer']['finetuning']
-        
-    #     trainer = GradientAscentTrainer(
-    #         outputs_dir=outputs_dir,
-    #         **finetuning_cfg,
-    #         exp_name=experiment_name,
-    #         exp_tags=None,
-    #     )
-        
-    #     results = trainer.fit(model, dataset, resume=False)
-    #     torch.save(model.state_dict(), weights_dir / Path("ft_weights.pth"))
         
         
     for idx, poison_tv in enumerate(strategy['poison']['finetuning']):
@@ -789,14 +741,14 @@ def main():
 
     dotenv.load_dotenv(".env")
     
-    cfg_path = Path('configs/single_experiment/clip_poison_TA') / f"{args.config}.yaml"
+    cfg_path = Path('configs/single_experiment/dino_poison_TA') / f"{args.config}.yaml"
 
     if not cfg_path.exists(): raise RuntimeError('The specified config file does not exist.')
     with open(cfg_path, 'r') as file:
         cfg = yaml.full_load(file)
 
-    outputs_dir = Path("outputs/single_experiment/clip_poison_TA").absolute()
-    results_dir = Path("results/single_experiment/clip_poison_TA").absolute()
+    outputs_dir = Path("outputs/single_experiment/dino_poison_TA").absolute()
+    results_dir = Path("results/single_experiment/dino_poison_TA").absolute()
     results_dir.mkdir(exist_ok=True, parents=True)
 
     global_seed = cfg['global_seed']

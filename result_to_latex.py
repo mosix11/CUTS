@@ -9,22 +9,25 @@ from pathlib import Path
 from collections import OrderedDict
 from typing import Dict, Any, Optional, Tuple, List
 
+
+def load_metrics(config_dir: Path) -> Optional[Dict[str, Any]]:
+    fpath = config_dir / 'metrics.json'
+    if fpath.exists():
+        try:
+            with open(fpath, "r") as json_file:
+                return json.load(json_file, object_pairs_hook=OrderedDict)
+        except Exception:
+            return None
+        
+    return None
+
+
 def generate_clip_symmetric_noise_table(results_dir:Path, cfgmap:OrderedDict):
     dataset_order = ["MNIST", "CIFAR10", "CIFAR100"]
     noise_levels = [10, 20, 40, 60, 80]
 
     # ---------- helpers ----------
-    def load_metrics(config_name: str) -> Optional[Dict[str, Any]]:
-        cfg_dir = results_dir / config_name
-        for fname in ("metrics.json", "metric.json"):
-            fpath = cfg_dir / fname
-            if fpath.exists():
-                try:
-                    with open(fpath, "r") as f:
-                        return json.load(f)
-                except Exception:
-                    return None
-        return None
+    
 
     def get_test_acc(block: Dict[str, Any]) -> Optional[float]:
         try:
@@ -164,15 +167,26 @@ if __name__ == "__main__":
     clip_models_results_dir = Path('results/single_experiment/clip_noise_TA')
     
     clip_symmetric_cfgs = OrderedDict()
-    clip_symmetric_cfgs['MNIST'] = clip_models_cfgs['MNIST']['symmetric']
-    clip_symmetric_cfgs['CIFAR10'] = clip_models_cfgs['CIFAR10']['symmetric']
-    clip_symmetric_cfgs['CIFAR100'] = clip_models_cfgs['CIFAR100']['symmetric']
+    clip_symmetric_cfgs['MNIST'] = clip_models_cfgs['MNIST']['ho2']['symmetric']
+    clip_symmetric_cfgs['CIFAR10'] = clip_models_cfgs['CIFAR10']['ho2']['symmetric']
+    clip_symmetric_cfgs['CIFAR100'] = clip_models_cfgs['CIFAR100']['ho2']['symmetric']
     
     
     clip_asymmetric_cfgs = OrderedDict()
-    clip_asymmetric_cfgs['MNIST'] = clip_models_cfgs['MNIST']['asymmetric']
-    clip_asymmetric_cfgs['CIFAR10'] = clip_models_cfgs['CIFAR10']['asymmetric']
-    clip_asymmetric_cfgs['CIFAR100'] = clip_models_cfgs['CIFAR100']['asymmetric']
+    clip_asymmetric_cfgs['MNIST'] = clip_models_cfgs['MNIST']['ho2']['asymmetric']
+    clip_asymmetric_cfgs['CIFAR10'] = clip_models_cfgs['CIFAR10']['ho2']['asymmetric']
+    clip_asymmetric_cfgs['CIFAR100'] = clip_models_cfgs['CIFAR100']['ho2']['asymmetric']
+    
+    clip_ic_cfgs = OrderedDict()
+    clip_ic_cfgs['MNIST'] = clip_models_cfgs['MNIST']['ho2']['ic']
+    clip_ic_cfgs['CIFAR10'] = clip_models_cfgs['CIFAR10']['ho2']['ic']
+    clip_ic_cfgs['CIFAR100'] = clip_models_cfgs['CIFAR100']['ho2']['ic']
+    
+    clip_poison_cfgs = OrderedDict()
+    clip_poison_cfgs['MNIST'] = clip_models_cfgs['MNIST']['ho2']['poison']
+    clip_poison_cfgs['CIFAR10'] = clip_models_cfgs['CIFAR10']['ho2']['poison']
+    clip_poison_cfgs['CIFAR100'] = clip_models_cfgs['CIFAR100']['ho2']['poison']
+    
     
     generate_clip_symmetric_noise_table(clip_models_results_dir, clip_symmetric_cfgs)
     

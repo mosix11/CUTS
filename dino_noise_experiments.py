@@ -42,44 +42,6 @@ from src.utils import embedding_space_analysis
 from helper_funcs import evaluate_model, eval_model_on_clean_noise_splits, search_optimal_coefficient, get_confusion_matrix, row_normalize
 from src.utils import weight_norm_analysis
 
-def eval_model_on_tvs(model, taskvectors, results_dict, cfg, dataset, num_classes, device):
-    
-    results = results_dict
-    
-    
-    for tv_name, tv in taskvectors.items():
-        results[tv_name] = OrderedDict()
-        
-        base_model = copy.deepcopy(model)
-        results[tv_name]["-1.0"] = OrderedDict()
-        tv.apply_to(base_model, scaling_coef=-1.0)
-        base_test_results, _, _ = evaluate_model(base_model, dataset.get_test_dataloader(), device)
-        base_train_split_results = eval_model_on_clean_noise_splits(base_model, cfg, dataset, device)
-        results[tv_name]["-1.0"]['test_results'] = base_test_results
-        results[tv_name]["-1.0"]['train_results'] = base_train_split_results
-        
-        base_model = copy.deepcopy(model)
-
-        best_coef, best_results, best_cm = search_optimal_coefficient(
-            base_model=base_model,
-            task_vector=tv,
-            search_range=(-2.0, 0.0),
-            dataset=dataset,
-            num_classes=num_classes,
-            device=device
-        )
-        
-        results[tv_name][best_coef] = OrderedDict()
-        results[tv_name][best_coef]['test_results'] = best_results
-        
-        tv.apply_to(base_model, scaling_coef=best_coef)
-        
-        after_tv_metrics = eval_model_on_clean_noise_splits(base_model, cfg, dataset, device)
-        results[tv_name][best_coef]['train_results'] = after_tv_metrics
-        
-        
-    return results    
-
 
 
     
