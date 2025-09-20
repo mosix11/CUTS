@@ -53,27 +53,43 @@ def _get_train_healing_acc(block: Dict[str, Any]) -> Optional[float]:
 
 
 def _collect_alpha_metrics(metrics: Dict[str, Any]) -> Dict[float, Dict]:
-        alpha_metrics: Dict[float, Dict] = OrderedDict()
-        for k, v in metrics.items():
-            if k in {"Mix", "Gold", "FT HO Clean"}:
-                continue
-            try:
-                alpha = float(k)
-            except Exception:
-                continue
-            alpha = round(alpha, 2)
-            alpha_metrics[alpha] = OrderedDict()
-            
-            alpha_metrics['utility'] = _get_test_acc(v)
-            alpha_metrics['forget_rate'] = _get_train_noisy_forget_rate(v)
-            alpha_metrics['destruction_rate'] = _get_train_clean_destruction_rate(v)
-            alpha_metrics['healing_rate'] = _get_train_healing_acc(v)
-            
-            acc = get_test_acc(v)
-            if acc is not None:
-                alpha_accs.append((alpha, acc))
-        return alpha_accs
+    alpha_metrics: Dict[float, Dict] = OrderedDict()
+    for k, v in metrics.items():
+        if k in {"Mix", "Gold", "FT HO Clean"}:
+            continue
+        try:
+            alpha = float(k)
+        except Exception:
+            continue
+        alpha = round(alpha, 2)
+        alpha_metrics[alpha] = OrderedDict()
+        
+        alpha_metrics['utility'] = _get_test_acc(v)
+        alpha_metrics['forget_rate'] = _get_train_noisy_forget_rate(v)
+        alpha_metrics['destruction_rate'] = _get_train_clean_destruction_rate(v)
+        alpha_metrics['healing_rate'] = _get_train_healing_acc(v)
+        
+    return alpha_metrics
 
+
+def _collect_baseline_metrix(metrics: Dict[str, Any]) -> Dict[float, Dict]:
+    baseline_metrics: Dict[float, Dict] = OrderedDict()
+    
+    baseline_metrics['mix'] = OrderedDict()
+    baseline_metrics['clean'] = OrderedDict()
+    
+    baseline_metrics['mix']['utility'] = _get_test_acc(metrics['Mix'])
+    baseline_metrics['mix']['forget_rate'] = _get_train_noisy_forget_rate(metrics['Mix'])
+    baseline_metrics['mix']['destruction_rate'] = _get_train_clean_destruction_rate(metrics['Mix'])
+    baseline_metrics['mix']['healing_rate'] = _get_train_healing_acc(metrics['Mix'])
+    
+    
+    baseline_metrics['clean']['utility'] = _get_test_acc(metrics['Gold'])
+    baseline_metrics['clean']['forget_rate'] = _get_train_noisy_forget_rate(metrics['Gold'])
+    baseline_metrics['clean']['destruction_rate'] = _get_train_clean_destruction_rate(metrics['Gold'])
+    baseline_metrics['clean']['healing_rate'] = _get_train_healing_acc(metrics['Gold'])
+
+    return baseline_metrics
 
 def generate_clip_symmetric_noise_table(results_dir:Path, cfgmap:OrderedDict):
     dataset_order = ["MNIST", "CIFAR10", "CIFAR100"]
