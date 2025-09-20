@@ -1061,8 +1061,8 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     #         results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
             
             
-    results_dict.pop('alpha_kNN')
-    results_dict.pop('alpha_S4')
+    results_dict.pop('alpha_KNN')
+    results_dict.pop('alpha_s4')
     # if 'alpha_kNN' not in results_dict:        
     from test_alpha import select_alpha_star, plot_alpha_metrics
     best, records, alpha_best = select_alpha_star(
