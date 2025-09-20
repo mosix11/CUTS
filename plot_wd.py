@@ -116,6 +116,10 @@ def plot_antitask_wd_maps(pickle_path):
     interaction = np.asarray(res["interaction"], dtype=float)   # [H,W]
     wd_map = np.asarray(res["wd_map"], dtype=float)             # [H,W]
     best = res.get("best", None)
+    
+    # print(risk_n_only - risk_base)
+    # print(risk_map[:, 20] - risk_base + risk_c_only)
+    # # exit()
 
     H, W = risk_map.shape
     assert H == len(alphas) and W == len(alphas), "Maps should be len(alphas)×len(alphas)."
@@ -124,6 +128,11 @@ def plot_antitask_wd_maps(pickle_path):
     # \hat R_add(αc, αn) = R(αc,0) + R(0,αn) - R(0,0)
     R_add = (risk_n_only[:, None] + risk_c_only[None, :] - risk_base).astype(np.float32)
     denom = (np.abs(delta_n)[:, None] + np.abs(delta_c)[None, :]).astype(np.float32)  # |Δc|+|Δn|
+    
+    
+    # print(risk_base)
+    # print((risk_map - risk_c_only)[:, 20])
+    # exit()
 
     # Nice aligned edges for pcolormesh so ticks sit on alpha values
     if len(alphas) > 1:
@@ -187,8 +196,8 @@ def plot_antitask_wd_maps(pickle_path):
 
     # Residual = measured - additive (another way to show interaction sign/scale)
     # (Duplicate of interaction numerically, but sometimes nice to see with different scaling.)
-    _heat(ax23, risk_map - R_add,  r"Residual $R-\hat R_{\mathrm{add}}$",
-          cbar_label="Residual", vmin=-max_abs_I, vmax=max_abs_I, mark_best=False)
+    _heat(ax23, np.abs(risk_map - R_add),  r"Abs Interaction $|I|$",
+          cbar_label="Interaction (abs)", vmin=0, vmax=max_abs_I, mark_best=False)
 
     fig.suptitle("Task vs. Anti-task Weight Disentanglement Maps", y=0.995, fontsize=12)
     fig.tight_layout()
@@ -208,5 +217,6 @@ def plot_antitask_wd_maps(pickle_path):
 # )
 
 
-fig, axs = plot_antitask_wd_maps('results/single_experiment/clip_noise_TA/config26/WD_AT2.pkl')
+# fig, axs = plot_antitask_wd_maps('results/single_experiment/clip_noise_TA/config26/WD_AT2_acc.pkl')
+fig, axs = plot_antitask_wd_maps('results/single_experiment/clip_noise_TA/config7/WD_AT.pkl')
 plt.show()

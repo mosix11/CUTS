@@ -780,7 +780,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     #     dataset.get_num_classes(),
     #     dataset.get_heldout_dataloader(),
     #     gpu
-    # )
+    # )1
     
     # misc_utils.plot_confusion_matrix(
     #     title='Normalized Confusion Matrix',
@@ -890,8 +890,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # print(temp_res)
     # exit()
     
-    ft_ho_clean_weights
-    
+
     base_model.load_state_dict(pretrain_weights)
     pt_test_results, _, _ = evaluate_model(base_model, dataset.get_test_dataloader(), gpu)
     pt_train_results = eval_model_on_clean_noise_splits(base_model, None, dataset, gpu)

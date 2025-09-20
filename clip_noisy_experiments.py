@@ -593,6 +593,9 @@ def apply_tv_gt(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         filepath=results_dir / 'task_similarities.png',
         show=False
     )
+    
+    
+    
 
     # results_dict = OrderedDict()
     # for alpha in tqdm(np.round(np.linspace(0.1, 1.0, 10), 1)):
@@ -839,6 +842,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # task_vectors['Average Pruned 0.99'] = task_vectors['Average'].prune_small_weights(rate=0.99)
     
     task_vectors['Clean'] = TaskVector(mix_weights, ft_ho_clean_weights)
+    task_vectors['Mix'] = TaskVector(pt_weights, mix_weights)
     
     task_vectors['Random Vector'] = task_vectors['Average'].generate_random_vector_with_same_layer_norms(seed=training_seed)
 
@@ -872,45 +876,11 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         show=False
     )
 
-    
-    # from test_alpha import select_alpha_star, plot_alpha_metrics
-    
-    # best, records, alpha_best = select_alpha_star(
-    #     model=model,
-    #     feature_extractor=model.get_image_encoder(),
-    #     classifier=model.get_active_head(),
-    #     state0=mix_weights,
-    #     taskvector=task_vectors['Average'],
-    #     unlabeled_loader=dataset_clean.get_heldout_dataloader(),
-    #     # K=dataset.get_num_classes(),
-    #     alphas=np.round(np.linspace(-0.1, -2.0, 20), 1),
-    #     device=gpu
-    # )
-    # print(alpha_best)
 
-    # # Plot and show per-metric best α lines
-    # plot_alpha_metrics(
-    #     records,
-    #     weights=(2.0, 1.5, 1.0),
-    #     title_prefix="Noisy-Repair α-search (proxy-U)",
-    #     save_prefix="outputs/alpha_search_run1",
-    #     show=True,
-    #     alpha_best=alpha_best,
-    # )
+    
 
 
-    # exit()
-    
-    # results = pick_alpha_weight_only(
-    #     state0=mix_weights,
-    #     delta=task_vectors['Average'].vector,
-    #     alphas=alphas,
-    #     device=gpu
-    # )
-    
-    # print(results['alpha_best'])
-    # plot_weight_only_curves(results)
-    # exit()
+
     
     # model.load_state_dict(mix_weights, strict=False)
     # fig_comp_pt = embedding_space_analysis.all_plot_comp(
@@ -1131,7 +1101,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         target_vectors = copy.deepcopy(task_vectors)
         target_vectors.pop('Random Vector')
         target_vectors.pop('Clean')
-        
+        target_vectors.pop('Mix')
         
         model.load_state_dict(mix_weights, strict=False)
         mix_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
@@ -1167,15 +1137,40 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
                 target_vector.apply_to(model, scaling_coef=alpha, strict=False)
                 tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
                 tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
-                tv_ho_results, _, _  = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
+                # tv_ho_results, _, _  = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
 
-                results_dict[tv_name][alpha] = {'test_results': tv_test_results, 'heldout_resutls':tv_ho_results, 'train_results': tv_train_results}
-            
+                # results_dict[tv_name][alpha] = {'test_results': tv_test_results, 'heldout_resutls':tv_ho_results, 'train_results': tv_train_results}
+                results_dict[tv_name][alpha] = {'test_results': tv_test_results, 'train_results': tv_train_results}
         with open(results_dir / 'metrics.json' , 'w') as json_file:
             json.dump(results_dict, json_file, indent=4)
     else:
         with open(results_dir / "metrics.json", "r") as json_file:
             results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
+            
+            
+    from test_alpha import select_alpha_star, plot_alpha_metrics
+    
+    best, records, alpha_best = select_alpha_star(
+        model=model,
+        feature_extractor=model.get_image_encoder(),
+        classifier=model.get_active_head(),
+        state0=mix_weights,
+        taskvector=task_vectors['Average'],
+        unlabeled_loader=dataset_clean.get_heldout_dataloader(),
+        # K=dataset.get_num_classes(),
+        alphas=np.round(np.linspace(-0.1, -2.0, 20), 1),
+        device=gpu
+    )
+    alpha_kNN = alpha_best['alpha_kNN']
+    alpha_s4 = alpha_best['alpha_S4']
+
+    results_dict['alpha_KNN'] = alpha_kNN
+    results_dict['alpha_s4'] = alpha_s4
+    with open(results_dir / 'metrics.json' , 'w') as json_file:
+        json.dump(results_dict, json_file, indent=4)
+
+    
+    exit()
 
     # Weight Space Disentanglemet Analysis
     # clean_train_ds, noisy_train_ds = dataset.get_clean_noisy_subsets('Train')
@@ -1266,18 +1261,26 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
 
     test_subset = random_subset(dataset.get_testset(), subset_size, dataset_seed)
     
+    clean_vector.apply_to(model, scaling_coef=1.0, strict=False)
+    noise_vector.apply_to(model, scaling_coef=1.0, strict=False)
+    tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+    print(tv_test_results)
+
+    
+
+    model.load_state_dict(pt_weights, strict=False)
     wd_results = apply_WD_antitask_analysis(
         model=model,
         clean_tv=clean_vector,
         noise_tv=noise_vector,
         testset=test_subset,
         alpha_range=(0, 2),
-        step=0.05,
+        step=0.1,
         batch_size=512,
         device=gpu,
-        metric='loss',
+        metric='error',
     )
-    with open(results_dir / "WD_AT2.pkl", "wb") as f:
+    with open(results_dir / "WD_AT2_acc.pkl", "wb") as f:
         pickle.dump(wd_results, f)
     
     

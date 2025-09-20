@@ -158,7 +158,7 @@ def apply_WD_antitask_analysis(
             raise ValueError("metric must be 'loss' or 'error'.")
 
     def _eval_model(m, dl):
-        metrics, preds, labels = evaluate_model(m, dl, device)  # your API
+        metrics, preds, labels = evaluate_model(m, dl, device)  
         return _risk_from_metrics(metrics)
 
     # -------------------------
