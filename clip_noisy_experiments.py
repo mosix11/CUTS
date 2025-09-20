@@ -1019,57 +1019,50 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     
     results_dict = OrderedDict()
-    if not results_dir.joinpath('metrics.json').exists():
-        target_vectors = copy.deepcopy(task_vectors)
-        target_vectors.pop('Random Vector')
-        target_vectors.pop('Clean')
-        target_vectors.pop('Mix')
+    with open(results_dir / "metrics.json", "r") as json_file:
+        results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
+    # if not results_dir.joinpath('metrics.json').exists():
+
+    # model.load_state_dict(mix_weights, strict=False)
+    # mix_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+    # mix_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+    
+    
+    # model.load_state_dict(gold_weights, strict=False)
+    # gold_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+    # gold_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+    
+    # model.load_state_dict(ft_ho_clean_weights, strict=False)
+    # ft_ho_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+    # ft_ho_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+    
+    # results_dict['Mix'] = {'test_results': mix_test_results, 'train_results': mix_train_results}
+    # results_dict['Gold'] = {'test_results': gold_test_results, 'train_results': gold_train_results}
+    # results_dict['FT HO Clean'] = {'test_results': ft_ho_test_results, 'train_results': ft_ho_train_results}
+    
+    if strategy['noise']['finetuning'][0]['noise_type'] == 'asymmetric':
+        alphas = tqdm(np.round(np.linspace(-0.05, -2.0, 40), 2))
+    else:
+        alphas = tqdm(np.round(np.linspace(-3.05, -3.5, 10), 2))
+    for alpha in alphas:
         
         model.load_state_dict(mix_weights, strict=False)
-        mix_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-        mix_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
-        
-        
-        model.load_state_dict(gold_weights, strict=False)
-        gold_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-        gold_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
-        
-        model.load_state_dict(ft_ho_clean_weights, strict=False)
-        ft_ho_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-        ft_ho_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
-        
-        results_dict['Mix'] = {'test_results': mix_test_results, 'train_results': mix_train_results}
-        results_dict['Gold'] = {'test_results': gold_test_results, 'train_results': gold_train_results}
-        results_dict['FT HO Clean'] = {'test_results': ft_ho_test_results, 'train_results': ft_ho_train_results}
-        
-        
-        for tv_name, target_vector in target_vectors.items():
-            results_dict[tv_name] = OrderedDict()
-            
-            if strategy['noise']['finetuning'][0]['noise_type'] == 'asymmetric':
-                alphas = tqdm(np.round(np.linspace(-0.05, -2.0, 40), 2))
-            else:
-                # for alpha in tqdm(np.linspace(-0.05, -1.5, 30)):
-                # for alpha in tqdm(np.linspace(-0.1, -2.0, 20)):
-                # for alpha in tqdm(np.linspace(-0.1, -1.5, 15)):
-                alphas = tqdm(np.round(np.linspace(-0.05, -3.0, 60), 2))
-            for alpha in alphas:
-                
-                model.load_state_dict(mix_weights, strict=False)
-                target_vector.apply_to(model, scaling_coef=alpha, strict=False)
-                tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-                tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
-                # tv_ho_results, _, _  = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
+        task_vectors['Average'].apply_to(model, scaling_coef=alpha, strict=False)
+        tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+        tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
 
-                # results_dict[tv_name][alpha] = {'test_results': tv_test_results, 'heldout_resutls':tv_ho_results, 'train_results': tv_train_results}
-                results_dict[tv_name][alpha] = {'test_results': tv_test_results, 'train_results': tv_train_results}
-        with open(results_dir / 'metrics.json' , 'w') as json_file:
-            json.dump(results_dict, json_file, indent=4)
-    else:
-        with open(results_dir / "metrics.json", "r") as json_file:
-            results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
+        results_dict[alpha] = {'test_results': tv_test_results, 'train_results': tv_train_results}
+    # with open(results_dir / 'metrics.json' , 'w') as json_file:
+    #     json.dump(results_dict, json_file, indent=4)
+        
+    # exit()
+    # else:
+    #     with open(results_dir / "metrics.json", "r") as json_file:
+    #         results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
             
             
+    results_dict.pop('alpha_kNN')
+    results_dict.pop('alpha_S4')
     # if 'alpha_kNN' not in results_dict:        
     from test_alpha import select_alpha_star, plot_alpha_metrics
     best, records, alpha_best = select_alpha_star(
@@ -1080,7 +1073,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         taskvector=task_vectors['Average'],
         unlabeled_loader=dataset_clean.get_heldout_dataloader(),
         # K=dataset.get_num_classes(),
-        alphas=np.round(np.linspace(-0.05, -3.0, 60), 2),
+        alphas=np.round(np.linspace(-0.05, -3.5, 70), 2),
         device=gpu
     )
     alpha_kNN = alpha_best['alpha_kNN']
@@ -1091,8 +1084,17 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     with open(results_dir / 'metrics.json' , 'w') as json_file:
         json.dump(results_dict, json_file, indent=4)
 
-    
     exit()
+    if 'Random Vector' not in results_dict:
+        model.load_state_dict(mix_weights, strict=False)
+        alpha_kNN = results_dict[alpha_kNN]
+        task_vectors['Random Vector'].apply(model, scaling_coef=alpha_kNN, strict=False)
+        random_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+        random_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+        results_dict['Random Vector'] = {'test_results': random_test_results, 'train_results': random_train_results}
+        with open(results_dir / 'metrics.json' , 'w') as json_file:
+            json.dump(results_dict, json_file, indent=4)
+    
 
     # Weight Space Disentanglemet Analysis
     # clean_train_ds, noisy_train_ds = dataset.get_clean_noisy_subsets('Train')

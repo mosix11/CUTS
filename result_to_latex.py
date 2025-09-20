@@ -5,7 +5,7 @@ import yaml
 import json
 import re
 from pathlib import Path
-
+import numpy as np
 from collections import OrderedDict
 from typing import Dict, Any, Optional, Tuple, List
 
@@ -45,7 +45,7 @@ def _get_train_noisy_acc(block: Dict[str, Any]) -> Optional[float]:
 def _get_train_noisy_forget_rate(block: Dict[str, Any]) -> Optional[float]:
     return 1 - _get_train_noisy_acc(block)
 
-def _get_train_healing_acc(block: Dict[str, Any]) -> Optional[float]:
+def _get_train_noisy_healing_acc(block: Dict[str, Any]) -> Optional[float]:
     try:
         return float(block["train_results"]["healing_noise"]["ACC"])
     except Exception:
@@ -67,77 +67,87 @@ def _collect_alpha_metrics(metrics: Dict[str, Any]) -> Dict[float, Dict]:
         alpha_metrics['utility'] = _get_test_acc(v)
         alpha_metrics['forget_rate'] = _get_train_noisy_forget_rate(v)
         alpha_metrics['destruction_rate'] = _get_train_clean_destruction_rate(v)
-        alpha_metrics['healing_rate'] = _get_train_healing_acc(v)
+        alpha_metrics['healing_rate'] = _get_train_noisy_healing_acc(v)
         
-    return alpha_metrics
+    sorted_items = sorted(alpha_metrics.items(), key=lambda x: x[0])
+
+    return OrderedDict(sorted_items)
 
 
-def _collect_baseline_metrix(metrics: Dict[str, Any]) -> Dict[float, Dict]:
+def _collect_baseline_metrics(metrics: Dict[str, Any]) -> Dict[float, Dict]:
     baseline_metrics: Dict[float, Dict] = OrderedDict()
     
     baseline_metrics['mix'] = OrderedDict()
     baseline_metrics['clean'] = OrderedDict()
+    baseline_metrics['rnd'] = OrderedDict()
     
     baseline_metrics['mix']['utility'] = _get_test_acc(metrics['Mix'])
     baseline_metrics['mix']['forget_rate'] = _get_train_noisy_forget_rate(metrics['Mix'])
     baseline_metrics['mix']['destruction_rate'] = _get_train_clean_destruction_rate(metrics['Mix'])
-    baseline_metrics['mix']['healing_rate'] = _get_train_healing_acc(metrics['Mix'])
+    baseline_metrics['mix']['healing_rate'] = _get_train_noisy_healing_acc(metrics['Mix'])
     
     
     baseline_metrics['clean']['utility'] = _get_test_acc(metrics['Gold'])
     baseline_metrics['clean']['forget_rate'] = _get_train_noisy_forget_rate(metrics['Gold'])
     baseline_metrics['clean']['destruction_rate'] = _get_train_clean_destruction_rate(metrics['Gold'])
-    baseline_metrics['clean']['healing_rate'] = _get_train_healing_acc(metrics['Gold'])
+    baseline_metrics['clean']['healing_rate'] = _get_train_noisy_healing_acc(metrics['Gold'])
+    
+    
+    baseline_metrics['rnd']['utility'] = _get_test_acc(metrics['Random Vector'])
+    baseline_metrics['rnd']['forget_rate'] = _get_train_noisy_forget_rate(metrics['Random Vector'])
+    baseline_metrics['rnd']['destruction_rate'] = _get_train_clean_destruction_rate(metrics['Random Vector'])
+    baseline_metrics['rnd']['healing_rate'] = _get_train_noisy_healing_acc(metrics['Random Vector'])
 
     return baseline_metrics
 
+
+def _get_alpha_star_utility(alpha_metrics: Dict[float, Dict]) -> float:
+    best_alpha = None
+    best_alpha_utility = -np.inf
+    
+    for alpha, metrics in alpha_metrics.items():
+        if metrics['utility'] > best_alpha_utility:
+            best_alpha = alpha
+            best_alpha_utility = metrics['utility'] 
+            
+    return best_alpha
+       
+
+def _get_alpha_star_forgetting(alpha_metrics: Dict[float, Dict], threshold:float) -> float:
+    best_alpha = None
+    
+    for alpha, metrics in alpha_metrics.items():
+        if metrics['forget_rate'] >= threshold:
+            best_alpha = alpha
+            break
+    return best_alpha     
+
+
+# format as percentage with 1 decimal place
+def _fmt_perct(x: Optional[float]) -> str:
+    return "-" if x is None else f"{100.0 * x:.1f}"
+
+def _fmt_metrics(metrics: Dict[str, float]) -> Dict[str, str]:
+    for metric, value in metrics.items():
+        metrics[metric] = _fmt_perct(value)
+
+
 def generate_clip_symmetric_noise_table(results_dir:Path, cfgmap:OrderedDict):
     dataset_order = ["MNIST", "CIFAR10", "CIFAR100"]
+    dataset_forget_trsh ={
+        'MNIST': 0.9,
+        'CIFAR10': 0.9,
+        'CIFAR100': 0.9
+    }
     noise_levels = [10, 20, 40, 60, 80]
 
-    # ---------- helpers ----------
-    
 
-    def collect_alpha_accs(metrics: Dict[str, Any]) -> List[Tuple[float, float]]:
-        alpha_accs: List[Tuple[float, float]] = []
-        for k, v in metrics.items():
-            if k in {"Mix", "Gold", "FT HO Clean"}:
-                continue
-            try:
-                alpha = float(k)
-            except Exception:
-                continue
-            acc = get_test_acc(v)
-            if acc is not None:
-                alpha_accs.append((alpha, acc))
-        return alpha_accs
-
-    def get_acc_near_alpha(alpha_accs: List[Tuple[float, float]], target: float) -> Optional[float]:
-        if not alpha_accs:
-            return None
-        alpha, acc = min(alpha_accs, key=lambda p: abs(p[0] - target))
-        # tolerate float grid quirks; grid step is 0.05
-        if abs(alpha - target) > 0.075:
-            return None
-        return acc
-
-    def get_best_alpha_acc(alpha_accs: List[Tuple[float, float]]) -> Optional[float]:
-        if not alpha_accs:
-            return None
-        return max(alpha_accs, key=lambda p: p[1])[1]
-
-    # format as percentage with 1 decimal place
-    def fmt(x: Optional[float]) -> str:
-        return "-" if x is None else f"{100.0 * x:.1f}"
-
-    # ---------- row holders ----------
     row_theta_mix: Dict[str, List[str]]   = {ds: ["-"] * 5 for ds in dataset_order}
     row_theta_clean: Dict[str, List[str]] = {ds: ["-"] * 5 for ds in dataset_order}
-    row_alpha_05: Dict[str, List[str]]    = {ds: ["-"] * 5 for ds in dataset_order}
-    row_alpha_10: Dict[str, List[str]]    = {ds: ["-"] * 5 for ds in dataset_order}
-    row_alpha_15: Dict[str, List[str]]    = {ds: ["-"] * 5 for ds in dataset_order}
-    row_alpha_20: Dict[str, List[str]]    = {ds: ["-"] * 5 for ds in dataset_order}
-    row_alpha_star: Dict[str, List[str]]  = {ds: ["-"] * 5 for ds in dataset_order}
+    row_alpha_star_u: Dict[str, List[str]]  = {ds: ["-"] * 5 for ds in dataset_order}
+    row_alpha_star_fr: Dict[str, List[str]]  = {ds: ["-"] * 5 for ds in dataset_order}
+    row_alpha_kNN: Dict[str, List['str']] = {ds: ["-"] * 5 for ds in dataset_order}
+    row_random_vec: Dict[str, List['str']] = {ds: ["-"] * 5 for ds in dataset_order}
 
     # ---------- fill data ----------
     for ds in dataset_order:
@@ -145,33 +155,34 @@ def generate_clip_symmetric_noise_table(results_dir:Path, cfgmap:OrderedDict):
             continue
         for j, eta in enumerate(noise_levels):
             config = cfgmap[ds].get(eta)
-            if not config:
-                continue
 
-            metrics = load_metrics(results_dir/config)
-            if not metrics:
-                continue
-
-            mix_acc  = get_test_acc(metrics.get("Mix", {}))
-            gold_acc = get_test_acc(metrics.get("Gold", {}))
-
-            row_theta_mix[ds][j]   = fmt(mix_acc)
-            row_theta_clean[ds][j] = fmt(gold_acc)
-
-            alpha_accs = collect_alpha_accs(metrics)
-
-            acc_05 = get_acc_near_alpha(alpha_accs, target=-0.5)
-            acc_10 = get_acc_near_alpha(alpha_accs, target=-1.0)
-            acc_15 = get_acc_near_alpha(alpha_accs, target=-1.5)
-            acc_20 = get_acc_near_alpha(alpha_accs, target=-2.0)
-
-            row_alpha_05[ds][j] = fmt(acc_05)
-            row_alpha_10[ds][j] = fmt(acc_10)
-            row_alpha_15[ds][j] = fmt(acc_15)
-            row_alpha_20[ds][j] = fmt(acc_20)
-
-            best_acc = get_best_alpha_acc(alpha_accs)
-            row_alpha_star[ds][j] = fmt(best_acc)
+            metrics = _load_metrics(results_dir/config)
+            
+        
+            baseline_metrics = _collect_baseline_metrics(metrics)
+            alpha_metrics = _collect_alpha_metrics(metrics)
+            
+            alpha_KNN = metrics['alpha_KNN']
+            alpha_star_utility = _get_alpha_star_utility(alpha_metrics)
+            alpha_star_forgetting = _get_alpha_star_forgetting(alpha_metrics, dataset_forget_trsh[ds])
+            
+            mix_metrics  = _fmt_metrics(baseline_metrics['mix'])
+            clean_metrics = _fmt_metrics(baseline_metrics['clean'])
+            rnd_metrics = _fmt_metrics(baseline_metrics['rnd'])
+            
+            alpha_KNN_metrics = _fmt_metrics(alpha_metrics[alpha_KNN])
+            alpha_star_utility_metrics = _fmt_metrics(alpha_metrics[alpha_star_utility])
+            alpha_star_forgetting_metrics = _fmt_metrics(alpha_metrics[alpha_star_forgetting])
+            
+            row_theta_mix[ds][j] = mix_metrics['utility']
+            row_theta_clean[ds][j] = clean_metrics['utility']
+            row_alpha_star_u[ds][j] = alpha_star_utility_metrics['utility']
+            row_alpha_star_fr[ds][j] = alpha_star_forgetting_metrics['utility']
+            row_alpha_kNN[ds][j] = alpha_KNN_metrics['utility']
+            row_random_vec[ds][j] = rnd_metrics['utility']
+            
+    
+            
 
     # ---------- render LaTeX ----------
     def row_line(label: str, values_by_ds: Dict[str, List[str]]) -> str:

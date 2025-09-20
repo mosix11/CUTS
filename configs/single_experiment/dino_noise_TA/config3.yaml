@@ -45,7 +45,7 @@ model:
 trainer:
   finetuning:
     mix:
-      max_iterations: 12000
+      max_iterations: 15000
       optimizer_cfg: 
         type: "adamw"
         lr: 5.0e-5
@@ -55,7 +55,7 @@ trainer:
         update_on: 'gradient_step'
         warmup_steps: 300
         hold_steps: 8000
-        T_max: 12000
+        T_max: 15000
         eta_min: 0
       early_stopping: False
       validation_freq: -1
