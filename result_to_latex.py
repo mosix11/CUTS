@@ -199,7 +199,6 @@ def generate_clip_symmetric_noise_table(results_dir:Path, cfgmap:OrderedDict):
 % \renewcommand{\arraystretch}{1}
 \setlength{\tabcolsep}{4pt}
 \begin{tabular}{lccccccccccccccc}
-% \begin{tabular}{l|ccccc|ccccc|ccccc}
 \toprule
 & \multicolumn{5}{c}{MNIST} & \multicolumn{5}{c}{CIFAR10} & \multicolumn{5}{c}{CIFAR100} \\
 \cmidrule(lr){2-6} \cmidrule(lr){7-11} \cmidrule(lr){12-16} 
@@ -211,14 +210,11 @@ Model & 10\% & 20\% & 40\% & 60\% & 80\% & 10\% & 20\% & 40\% & 60\% & 80\% & 10
         row_line(r"$\theta_{\text{mix}}$", row_theta_mix),
         row_line(r"$\theta_{\text{clean}}$", row_theta_clean),
         r"\cmidrule(lr){1-16}",
-        row_line(r"$\alpha=0.5$", row_alpha_05),
-        row_line(r"$\alpha=1$", row_alpha_10),
-        row_line(r"$\alpha=1.5$", row_alpha_15),
-        row_line(r"$\alpha=2$", row_alpha_20),
-        row_line(r"$\alpha^\ast$", row_alpha_star),
+        row_line(r"$\alpha^\ast_u$", row_alpha_star_u),
+        row_line(r"$\alpha^\ast_f$", row_alpha_star_fr),
+        row_line(r"$\hat{\alpha}^\ast_{\text{kNN}}$", row_alpha_kNN),
         r"\cmidrule(lr){1-16}",
-        row_line(r"$\tau_{\text{random}}$", {ds: ["-"] * 5 for ds in dataset_order}),
-        row_line(r"GA", {ds: ["-"] * 5 for ds in dataset_order}),
+        row_line(r"$\tau_{r}$", row_random_vec),
     ]
 
     footer = r"""

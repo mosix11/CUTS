@@ -572,7 +572,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         if strategy['noise']['finetuning'][0]['noise_type'] == 'asymmetric':
             alphas = tqdm(np.round(np.linspace(-0.05, -2.0, 40), 2))
         else:
-            alphas = tqdm(np.round(np.linspace(-0.05, -3.0, 60), 2))
+            alphas = tqdm(np.round(np.linspace(-0.05, -2.0, 40), 2))
         for alpha in alphas:
             
             model.load_state_dict(mix_weights, strict=False)
@@ -592,13 +592,13 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         from test_alpha import select_alpha_star, plot_alpha_metrics
         best, records, alpha_best = select_alpha_star(
             model=model,
-            feature_extractor=model.get_image_encoder(),
-            classifier=model.get_active_head(),
+            feature_extractor=model.get_feature_extractor(),
+            classifier=model.get_classifier_head(),
             state0=mix_weights,
             taskvector=task_vectors['Average'],
             unlabeled_loader=dataset_clean.get_heldout_dataloader(),
             # K=dataset.get_num_classes(),
-            alphas=np.round(np.linspace(-0.05, -3.0, 60), 2),
+            alphas=np.round(np.linspace(-0.05, -2.0, 40), 2),
             device=gpu
         )
         alpha_kNN = alpha_best['alpha_kNN']
