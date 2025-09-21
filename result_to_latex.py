@@ -54,9 +54,8 @@ def _get_train_noisy_healing_acc(block: Dict[str, Any]) -> Optional[float]:
 
 def _collect_alpha_metrics(metrics: Dict[str, Any]) -> Dict[float, Dict]:
     alpha_metrics: Dict[float, Dict] = OrderedDict()
+
     for k, v in metrics.items():
-        if k in {"Mix", "Gold", "FT HO Clean"}:
-            continue
         try:
             alpha = float(k)
         except Exception:
@@ -64,13 +63,13 @@ def _collect_alpha_metrics(metrics: Dict[str, Any]) -> Dict[float, Dict]:
         alpha = round(alpha, 2)
         alpha_metrics[alpha] = OrderedDict()
         
-        alpha_metrics['utility'] = _get_test_acc(v)
-        alpha_metrics['forget_rate'] = _get_train_noisy_forget_rate(v)
-        alpha_metrics['destruction_rate'] = _get_train_clean_destruction_rate(v)
-        alpha_metrics['healing_rate'] = _get_train_noisy_healing_acc(v)
+        alpha_metrics[alpha]['utility'] = _get_test_acc(v)
+        alpha_metrics[alpha]['forget_rate'] = _get_train_noisy_forget_rate(v)
+        alpha_metrics[alpha]['destruction_rate'] = _get_train_clean_destruction_rate(v)
+        alpha_metrics[alpha]['healing_rate'] = _get_train_noisy_healing_acc(v)
         
-    sorted_items = sorted(alpha_metrics.items(), key=lambda x: x[0])
-
+    sorted_items = sorted(alpha_metrics.items(), key=lambda x: x[0], reverse=True)
+    
     return OrderedDict(sorted_items)
 
 
@@ -85,18 +84,21 @@ def _collect_baseline_metrics(metrics: Dict[str, Any]) -> Dict[float, Dict]:
     baseline_metrics['mix']['forget_rate'] = _get_train_noisy_forget_rate(metrics['Mix'])
     baseline_metrics['mix']['destruction_rate'] = _get_train_clean_destruction_rate(metrics['Mix'])
     baseline_metrics['mix']['healing_rate'] = _get_train_noisy_healing_acc(metrics['Mix'])
+    metrics.pop("Mix")
     
     
     baseline_metrics['clean']['utility'] = _get_test_acc(metrics['Gold'])
     baseline_metrics['clean']['forget_rate'] = _get_train_noisy_forget_rate(metrics['Gold'])
     baseline_metrics['clean']['destruction_rate'] = _get_train_clean_destruction_rate(metrics['Gold'])
     baseline_metrics['clean']['healing_rate'] = _get_train_noisy_healing_acc(metrics['Gold'])
+    metrics.pop("Gold")
     
     
     baseline_metrics['rnd']['utility'] = _get_test_acc(metrics['Random Vector'])
     baseline_metrics['rnd']['forget_rate'] = _get_train_noisy_forget_rate(metrics['Random Vector'])
     baseline_metrics['rnd']['destruction_rate'] = _get_train_clean_destruction_rate(metrics['Random Vector'])
     baseline_metrics['rnd']['healing_rate'] = _get_train_noisy_healing_acc(metrics['Random Vector'])
+    metrics.pop("Random Vector")
 
     return baseline_metrics
 
@@ -117,7 +119,7 @@ def _get_alpha_star_forgetting(alpha_metrics: Dict[float, Dict], threshold:float
     best_alpha = None
     
     for alpha, metrics in alpha_metrics.items():
-        if metrics['forget_rate'] >= threshold:
+        if round(metrics['forget_rate'], 2) >= threshold:
             best_alpha = alpha
             break
     return best_alpha     
@@ -127,10 +129,8 @@ def _get_alpha_star_forgetting(alpha_metrics: Dict[float, Dict], threshold:float
 def _fmt_perct(x: Optional[float]) -> str:
     return "-" if x is None else f"{100.0 * x:.1f}"
 
-def _fmt_metrics(metrics: Dict[str, float]) -> Dict[str, str]:
-    for metric, value in metrics.items():
-        metrics[metric] = _fmt_perct(value)
-
+def _fmt_metrics(metrics: Dict[str, Optional[float]]) -> Dict[str, str]:
+    return {k: _fmt_perct(v) for k, v in metrics.items()}
 
 def generate_clip_symmetric_noise_table(results_dir:Path, cfgmap:OrderedDict):
     dataset_order = ["MNIST", "CIFAR10", "CIFAR100"]
@@ -158,11 +158,13 @@ def generate_clip_symmetric_noise_table(results_dir:Path, cfgmap:OrderedDict):
 
             metrics = _load_metrics(results_dir/config)
             
+            metrics.pop('FT HO Clean')
+            metrics.pop('alpha_s4')
+            alpha_KNN = metrics.pop('alpha_KNN')
         
             baseline_metrics = _collect_baseline_metrics(metrics)
             alpha_metrics = _collect_alpha_metrics(metrics)
             
-            alpha_KNN = metrics['alpha_KNN']
             alpha_star_utility = _get_alpha_star_utility(alpha_metrics)
             alpha_star_forgetting = _get_alpha_star_forgetting(alpha_metrics, dataset_forget_trsh[ds])
             
@@ -210,7 +212,7 @@ Model & 10\% & 20\% & 40\% & 60\% & 80\% & 10\% & 20\% & 40\% & 60\% & 80\% & 10
         row_line(r"$\theta_{\text{mix}}$", row_theta_mix),
         row_line(r"$\theta_{\text{clean}}$", row_theta_clean),
         r"\cmidrule(lr){1-16}",
-        row_line(r"$\alpha^\ast_u$", row_alpha_star_u),
+        row_line(r"$\alpha^\ast_a$", row_alpha_star_u),
         row_line(r"$\alpha^\ast_f$", row_alpha_star_fr),
         row_line(r"$\hat{\alpha}^\ast_{\text{kNN}}$", row_alpha_kNN),
         r"\cmidrule(lr){1-16}",
@@ -237,25 +239,24 @@ if __name__ == "__main__":
     clip_models_results_dir = Path('results/single_experiment/clip_noise_TA')
     
     clip_symmetric_cfgs = OrderedDict()
-    clip_symmetric_cfgs['MNIST'] = clip_models_cfgs['MNIST']['ho2']['symmetric']
-    clip_symmetric_cfgs['CIFAR10'] = clip_models_cfgs['CIFAR10']['ho2']['symmetric']
-    clip_symmetric_cfgs['CIFAR100'] = clip_models_cfgs['CIFAR100']['ho2']['symmetric']
+    clip_symmetric_cfgs['MNIST'] = clip_models_cfgs['MNIST']['ho_2']['symmetric']
+    clip_symmetric_cfgs['CIFAR10'] = clip_models_cfgs['CIFAR10']['ho_2']['symmetric']
+    clip_symmetric_cfgs['CIFAR100'] = clip_models_cfgs['CIFAR100']['ho_2']['symmetric']
     
     
     clip_asymmetric_cfgs = OrderedDict()
-    clip_asymmetric_cfgs['MNIST'] = clip_models_cfgs['MNIST']['ho2']['asymmetric']
-    clip_asymmetric_cfgs['CIFAR10'] = clip_models_cfgs['CIFAR10']['ho2']['asymmetric']
-    clip_asymmetric_cfgs['CIFAR100'] = clip_models_cfgs['CIFAR100']['ho2']['asymmetric']
+    clip_asymmetric_cfgs['CIFAR10'] = clip_models_cfgs['CIFAR10']['ho_2']['asymmetric']
+    clip_asymmetric_cfgs['CIFAR100'] = clip_models_cfgs['CIFAR100']['ho_2']['asymmetric']
     
     clip_ic_cfgs = OrderedDict()
-    clip_ic_cfgs['MNIST'] = clip_models_cfgs['MNIST']['ho2']['ic']
-    clip_ic_cfgs['CIFAR10'] = clip_models_cfgs['CIFAR10']['ho2']['ic']
-    clip_ic_cfgs['CIFAR100'] = clip_models_cfgs['CIFAR100']['ho2']['ic']
+    clip_ic_cfgs['MNIST'] = clip_models_cfgs['MNIST']['ho_2']['ic']
+    clip_ic_cfgs['CIFAR10'] = clip_models_cfgs['CIFAR10']['ho_2']['ic']
+    clip_ic_cfgs['CIFAR100'] = clip_models_cfgs['CIFAR100']['ho_2']['ic']
     
     clip_poison_cfgs = OrderedDict()
-    clip_poison_cfgs['MNIST'] = clip_models_cfgs['MNIST']['ho2']['poison']
-    clip_poison_cfgs['CIFAR10'] = clip_models_cfgs['CIFAR10']['ho2']['poison']
-    clip_poison_cfgs['CIFAR100'] = clip_models_cfgs['CIFAR100']['ho2']['poison']
+    clip_poison_cfgs['MNIST'] = clip_models_cfgs['MNIST']['ho_2']['poison']
+    clip_poison_cfgs['CIFAR10'] = clip_models_cfgs['CIFAR10']['ho_2']['poison']
+    clip_poison_cfgs['CIFAR100'] = clip_models_cfgs['CIFAR100']['ho_2']['poison']
     
     
     generate_clip_symmetric_noise_table(clip_models_results_dir, clip_symmetric_cfgs)

@@ -89,7 +89,7 @@ DINO:
       symmetric:
         40: 'config1'
       asymmetric:
-        40: 
+        40: 'config4'
       poison: 'config1'
       ic:
         '3-5':  # cat dog
@@ -100,7 +100,7 @@ DINO:
       symmetric:
         40: 'config2'
       asymmetric:
-        40: 
+        40: 'config5'
       poison: 'config2'
       ic:
         '47-52':  # maple tre - oak tree

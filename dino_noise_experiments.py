@@ -311,14 +311,14 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         
     if len(task_vectors) == 1:
         only_tv = task_vectors.popitem(last=False)[1]
-        task_vectors['Average TV'] = only_tv
+        task_vectors['Average'] = only_tv
     else:
-        task_vectors['Average TV'] = TaskVector.mean(task_vectors)
+        task_vectors['Average'] = TaskVector.mean(task_vectors)
         
     
     task_vectors['Clean'] = TaskVector(mix_weights, ft_ho_clean_weights)
     task_vectors['Mix'] = TaskVector(pt_weights, mix_weights)
-    task_vectors['Random Vector'] = task_vectors['Average TV'].generate_random_vector_with_same_layer_norms(seed=training_seed)
+    task_vectors['Random Vector'] = task_vectors['Average'].generate_random_vector_with_same_layer_norms(seed=training_seed)
 
     
     
@@ -368,7 +368,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # fig_comp_pt.savefig(results_dirs['embed_plots'] / "comp_pt.png", bbox_inches="tight")
     
     
-    # task_vectors['Average TV'].apply_to(model, scaling_coef=-1.0, strict=False)
+    # task_vectors['Average'].apply_to(model, scaling_coef=-1.0, strict=False)
     # fig_comp_AVG_1 = embedding_space_analysis.all_plot_comp(
     #     feature_extractor=model.get_image_encoder(),
     #     dataloader=dataset_clean.get_train_dataloader(),
@@ -401,7 +401,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     # fig_umap_pt.savefig(results_dirs['embed_plots'] / "umap_pt.png", bbox_inches="tight")
     
-    # task_vectors['Average TV'].apply_to(model, scaling_coef=-1.0, strict=False)
+    # task_vectors['Average'].apply_to(model, scaling_coef=-1.0, strict=False)
     # fig_umap_AVG_1 = embedding_space_analysis.umap_plot(
     #     feature_extractor=model.get_image_encoder(),
     #     dataloader=dataset_clean.get_train_dataloader(),
@@ -437,7 +437,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     # fig_tsne_pt.savefig(results_dirs['embed_plots'] / "tsne_pt.png", bbox_inches="tight")
     
-    # task_vectors['Average TV'].apply_to(model, scaling_coef=-1.0, strict=False)
+    # task_vectors['Average'].apply_to(model, scaling_coef=-1.0, strict=False)
     # fig_tsne_AVG_1 = embedding_space_analysis.tsne_plot(
     #     feature_extractor=model.get_image_encoder(),
     #     dataloader=dataset_clean.get_train_dataloader(),
@@ -469,7 +469,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     # fig_pca_pt.savefig(results_dirs['embed_plots'] / "pca_pt.png", bbox_inches="tight")
     
-    # task_vectors['Average TV'].apply_to(model, scaling_coef=-1.0, strict=False)
+    # task_vectors['Average'].apply_to(model, scaling_coef=-1.0, strict=False)
     # fig_pca_AVG_1 = embedding_space_analysis.pca_plot(
     #     feature_extractor=model.get_image_encoder(),
     #     dataloader=dataset_clean.get_train_dataloader(),
@@ -517,7 +517,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # for alpha in np.linspace(0.0, -2.0, 9):
     #     model.load_state_dict(mix_weights, strict=False)
     #     if alpha != 0.0:
-    #         task_vectors['Average TV'].apply_to(model, scaling_coef=alpha, strict=False)
+    #         task_vectors['Average'].apply_to(model, scaling_coef=alpha, strict=False)
     #     fig_pca = embedding_space_analysis.pca_plot(
     #         feature_extractor=model.get_image_encoder(),
     #         dataloader=dataset_clean.get_train_dataloader(),
