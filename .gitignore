@@ -8,6 +8,7 @@ output/
 backups/
 results/
 logs/
+visulaization_dir/
 .vscode/
 .cometml-runs
 ###################
