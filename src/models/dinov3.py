@@ -73,6 +73,16 @@ class DinoV3Classifier(BaseModel):
         logits = self.classifier_head(feats)
         return logits
     
+    
+    def predict_features(self, x: torch.Tensor): 
+        outputs = self.image_encoder(pixel_values=x)
+
+        feats = getattr(outputs, "pooler_output", None)
+        if feats is None:
+            feats = outputs.last_hidden_state[:, 0, :]
+        
+        return feats
+            
     def get_feature_extractor(self):
         return self.image_encoder
         

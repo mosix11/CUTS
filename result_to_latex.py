@@ -175,7 +175,6 @@ def generate_clip_noise_utlity_table(
             
             alpha_star_utility = _get_alpha_star_utility(alpha_metrics)
             alpha_star_forgetting = _get_alpha_star_forgetting(alpha_metrics, dataset_forget_trsh[ds])
-            
             recovery_kNN = (alpha_metrics[alpha_KNN]['utility'] - baseline_metrics['mix']['utility'])/(baseline_metrics['clean']['utility'] - baseline_metrics['mix']['utility'])
             recovery_kNN = _fmt_perct(recovery_kNN)
             
@@ -245,7 +244,13 @@ Model & 10\% & 20\% & 40\% & 60\% & 80\% & 10\% & 20\% & 40\% & 60\% & 80\% & 10
     return outputfile_path
 
 
-def generate_clip_symmetric_noise_fr_dr_hr_table(results_dir: Path, cfgmap: OrderedDict):
+def generate_clip_noise_fr_dr_hr_table(
+    results_dir:Path,
+    cfgmap:OrderedDict,
+    forget_threshold: float = 0.89,
+    noise_levels:List[int] = [10, 20, 40, 60, 80],
+    outputfile_path:Path = Path("./visulaization_dir/clip_asymmetric_noise_fr_dr_hr_table.txt")  
+):
     """
     Build a CIFAR-10 table showing, for each noise level, the metrics at three alpha choices:
       - alpha*_a (best utility)
@@ -253,8 +258,6 @@ def generate_clip_symmetric_noise_fr_dr_hr_table(results_dir: Path, cfgmap: Orde
       - alpha_hat*_knn (kNN-estimated alpha)
     Rows: UT, RR, FR, HR, DR
     """
-    noise_levels = [10, 20, 40, 60, 80]
-    forget_threshold = 0.9  # CIFAR10 threshold (consistent with your other table)
 
     # Allocate 15 columns (5 noise levels × 3 alphas each)
     ut_vals = ["-"] * 15
@@ -354,9 +357,8 @@ Metric & $\alpha^\ast_a$ & $\alpha^\ast_f$ & $\hat{\alpha}^\ast_{\text{knn}}$ & 
 """
 
     table_tex = header + "\n".join(body_lines) + footer
-    out_path = Path('visulaization_dir/clip_symmetric_noise_fr_dr_hr_table.txt')
-    out_path.write_text(table_tex)
-    return out_path
+    outputfile_path.write_text(table_tex)
+    return outputfile_path
 
 def plot_alpha_interplay(
     results_dir: Path,
@@ -616,7 +618,6 @@ def plot_alpha_interplay_dual(
     payloadB, _ = _prepare_one(config_rel_path_B, dataset_name_B, forget_threshold_B)
 
     # ---------- plotting ----------
-    out_dir.mkdir(parents=True, exist_ok=True)
     nameA = re.sub(r"[^\w\-]+", "_", str(config_rel_path_A))
     nameB = re.sub(r"[^\w\-]+", "_", str(config_rel_path_B))
     save_path = out_dir / f"interplay_{nameA}__{nameB}.png"
@@ -740,13 +741,35 @@ if __name__ == "__main__":
     # )
     
     
-    generate_clip_noise_utlity_table(
+    # generate_clip_noise_utlity_table(
+    #     clip_models_results_dir,
+    #     clip_asymmetric_cfgs,
+    #     dataset_order=['CIFAR10', 'CIFAR100'],
+    #     dataset_forget_trsh={
+    #         'MNIST': 0.9,
+    #         'CIFAR10': 0.89,
+    #         'CIFAR100': 0.89
+    #     },
+    #     noise_levels=[20, 40],
+    #     outputfile_path=Path('visulaization_dir/clip_asymmetric_noise_table.txt')
+    #     )
+    
+    # generate_clip_noise_fr_dr_hr_table(
+    #     clip_models_results_dir,
+    #     clip_symmetric_cfgs['CIFAR10'],
+    #     noise_levels=[20, 40]
+    #     )
+    
+    plot_alpha_interplay_dual(
         clip_models_results_dir,
-        clip_asymmetric_cfgs,
-        dataset_order=['CIFAR10', 'CIFAR100'],
-        noise_levels=[20, 40],
-        outputfile_path=Path('visulaization_dir/clip_asymmetric_noise_table.txt')
-        )
+        clip_asymmetric_cfgs['CIFAR10'][40],
+        clip_asymmetric_cfgs['CIFAR100'][20],
+        dataset_name_A="CIFAR-10 (40%)",
+        dataset_name_B="CIFAR-100 (20%)",
+        forget_threshold_A=0.89,
+        forget_threshold_B=0.89,
+    )
+    
     
     regular_models_cfgs = configmap['regular_models']
     clip_models_results_dir = Path('results/single_experiment/pretrain_on_noisy')

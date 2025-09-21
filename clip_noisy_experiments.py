@@ -938,46 +938,10 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # exit()
     
     
-    results_dict = OrderedDict()
-    with open(results_dir / "metrics.json", "r") as json_file:
-        results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
 
-    if strategy['noise']['finetuning'][0]['noise_type'] == 'asymmetric':
-        alphas = tqdm(np.round(np.linspace(-2.05, -2.5, 10), 2))
-    else:
-        alphas = tqdm(np.round(np.linspace(-0.05, -3.0, 60), 2))
-    for alpha in alphas:
-        
-        model.load_state_dict(mix_weights, strict=False)
-        task_vectors['Average'].apply_to(model, scaling_coef=alpha, strict=False)
-        tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-        tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
 
-        results_dict[alpha] = {'test_results': tv_test_results, 'train_results': tv_train_results}
-    with open(results_dir / 'metrics.json' , 'w') as json_file:
-        json.dump(results_dict, json_file, indent=4)
-        
-    from test_alpha import select_alpha_star, plot_alpha_metrics
-    best, records, alpha_best = select_alpha_star(
-        model=model,
-        feature_extractor=model.get_image_encoder(),
-        classifier=model.get_active_head(),
-        state0=mix_weights,
-        taskvector=task_vectors['Average'],
-        unlabeled_loader=dataset_clean.get_heldout_dataloader(),
-        # K=dataset.get_num_classes(),
-        alphas=np.round(np.linspace(-0.05, -2.5, 50), 2),
-        device=gpu
-    )
-    alpha_kNN = alpha_best['alpha_kNN']
-    alpha_s4 = alpha_best['alpha_S4']
-
-    results_dict['alpha_KNN'] = alpha_kNN
-    results_dict['alpha_s4'] = alpha_s4
-    with open(results_dir / 'metrics.json' , 'w') as json_file:
-        json.dump(results_dict, json_file, indent=4)
     
-    exit()
+    
     results_dict = OrderedDict()
     if not results_dir.joinpath('metrics.json').exists():
 

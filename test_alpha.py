@@ -7,6 +7,7 @@ from tqdm import tqdm
 import torchvision.transforms.v2 as transforms
 from torchvision.transforms.v2 import InterpolationMode
 import matplotlib.pyplot as plt
+from transformers import AutoModel
 
 # -----------------------------
 # Batch prep + feature extraction
@@ -196,11 +197,21 @@ def collect_aug_consistency_with_loader(
         x1, x2 = two_augs(x, image_size=x.shape[-1])
 
         f1 = feature_extractor(x1)
+        # hard coding for DinoV3
+        if not isinstance(feature_extractor, torch.Tensor):
+            f1 = getattr(f1, "pooler_output", None)
+            if f1 is None:
+                f1 = f1.last_hidden_state[:, 0, :]
+        
         f2 = feature_extractor(x2)
+        # hard coding for DinoV3
+        if not isinstance(feature_extractor, torch.Tensor):
+            f2 = getattr(f2, "pooler_output", None)
+            if f2 is None:
+                f2 = f2.last_hidden_state[:, 0, :]
         z1 = classifier(f1)
         z2 = classifier(f2)
         p1, p2 = softmax_probs(z1), softmax_probs(z2)
-
         kl = (p1 * (p1.clamp(1e-12, 1).log() - p2.clamp(1e-12, 1).log())).sum(dim=-1)
         kl_sum += kl.sum().item()
         cond_H_sum += (entropy_t(p1) + entropy_t(p2)).sum().item() / 2.0
