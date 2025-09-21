@@ -384,11 +384,8 @@ def apply_tv_gt(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     dataset_clean = copy.deepcopy(dataset)
     
-    strategy = cfg['strategy']
-    dataset.inject_noise(**strategy['noise']['pretraining'])
-    noise_tv = strategy['noise']['finetuning'][0]
-    noise_tv['set'] = 'Heldout'
-    dataset.inject_noise(**noise_tv)
+    dataset.inject_noise(**noise_cfg)
+
 
     ft_weights = OrderedDict()
 
@@ -419,7 +416,9 @@ def apply_tv_gt(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
 
     sum_clean_noise_TV = TaskVector.sum([task_vectors['clean'], task_vectors['noise']])
     avg_clean_noise_TV = TaskVector.mean([task_vectors['clean'], task_vectors['noise']])
-    goal_TV = task_vectors['mix'] - (task_vectors['noise'])
+    goal_TV = task_vectors['mix'] - task_vectors['noise']
+    
+    task_vectors['noise_real'] = task_vectors['mix'] - task_vectors['clean']
     
     
     ft_tvs_list = list(task_vectors.values())
@@ -452,7 +451,7 @@ def apply_tv_gt(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         show=False
     )
     
-    
+
     
 
     # results_dict = OrderedDict()
@@ -507,10 +506,10 @@ def apply_tv_gt(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     wd_results = apply_WD_antitask_analysis(
         model=model,
         clean_tv=task_vectors['clean'],
-        noise_tv=task_vectors['noise'],
+        noise_tv=task_vectors['noise_real'],
         testset=test_subset,
-        alpha_range=(0, 2.8),
-        step=0.4,
+        alpha_range=(0, 2.4),
+        step=0.2,
         batch_size=512,
         device=gpu,
         metric='loss',

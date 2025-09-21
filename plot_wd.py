@@ -218,5 +218,5 @@ def plot_antitask_wd_maps(pickle_path):
 
 
 # fig, axs = plot_antitask_wd_maps('results/single_experiment/clip_noise_TA/config26/WD_AT2_acc.pkl')
-fig, axs = plot_antitask_wd_maps('results/single_experiment/clip_noise_TA/config7/WD_AT.pkl')
+fig, axs = plot_antitask_wd_maps('results/single_experiment/clip_noise_TA/config7/WD_AT2.pkl')
 plt.show()
