@@ -614,7 +614,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             taskvector=task_vectors['Average'],
             unlabeled_loader=dataset_clean.get_heldout_dataloader(),
             # K=dataset.get_num_classes(),
-            alphas=np.round(np.linspace(-0.05, -2.0, 40), 2),
+            alphas=np.round(np.linspace(-0.05, -3.0, 60), 2),
             device=gpu
         )
         alpha_kNN = alpha_best['alpha_kNN']
