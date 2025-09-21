@@ -7,9 +7,6 @@ clip_models:
         40: 'config39'
         60: 'config40'
         80: 'config41'
-      asymmetric:
-        20:
-        40:
       poison: 'config1'
       ic:
         '1-7': 'config2' # numbers
@@ -20,8 +17,8 @@ clip_models:
         40: 'config3'
         60: 'config23'
         80: 'config13'
-      asymmetric:
-        40: 'config20'
+      # asymmetric:
+      #   40: 'config20'
 
   CIFAR10:
     ho_2:
@@ -77,7 +74,38 @@ clip_models:
         40: 'config19'
 
 DINO:
-  
+  MNIST:
+    ho_2:
+      symmetric:
+        40: 'config3'
+      # asymmetric:
+      #   40:
+      poison: null
+      ic:
+        '1-7':  # numbers
+
+  CIFAR10:
+    ho_2:
+      symmetric:
+        40: 'config1'
+      asymmetric:
+        40: 
+      poison: 'config1'
+      ic:
+        '3-5':  # cat dog
+        '6-9':  # frog truck
+
+  CIFAR100:
+    ho_2:
+      symmetric:
+        40: 'config2'
+      asymmetric:
+        40: 
+      poison: 'config2'
+      ic:
+        '47-52':  # maple tre - oak tree
+        '0-24':  # apple cockroach
+
 
 regular_models:
   MNIST:

@@ -73,6 +73,11 @@ class DinoV3Classifier(BaseModel):
         logits = self.classifier_head(feats)
         return logits
     
+    def get_feature_extractor(self):
+        return self.image_encoder
+        
+    def get_classifier_head(self):
+        return self.classifier_head
     
     def get_train_transforms(self):
         return transforms.Compose([

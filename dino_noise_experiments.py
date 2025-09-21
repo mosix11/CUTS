@@ -39,7 +39,7 @@ import re
 import imageio.v2 as imageio
 
 from src.utils import embedding_space_analysis
-from helper_funcs import evaluate_model, eval_model_on_clean_noise_splits, search_optimal_coefficient, get_confusion_matrix, row_normalize
+from helper_funcs import evaluate_model, eval_model_on_clean_noise_splits, get_confusion_matrix, row_normalize
 from src.utils import weight_norm_analysis
 
 
@@ -131,7 +131,17 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
         model.load_state_dict(checkpoint)
         
         
-        dataset.set_trainset(dataset.get_heldoutset(), shuffle=True)
+        noise_tv = strategy['noise']['finetuning'][0]
+        # For asymmetric noise, we only consider the noisy samples (only a subset of classes are swapped.)
+        if noise_tv['noise_type'] == 'asymmetric':
+            noise_tv['set'] = 'Heldout'
+            dataset.inject_noise(**noise_tv)
+            hs_clean, hs_noisy = dataset.get_clean_noisy_subsets(set='Heldout')
+            dataset.switch_labels_to_clean(hs_noisy)
+            
+            dataset.set_trainset(hs_noisy, shuffle=True)
+        else:
+            dataset.set_trainset(dataset.get_heldoutset(), shuffle=True)
         
         experiment_name = f"{cfg_name}/finetune_clean"
         experiment_dir = outputs_dir / Path(experiment_name)
@@ -177,7 +187,13 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
             plots_dir = experiment_dir / Path("plots")
             plots_dir.mkdir(exist_ok=True, parents=True)
             
-            if strategy['finetuning_set'] == 'Heldout':
+            # For asymmetric noise, we only consider the noisy samples (only a subset of classes are swapped.)
+            if noise_tv['noise_type'] == 'asymmetric':
+                noise_tv['set'] = 'Heldout'
+                dataset.inject_noise(**noise_tv)
+                hs_clean, hs_noisy = dataset.get_clean_noisy_subsets(set='Heldout')
+                dataset.set_trainset(hs_noisy, shuffle=True)
+            else:
                 dataset.set_trainset(dataset.get_heldoutset(), shuffle=True)
                 dataset.inject_noise(**noise_tv)
                 
@@ -237,14 +253,28 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     dataset.reset_train_dl(shuffle=False)
     
-    dataset_clean = copy.deepcopy(dataset)
     
-    strategy = cfg['strategy']
-    dataset.inject_noise(**strategy['noise']['pretraining'])
     strategy = cfg['strategy']
     noise_tv = strategy['noise']['finetuning'][0]
     noise_tv['set'] = 'Heldout'
-    dataset.inject_noise(**noise_tv)
+    # For asymmetric noise, we only consider the noisy samples (only a subset of classes are swapped.)
+    if noise_tv['noise_type'] == 'asymmetric':
+        dataset.inject_noise(**noise_tv)
+        hs_clean, hs_noisy = dataset.get_clean_noisy_subsets(set='Heldout')
+        dataset.switch_labels_to_clean(hs_noisy)
+        
+        dataset.set_heldoutset(hs_noisy, shuffle=False)
+    
+        dataset_clean = copy.deepcopy(dataset)
+    
+        dataset.inject_noise(**strategy['noise']['pretraining'])
+        ho_set = dataset.get_heldoutset()
+        dataset.switch_labels_to_noisy(ho_set)
+        dataset.set_heldoutset(ho_set)
+    else:
+        dataset_clean = copy.deepcopy(dataset)
+        dataset.inject_noise(**strategy['noise']['pretraining'])
+        dataset.inject_noise(**noise_tv)
 
 
 
@@ -274,7 +304,6 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         )
         noise_weights[f"{noise_tv['noise_rate']*100:.0f}% Noise, {noise_tv['seed']} Seed"] = n_weights
         
-    
             
     task_vectors = OrderedDict()
     for task_name, finetuend_weights in noise_weights.items():
@@ -289,7 +318,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     task_vectors['Clean'] = TaskVector(mix_weights, ft_ho_clean_weights)
     task_vectors['Mix'] = TaskVector(pt_weights, mix_weights)
-    task_vectors['Random Vector'] = task_vectors['Average TV'].generate_random_vector_with_same_layer_norms(seed=11)
+    task_vectors['Random Vector'] = task_vectors['Average TV'].generate_random_vector_with_same_layer_norms(seed=training_seed)
 
     
     
@@ -519,12 +548,10 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # exit()
     
     
-
-    
-    
     
     results_dict = OrderedDict()
     if not results_dir.joinpath('metrics.json').exists():
+
         model.load_state_dict(mix_weights, strict=False)
         mix_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
         mix_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
@@ -542,23 +569,26 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         results_dict['Gold'] = {'test_results': gold_test_results, 'train_results': gold_train_results}
         results_dict['FT HO Clean'] = {'test_results': ft_ho_test_results, 'train_results': ft_ho_train_results}
         
-
-        for alpha in tqdm(np.round(np.linspace(-0.05, -2.0, 40), 2)):
+        if strategy['noise']['finetuning'][0]['noise_type'] == 'asymmetric':
+            alphas = tqdm(np.round(np.linspace(-0.05, -2.0, 40), 2))
+        else:
+            alphas = tqdm(np.round(np.linspace(-0.05, -3.0, 60), 2))
+        for alpha in alphas:
+            
             model.load_state_dict(mix_weights, strict=False)
-            task_vectors['Average TV'].apply_to(model, scaling_coef=alpha, strict=False)
+            task_vectors['Average'].apply_to(model, scaling_coef=alpha, strict=False)
             tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
             tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
 
             results_dict[alpha] = {'test_results': tv_test_results, 'train_results': tv_train_results}
-        
         with open(results_dir / 'metrics.json' , 'w') as json_file:
             json.dump(results_dict, json_file, indent=4)
-            
     else:
         with open(results_dir / "metrics.json", "r") as json_file:
             results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
             
-    if 'alpha_kNN' not in results_dict:        
+            
+    if 'alpha_KNN' not in results_dict:        
         from test_alpha import select_alpha_star, plot_alpha_metrics
         best, records, alpha_best = select_alpha_star(
             model=model,
@@ -568,7 +598,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             taskvector=task_vectors['Average'],
             unlabeled_loader=dataset_clean.get_heldout_dataloader(),
             # K=dataset.get_num_classes(),
-            alphas=np.round(np.linspace(-0.1, -2.0, 20), 1),
+            alphas=np.round(np.linspace(-0.05, -3.0, 60), 2),
             device=gpu
         )
         alpha_kNN = alpha_best['alpha_kNN']
@@ -578,11 +608,16 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         results_dict['alpha_s4'] = alpha_s4
         with open(results_dir / 'metrics.json' , 'w') as json_file:
             json.dump(results_dict, json_file, indent=4)
-        
-    # print(results_dict)
-    
-    # with open(results_dir / 'tv_metrics.json' , 'w') as json_file:
-    #     json.dump(results_dict, json_file, indent=4)
+
+    if 'Random Vector' not in results_dict:
+        model.load_state_dict(mix_weights, strict=False)
+        alpha_kNN = results_dict['alpha_KNN']
+        task_vectors['Random Vector'].apply_to(model, scaling_coef=alpha_kNN, strict=False)
+        random_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+        random_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+        results_dict['Random Vector'] = {'test_results': random_test_results, 'train_results': random_train_results}
+        with open(results_dir / 'metrics.json' , 'w') as json_file:
+            json.dump(results_dict, json_file, indent=4)
     
     
 
