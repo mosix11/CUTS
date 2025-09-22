@@ -95,6 +95,8 @@ def umap_plot(
     return fig
     
 
+
+
 def pca_plot(
     features: torch.Tensor = None,
     labels: torch.Tensor = None,
@@ -280,105 +282,295 @@ def all_plot_comp(
 
 
 
+# def pca_evolution_plot(
+#     model: nn.Module,
+#     base_weights: Dict,
+#     gold_weights: Dict,
+#     task_vector,
+#     dataset,
+#     split: str, 
+#     alpha_range: List[float],
+#     device: torch.device,
+#     saving_dir: Path,
+# ):
+    
+#     def fig_to_rgb(fig):
+#         """Return an (H, W, 3) uint8 array from a Matplotlib Figure for any backend."""
+#         fig.canvas.draw()
+#         w, h = fig.canvas.get_width_height()
+
+#         # Try backends that support RGB directly (Agg, etc.)
+#         try:
+#             buf = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
+#             return buf.reshape(h, w, 3)
+#         except AttributeError:
+#             # TkAgg gives ARGB; convert to RGB
+#             buf = np.frombuffer(fig.canvas.tostring_argb(), dtype=np.uint8).reshape(h, w, 4)
+#             # ARGB -> RGB by dropping alpha and reordering
+#             return buf[:, :, 1:4]
+    
+
+#     def make_gif(figs, out_path="progress.gif", duration=0.8):
+#         frames = [fig_to_rgb(f) for f in figs]
+#         # Per-frame durations in seconds
+#         with imageio.get_writer(out_path, mode="I", loop=0, duration=duration) as w:
+#             for fr in frames:
+#                 w.append_data(fr)
+    
+    
+#     dataloader = None
+#     if split == 'Test':
+#         dataloader = dataset.get_test_dataloader()
+#     elif split == 'Train':
+#         dataloader = dataset.get_train_dataloader()
+#     elif split == 'Heldout':
+#         dataloader = dataset.get_heldout_dataloader()
+#     else: raise ValueError(f'Invalid dataset split {split}')
+    
+#     figs_alpha = []
+#     for alpha in alpha_range:
+#         model.load_state_dict(base_weights, strict=False)
+#         if alpha != 0.0:
+#             task_vector.apply_to(model, scaling_coef=alpha, strict=False)
+#         fig_pca = pca_plot(
+#             feature_extractor=model.get_image_encoder(),
+#             dataloader=dataset.get_test_dataloader(),
+#             class_names=dataset.get_class_names(),
+#             dataset_name=dataset.dataset_name,
+#             device=device,
+#         )
+        
+#         figs_alpha.append(fig_pca)
+    
+#     with open(saving_dir / "pca_alpha_figs.pkl", "wb") as f:
+#         pickle.dump(figs_alpha, f)
+    
+#     model.load_state_dict(gold_weights, strict=False)
+#     fig_gold = pca_plot(
+#         feature_extractor=model.get_image_encoder(),
+#         dataloader=dataloader,
+#         class_names=dataset.get_class_names(),
+#         dataset_name=dataset.dataset_name,
+#         device=device,
+#     )
+    
+#     with open(saving_dir / "pca_gold_fig.pkl", "wb") as f:
+#         pickle.dump(figs_alpha, f)
+    
+#     # big_fig.savefig(results_dirs['embed_plots'] / "pca_evol_test.png", bbox_inches="tight")
+    
+#     # make_gif(figs_pca, results_dirs['embed_plots'] / "pca_evol_test.gif", duration=5.0)
+    
+#     # fig_pca_gold.savefig(results_dirs['embed_plots'] / "pca_gold.png", bbox_inches="tight")
+
+#     return figs_alpha, fig_gold
+
+# ------- helpers (rotation-only alignment) -------
+
+def _labels_to_names(labels: torch.Tensor, class_names: List[str]) -> np.ndarray:
+    idx2name = {int(i): n for i, n in enumerate(class_names)}
+    return np.array([idx2name[int(i)] for i in labels.detach().cpu().numpy()])
+
+def _pca_coords(features: torch.Tensor, device: torch.device) -> np.ndarray:
+    z = torchdr.PCA(n_components=2, device=device).fit_transform(features)
+    return z.detach().cpu().numpy()  # PCA scores, already centered (≈ zero mean)
+
+def _orthogonal_matrix(Y: np.ndarray, X: np.ndarray, allow_reflection: bool = True) -> np.ndarray:
+    """
+    Compute the 2x2 orthogonal matrix R (rotation ± reflection) that best aligns Y to X.
+    IMPORTANT: We use Yc, Xc only to estimate R; we return R and later apply it to *raw* Z.
+    """
+    Yc = Y - Y.mean(axis=0, keepdims=True)
+    Xc = X - X.mean(axis=0, keepdims=True)
+    U, _, Vt = np.linalg.svd(Yc.T @ Xc)
+    R = U @ Vt
+    if not allow_reflection and np.linalg.det(R) < 0:
+        U[:, -1] *= -1
+        R = U @ Vt
+    return R  # use later as Z_aligned = Z @ R  (no extra centering/scaling)
+
+def _centroids(Z: np.ndarray, labels_str: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    """Return (centroids[K,2], label_order[K]) for stable class order."""
+    uniq = np.unique(labels_str)
+    cent = np.stack([Z[labels_str == u].mean(axis=0) for u in uniq], axis=0)
+    return cent, uniq
+
+def _fig_to_rgb(fig):
+    fig.canvas.draw()
+    w, h = fig.canvas.get_width_height()
+    try:
+        buf = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
+        return buf.reshape(h, w, 3)
+    except AttributeError:
+        buf = np.frombuffer(fig.canvas.tostring_argb(), dtype=np.uint8).reshape(h, w, 4)
+        return buf[:, :, 1:4]
+
+def _make_gif(figs, out_path, duration=0.8):
+    frames = [_fig_to_rgb(f) for f in figs]
+    with imageio.get_writer(out_path, mode="I", loop=0, duration=duration) as w:
+        for fr in frames:
+            w.append_data(fr)
+
+# ------- main --------
+
+@torch.no_grad()
 def pca_evolution_plot(
-    model: nn.Module,
+    model: torch.nn.Module,
     base_weights: Dict,
     gold_weights: Dict,
     task_vector,
     dataset,
-    split: str, 
+    split: str,
     alpha_range: List[float],
     device: torch.device,
     saving_dir: Path,
+    *,
+    normalize: bool = False,
+    align_on: str = "centroids",     # "centroids" (order-agnostic) or "points" (requires identical sample order)
+    allow_reflection: bool = True,
 ):
-    
-    def fig_to_rgb(fig):
-        """Return an (H, W, 3) uint8 array from a Matplotlib Figure for any backend."""
-        fig.canvas.draw()
-        w, h = fig.canvas.get_width_height()
+    """
+    Refit PCA for each alpha, then apply a rotation/reflection to align with alpha=0.
+    - No titles or alpha hints added to figures
+    - Global x/y limits so nothing is cropped
+    - Rotation-only alignment (no re-centering / scaling), so cluster shapes are unchanged
+    """
 
-        # Try backends that support RGB directly (Agg, etc.)
-        try:
-            buf = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
-            return buf.reshape(h, w, 3)
-        except AttributeError:
-            # TkAgg gives ARGB; convert to RGB
-            buf = np.frombuffer(fig.canvas.tostring_argb(), dtype=np.uint8).reshape(h, w, 4)
-            # ARGB -> RGB by dropping alpha and reordering
-            return buf[:, :, 1:4]
-    
-    def combine_figures(figs, ncols=3, nrows=2, figsize=(15, 10)):
-        fig, axes = plt.subplots(nrows, ncols, figsize=figsize)
-        for ax, f in zip(axes.flat, figs):
-            img = fig_to_rgb(f)
-            ax.imshow(img)
-            ax.axis("off")
-        for ax in axes.flat[len(figs):]:
-            ax.axis("off")
-        plt.tight_layout()
-        return fig
-
-    def make_gif(figs, out_path="progress.gif", duration=0.8):
-        frames = [fig_to_rgb(f) for f in figs]
-        # Per-frame durations in seconds
-        with imageio.get_writer(out_path, mode="I", loop=0, duration=duration) as w:
-            for fr in frames:
-                w.append_data(fr)
-    
-    
-    dataloader = None
-    if split == 'Test':
+    # choose split dataloader once (use shuffle=False in your dataset for determinism)
+    if split == "Test":
         dataloader = dataset.get_test_dataloader()
-    elif split == 'Train':
+    elif split == "Train":
         dataloader = dataset.get_train_dataloader()
-    elif split == 'Heldout':
+    elif split == "Heldout":
         dataloader = dataset.get_heldout_dataloader()
-    else: raise ValueError(f'Invalid dataset split {split}')
-    
-    figs_alpha = []
+    else:
+        raise ValueError(f"Invalid dataset split {split}")
+
+    # reference (alpha = 0)
+    model.load_state_dict(base_weights, strict=False)
+    feats0, labs0 = extract_features(model.get_image_encoder(), dataloader, normalize=normalize, device=device)
+    Z0 = _pca_coords(feats0, device)                         # true PCA scores at alpha=0
+    labels_str0 = _labels_to_names(labs0, dataset.get_class_names())
+
+    # anchor for alignment
+    if align_on == "points":
+        X_anchor = Z0
+    elif align_on == "centroids":
+        X_anchor, order0 = _centroids(Z0, labels_str0)
+    else:
+        raise ValueError("align_on must be 'points' or 'centroids'")
+
+    color_mapping = get_color_mappings((dataset.dataset_name or "").lower())
+
+    # pass 1: compute, align (rotation-only), and collect global bounds
+    aligned_list: List[Tuple[np.ndarray, np.ndarray]] = []  # [(Z_aligned, labels_str), ...]
+    global_xmin = global_xmax = None
+    global_ymin = global_ymax = None
+
     for alpha in alpha_range:
         model.load_state_dict(base_weights, strict=False)
         if alpha != 0.0:
             task_vector.apply_to(model, scaling_coef=alpha, strict=False)
-        fig_pca = pca_plot(
-            feature_extractor=model.get_image_encoder(),
-            dataloader=dataset.get_test_dataloader(),
-            class_names=dataset.get_class_names(),
-            dataset_name=dataset.dataset_name,
-            device=device,
+
+        feats, labs = extract_features(model.get_image_encoder(), dataloader, normalize=normalize, device=device)
+        Z = _pca_coords(feats, device)                       # refit PCA at this alpha
+        labels_str = _labels_to_names(labs, dataset.get_class_names())
+
+        if align_on == "points":
+            if Z.shape[0] != Z0.shape[0]:
+                raise RuntimeError("Point-wise alignment requires identical sample counts/order across alphas.")
+            R = _orthogonal_matrix(Z, X_anchor, allow_reflection=allow_reflection)
+        else:
+            Yc, order = _centroids(Z, labels_str)
+            # ensure centroid class order matches the reference order
+            if not np.array_equal(order, order0):
+                # reindex Yc to match the order of X_anchor's labels
+                remap = {lab: i for i, lab in enumerate(order)}
+                Yc_ordered = np.stack([Yc[remap[lab]] for lab in order0], axis=0)
+            else:
+                Yc_ordered = Yc
+            R = _orthogonal_matrix(Yc_ordered, X_anchor, allow_reflection=allow_reflection)
+
+        Z_aligned = Z @ R   # rotation/reflection ONLY; no centering, no scaling
+        aligned_list.append((Z_aligned, labels_str))
+
+        # update global bounds
+        xmn, xmx = Z_aligned[:, 0].min(), Z_aligned[:, 0].max()
+        ymn, ymx = Z_aligned[:, 1].min(), Z_aligned[:, 1].max()
+        global_xmin = xmn if global_xmin is None else min(global_xmin, xmn)
+        global_xmax = xmx if global_xmax is None else max(global_xmax, xmx)
+        global_ymin = ymn if global_ymin is None else min(global_ymin, ymn)
+        global_ymax = ymx if global_ymax is None else max(global_ymax, ymx)
+
+    # gold model (aligned to the same reference)
+    model.load_state_dict(gold_weights, strict=False)
+    feats_g, labs_g = extract_features(model.get_image_encoder(), dataloader, normalize=normalize, device=device)
+    Zg = _pca_coords(feats_g, device)
+    labels_str_g = _labels_to_names(labs_g, dataset.get_class_names())
+    if align_on == "points":
+        Rg = _orthogonal_matrix(Zg, X_anchor, allow_reflection=allow_reflection)
+    else:
+        Yg, orderg = _centroids(Zg, labels_str_g)
+        if not np.array_equal(orderg, order0):
+            remap = {lab: i for i, lab in enumerate(orderg)}
+            Yg_ordered = np.stack([Yg[remap[lab]] for lab in order0], axis=0)
+        else:
+            Yg_ordered = Yg
+        Rg = _orthogonal_matrix(Yg_ordered, X_anchor, allow_reflection=allow_reflection)
+    Zg_aligned = Zg @ Rg
+
+    # include gold in global bounds
+    global_xmin = min(global_xmin, Zg_aligned[:, 0].min())
+    global_xmax = max(global_xmax, Zg_aligned[:, 0].max())
+    global_ymin = min(global_ymin, Zg_aligned[:, 1].min())
+    global_ymax = max(global_ymax, Zg_aligned[:, 1].max())
+
+    # finalize global limits with a small padding
+    pad = 0.03
+    xspan = global_xmax - global_xmin
+    yspan = global_ymax - global_ymin
+    xlim = (global_xmin - pad * xspan, global_xmax + pad * xspan)
+    ylim = (global_ymin - pad * yspan, global_ymax + pad * yspan)
+
+    # pass 2: actually draw, using global limits; NO TITLES
+    figs_alpha: List[plt.Figure] = []
+    for Z_aligned, labels_str in aligned_list:
+        fig, ax = datamapplot.create_plot(
+            Z_aligned, labels_str,
+            label_color_map=color_mapping,
+            label_over_points=True,
+            label_font_size=30,
         )
-        
-        figs_alpha.append(fig_pca)
-    
+        ax.set_xlim(*xlim)
+        ax.set_ylim(*ylim)
+        figs_alpha.append(fig)
+
+    fig_gold, axg = datamapplot.create_plot(
+        Zg_aligned, labels_str_g,
+        label_color_map=color_mapping,
+        label_over_points=True,
+        label_font_size=30,
+    )
+    axg.set_xlim(*xlim)
+    axg.set_ylim(*ylim)
+
+    # persist
+    saving_dir.mkdir(parents=True, exist_ok=True)
     with open(saving_dir / "pca_alpha_figs.pkl", "wb") as f:
         pickle.dump(figs_alpha, f)
-    
-    model.load_state_dict(gold_weights, strict=False)
-    fig_gold = pca_plot(
-        feature_extractor=model.get_image_encoder(),
-        dataloader=dataloader,
-        class_names=dataset.get_class_names(),
-        dataset_name=dataset.dataset_name,
-        device=device,
-    )
-    
     with open(saving_dir / "pca_gold_fig.pkl", "wb") as f:
-        pickle.dump(figs_alpha, f)
-    
-    # big_fig.savefig(results_dirs['embed_plots'] / "pca_evol_test.png", bbox_inches="tight")
-    
-    # make_gif(figs_pca, results_dirs['embed_plots'] / "pca_evol_test.gif", duration=5.0)
-    
-    # fig_pca_gold.savefig(results_dirs['embed_plots'] / "pca_gold.png", bbox_inches="tight")
+        pickle.dump(fig_gold, f)
+
 
     return figs_alpha, fig_gold
+
 
 def get_color_mappings(dataset_name:str):
     
     if dataset_name == None:
         return None
-    elif dataset_name == 'mnist':
+    elif dataset_name == 'MNIST':
             return {'0': "#f64a4a", '1': "#2e862a", '2': "#0095ff", '3': "#af009d", '4': "#192c65", '5': "#00fffb", '6': "#8246b7", '7': "#92b301", '8': "#fa8f1e", '9': "#0a8d63"}
-    elif dataset_name == 'cifar10':
+    elif dataset_name == 'CIFAR10':
         return {'airplane': "#f64a4a", 'automobile': "#2e862a", 'bird': "#0095ff", 'cat': "#af009d", 'deer': "#192c65", 'dog': "#00fffb", 'frog': "#8246b7", 'horse': "#92b301", 'ship': "#fa8f1e", 'truck': "#0a8d63"}
 

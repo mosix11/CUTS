@@ -809,13 +809,15 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         model=model,
         base_weights=mix_weights,
         gold_weights=gold_weights,
+        dataset=dataset_clean,
         task_vector=task_vectors['Average'],
-        split='Heldout',
-        alpha_range=np.round(np.linspace(0.0, -1.0, 3), 2),
+        split='Test',
+        alpha_range=np.round(np.linspace(0.0, results_dict['alpha_KNN'], 16) / 0.05) * 0.05,
         device=gpu,
         saving_dir=results_dirs['embed_plots']
     )
-        
+    
+
     exit()
 
     # Weight Space Disentanglemet Analysis
