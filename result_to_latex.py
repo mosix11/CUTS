@@ -1166,8 +1166,16 @@ if __name__ == "__main__":
     
     # generate_clip_IC_utlity_table(clip_ic_results_dir, clip_ic_cfgs)
     # generate_clip_IC_fr_dr_hr_table(clip_ic_results_dir, clip_ic_cfgs['CIFAR10'])
-    generate_clip_poison_table(clip_poison_results_dir, clip_poison_cfgs)
-    
+    # generate_clip_poison_table(clip_poison_results_dir, clip_poison_cfgs)
+    plot_alpha_interplay_dual(
+        clip_poison_results_dir,
+        clip_poison_cfgs['CIFAR10'],
+        clip_poison_cfgs['CIFAR100'],
+        dataset_name_A="CIFAR-10 (10%)",
+        dataset_name_B="CIFAR-100 (10%)",
+        forget_threshold_A=0.9,
+        forget_threshold_B=0.99,
+    )
     
     regular_models_cfgs = configmap['regular_models']
     clip_models_results_dir = Path('results/single_experiment/pretrain_on_noisy')

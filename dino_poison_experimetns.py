@@ -261,7 +261,8 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     cpu = trainer_utils.get_cpu_device()
     gpu = trainer_utils.get_gpu_device()
     
-    
+    print('-----------------------------------', gpu)
+    print('-----------------------------------', cpu)
     outputs_dir = outputs_dir / cfg_name
     
     results_dir = results_dir / cfg_name
@@ -277,7 +278,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     for dir in results_dirs.values():
         dir.mkdir(exist_ok=True, parents=True)
     
-    
+    print('-----------------------------------11111')
     model = model_factory.create_model(cfg['model'])
     pt_weights = copy.deepcopy(model.state_dict())
     
@@ -285,11 +286,11 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     dataset_cfg['train_transforms'] = model.get_val_transforms()
     dataset_cfg['val_transforms'] = model.get_val_transforms()
     dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
-    
+    print('-----------------------------------2222')
     dataset.reset_train_dl(shuffle=False)
     
     dataset_clean = copy.deepcopy(dataset)
-    
+    print('-----------------------------------3333')
     strategy = cfg['strategy']
     dataset.inject_poison(**strategy['poison']['pretraining'])
     
@@ -297,28 +298,24 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     poison_tv_cfg['set'] = 'Heldout'
     dataset.inject_poison(**poison_tv_cfg)
 
-
+    print('-----------------------------------4444')
 
     # Load weights while removing classifier weights from the state dict
-    mix_weights = OrderedDict(
-    (k, v) for k, v in torch.load(
+    mix_weights = torch.load(
         outputs_dir.joinpath(f"mix/weights/ft_weights.pth"),
         map_location='cpu'
-    ).items() if "classifier_heads" not in k)
-    
-    gold_weights = OrderedDict(
-    (k, v) for k, v in torch.load(
+    )
+    gold_weights = torch.load(
         outputs_dir.joinpath(f"clean/weights/ft_weights.pth"),
         map_location='cpu'
-    ).items() if "classifier_heads" not in k)
+    )
     
-    ft_ho_clean_weights = OrderedDict(
-    (k, v) for k, v in torch.load(
+    ft_ho_clean_weights = torch.load(
         outputs_dir.joinpath(f"finetune_clean/weights/ft_weights.pth"),
         map_location='cpu'
-    ).items() if "classifier_heads" not in k)
+    )
     
-    
+    print('-----------------------------------55555')
     # ft_gradient_ascent_weights = OrderedDict(
     # (k, v) for k, v in torch.load(
     #     outputs_dir.joinpath(f"gradient_ascent/weights/ft_weights.pth"),
@@ -329,15 +326,14 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     for poison_tv in cfg['strategy']['poison']['finetuning']:
         ft_expr_dir = outputs_dir / f"finetune_{poison_tv['rate']}_{poison_tv['seed']}"
-        n_weights = OrderedDict(
-        (k, v) for k, v in torch.load(
+        n_weights = torch.load(
             ft_expr_dir.joinpath(f"weights/ft_weights.pth"),
             map_location='cpu'
-        ).items() if "classifier_heads" not in k)
+        )
         poison_weights[f"{poison_tv['rate']*100:.0f}% Noise, {poison_tv['seed']} Seed"] = n_weights
         
     
-            
+    print('-----------------------------------66666')
     task_vectors = OrderedDict()
     for task_name, finetuend_weights in poison_weights.items():
         task_vectors[task_name] = TaskVector(mix_weights, finetuend_weights)
@@ -354,7 +350,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     task_vectors['Random Vector'] = task_vectors['Average'].generate_random_vector_with_same_layer_norms(seed=11)
 
     
-    
+    print('-----------------------------------7777')
     
     ft_tvs_list = list(task_vectors.values())
     tv_names = list(task_vectors.keys())
@@ -368,7 +364,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             cos_sim = anchor_tv.cosine_similarity_flatten(other_tv)
             task_sim[i].append(cos_sim)
     task_sim = np.array(task_sim)
-    
+    print('-----------------------------------8888')
     misc_utils.plot_confusion_matrix(
         title='Task Vector Similarity Matrix',
         cm=task_sim,
