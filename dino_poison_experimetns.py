@@ -278,20 +278,12 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         dir.mkdir(exist_ok=True, parents=True)
     
     
-    dataset_cfg = cfg['dataset']
-    dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
-    
-
-    cfg['model']['datasets_cfgs'] = {dataset_cfg['name']: dataset.get_class_names()} 
     model = model_factory.create_model(cfg['model'])
-    model.freeze_all_heads()
-    
     pt_weights = copy.deepcopy(model.state_dict())
-    pt_weights = OrderedDict((k, v) for k, v in pt_weights.items() if "classifier_heads" not in k)
     
+    dataset_cfg = cfg['dataset']
     dataset_cfg['train_transforms'] = model.get_val_transforms()
     dataset_cfg['val_transforms'] = model.get_val_transforms()
-    
     dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
     
     dataset.reset_train_dl(shuffle=False)
@@ -634,7 +626,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             metrics = results_dict.get(alpha, None)
             if not metrics: metrics = results_dict.get(str(alpha), None)
             if not metrics: print('alpha not found', alpha)
-            if metrics['ho_results']['ACC'] <= 0.1:
+            if round(metrics['ho_results']['ACC'], 2) <= 0.1:
                 alpha_psn = alpha
                 break
         

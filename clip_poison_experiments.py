@@ -681,7 +681,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             metrics = results_dict.get(alpha, None)
             if not metrics: metrics = results_dict.get(str(alpha), None)
             if not metrics: print('alpha not found', alpha)
-            if metrics['ho_results']['ACC'] <= 0.1:
+            if round(metrics['ho_results']['ACC'], 2) <= 0.1:
                 alpha_psn = alpha
                 break
         
