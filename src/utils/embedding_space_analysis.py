@@ -8,8 +8,7 @@ from tqdm import tqdm
 import torchdr
 from typing import List
 import datamapplot
-from src.datasets import BaseClassificationDataset
-from src.models import TaskVector
+
 from typing import Dict, Any, Optional, Tuple, List
 
 from pathlib import Path
@@ -285,8 +284,8 @@ def pca_evolution_plot(
     model: nn.Module,
     base_weights: Dict,
     gold_weights: Dict,
-    task_vector: TaskVector,
-    dataset: BaseClassificationDataset,
+    task_vector,
+    dataset,
     split: str, 
     alpha_range: List[float],
     device: torch.device,
