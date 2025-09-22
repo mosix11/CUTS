@@ -969,7 +969,7 @@ def generate_clip_poison_table(
     dataset_forget_trsh: Dict[str, float] = {
         "MNIST": 0.90,
         "CIFAR10": 0.90,
-        "CIFAR100": 0.90,
+        "CIFAR100": 0.99,
     },
     outputfile_path: Path = Path("./visulaization_dir/clip_poison_triggers_table.txt"),
 ) -> Path:
