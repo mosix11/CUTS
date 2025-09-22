@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_agg import FigureCanvasAgg
-
+import matplotlib.patches as patches
 import pickle
 
 def _figure_to_rgb(fig, dpi=150):
@@ -20,16 +20,6 @@ def show_figure_grid(figs, rows=None, cols=None, dpi=150, strip_axes=True, close
     import matplotlib.pyplot as plt
     from matplotlib.backends.backend_agg import FigureCanvasAgg
 
-    def _figure_to_rgb(fig, dpi=150):
-        canvas = FigureCanvasAgg(fig)
-        orig_dpi = fig.get_dpi()
-        fig.set_dpi(dpi)
-        canvas.draw()
-        w, h = canvas.get_width_height()
-        import numpy as np
-        buf = np.frombuffer(canvas.buffer_rgba(), dtype=np.uint8).reshape(h, w, 4)
-        fig.set_dpi(orig_dpi)
-        return buf[..., :3]
 
     # (same rows/cols logic as before)
 
@@ -64,11 +54,17 @@ def show_figure_grid(figs, rows=None, cols=None, dpi=150, strip_axes=True, close
         ax.set_axis_off()
         if i < n:
             ax.imshow(imgs[i], aspect='auto')
+            rect = patches.Rectangle(
+                (0, 0), 1, 1,
+                linewidth=1, edgecolor="lightgray", facecolor="none",
+                transform=ax.transAxes, clip_on=False
+            )
+            ax.add_patch(rect)
 
     grid_fig.subplots_adjust(left=0, right=1, bottom=0, top=1, wspace=0, hspace=0)
     plt.show()
     
-with open('results/single_experiment/clip_noise_TA/config26/embedding_plots/pca_alpha_figs.pkl', 'rb') as f:
+with open('results/single_experiment/clip_noise_TA/config28/embedding_plots/pca_alpha_figs.pkl', 'rb') as f:
     figs = pickle.load(f)
     
 show_figure_grid(figs)

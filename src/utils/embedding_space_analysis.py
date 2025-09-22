@@ -460,7 +460,7 @@ def pca_evolution_plot(
     else:
         raise ValueError("align_on must be 'points' or 'centroids'")
 
-    color_mapping = get_color_mappings((dataset.dataset_name or "").lower())
+    color_mapping = get_color_mappings(dataset.dataset_name)
 
     # pass 1: compute, align (rotation-only), and collect global bounds
     aligned_list: List[Tuple[np.ndarray, np.ndarray]] = []  # [(Z_aligned, labels_str), ...]
@@ -556,7 +556,7 @@ def pca_evolution_plot(
 
     # persist
     saving_dir.mkdir(parents=True, exist_ok=True)
-    with open(saving_dir / "pca_alpha_figs.pkl", "wb") as f:
+    with open(saving_dir / f"pca_alpha_{len(alpha_range)}_figs.pkl", "wb") as f:
         pickle.dump(figs_alpha, f)
     with open(saving_dir / "pca_gold_fig.pkl", "wb") as f:
         pickle.dump(fig_gold, f)
@@ -572,5 +572,6 @@ def get_color_mappings(dataset_name:str):
     elif dataset_name == 'MNIST':
             return {'0': "#f64a4a", '1': "#2e862a", '2': "#0095ff", '3': "#af009d", '4': "#192c65", '5': "#00fffb", '6': "#8246b7", '7': "#92b301", '8': "#fa8f1e", '9': "#0a8d63"}
     elif dataset_name == 'CIFAR10':
+        
         return {'airplane': "#f64a4a", 'automobile': "#2e862a", 'bird': "#0095ff", 'cat': "#af009d", 'deer': "#192c65", 'dog': "#00fffb", 'frog': "#8246b7", 'horse': "#92b301", 'ship': "#fa8f1e", 'truck': "#0a8d63"}
 
