@@ -1,5 +1,4 @@
 global_seed: 11
-# Config 18 but fine tune noise vectors on HeldOut
 training_seed: &training_seed 11
 dataset_seed: &dataset_seed 11
 
@@ -9,36 +8,28 @@ strategy:
   noise:
     pretraining:
       set: 'Train'
-      noise_rate: 0.4
+      noise_rate: 0.6
       noise_type: 'symmetric'
       seed: 8
     finetuning:
       - set: 'Train'
-        noise_rate: 0.0
+        noise_rate: 1.0
         noise_type: 'symmetric'
         seed: 12
       - set: 'Train'
         noise_rate: 1.0
         noise_type: 'symmetric'
-        seed: 12
-      # - set: 'Train'
-      #   noise_rate: 1.0
-      #   noise_type: 'symmetric'a
-      #   seed: 10
+        seed: 10
 
 
 dataset:
-  name: "cifar10"
-  num_classes: &num_classes 10
+  name: "cifar100"
+  num_classes: &num_classes 100
   img_size: [224, 224]
-  batch_size: 512
-  subsample_size: [-1, -1]
-  class_subset: []
-  remap_labels: False
+  batch_size: 256
   heldout_conf: 0.1
   grayscale: False
   normalize_imgs: True
-  flatten: False
   valset_ratio: 0.0
   num_workers: 8
   seed: *dataset_seed
@@ -60,7 +51,7 @@ trainer:
     max_epochs: &max_epochs 150
     optimizer_cfg: 
       type: "adamw"
-      lr: 5.0e-4
+      lr: 1.0e-3
       betas: [0.9, 0.999]
     lr_schedule_cfg:
       type: 'cosann'
@@ -73,7 +64,7 @@ trainer:
     run_on_gpu: True
     use_amp: True
     log_comet: True
-    comet_project_name: 'pretrain-on-noise'
+    comet_project_name: 'regular-noise-TA'
     seed: *training_seed
 
   finetuning:
@@ -93,6 +84,6 @@ trainer:
     run_on_gpu: True
     use_amp: True
     log_comet: True
-    comet_project_name: 'pretrain-on-noise'
+    comet_project_name: 'regular-noise-TA'
     seed: *training_seed
 

@@ -1,5 +1,4 @@
 global_seed: 11
-# Config 18 but fine tune noise vectors on HeldOut
 training_seed: &training_seed 11
 dataset_seed: &dataset_seed 11
 
@@ -9,55 +8,49 @@ strategy:
   noise:
     pretraining:
       set: 'Train'
-      noise_rate: 0.4
+      noise_rate: 0.1
       noise_type: 'symmetric'
       seed: 8
     finetuning:
-      - set: 'Train'
-        noise_rate: 0.0
-        noise_type: 'symmetric'
-        seed: 12
-      - set: 'Train'
-        noise_rate: 1.0
-        noise_type: 'symmetric'
-        seed: 12
-      # - set: 'Train'
-      #   noise_rate: 1.0
-      #   noise_type: 'symmetric'a
-      #   seed: 10
+    - set: 'Train'
+      noise_rate: 1.0
+      noise_type: 'symmetric'
+      seed: 12
+    - set: 'Train'
+      noise_rate: 1.0
+      noise_type: 'symmetric'
+      seed: 10
+
 
 
 dataset:
-  name: "cifar10"
+  name: "mnist"
   num_classes: &num_classes 10
-  img_size: [224, 224]
-  batch_size: 512
-  subsample_size: [-1, -1]
-  class_subset: []
-  remap_labels: False
+  img_size: [28, 28]
+  batch_size: 1024
   heldout_conf: 0.1
-  grayscale: False
   normalize_imgs: True
-  flatten: False
+  flatten: True
   valset_ratio: 0.0
   num_workers: 8
   seed: *dataset_seed
 
 
 model:
-  type: 'torchvision_resnet18'
-  num_classes: *num_classes
-  img_size: [224, 224]
-  grayscale: False
+  type: 'fc1'
+  input_dim: 784
+  hidden_dim: 32768
+  output_dim: *num_classes
   loss_fn:
     type: 'CE'
   metrics: ['ACC', 'F1']
 
 
 
+
 trainer:
   pretraining:
-    max_epochs: &max_epochs 150
+    max_epochs: &max_epochs 200
     optimizer_cfg: 
       type: "adamw"
       lr: 5.0e-4
@@ -73,19 +66,19 @@ trainer:
     run_on_gpu: True
     use_amp: True
     log_comet: True
-    comet_project_name: 'pretrain-on-noise'
+    comet_project_name: 'regular-noise-TA'
     seed: *training_seed
 
   finetuning:
-    max_epochs: 120
+    max_epochs: 300
     optimizer_cfg: 
       type: "adamw"
-      lr: 5.0e-4
+      lr: 1.0e-4
       betas: [0.9, 0.999]
     lr_schedule_cfg:
       type: 'step'
-      milestones: [50, 70, 90, 100, 110, 115]
-      gamma: 0.7
+      milestones: [50, 100, 150, 200, 250]
+      gamma: 0.8
     early_stopping: False
     validation_freq: -1
     save_best_model: False
@@ -93,6 +86,6 @@ trainer:
     run_on_gpu: True
     use_amp: True
     log_comet: True
-    comet_project_name: 'pretrain-on-noise'
+    comet_project_name: 'regular-noise-TA'
     seed: *training_seed
 
