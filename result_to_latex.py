@@ -847,17 +847,6 @@ Model & 10\% & 20\% & 40\% & 60\% & 80\% & 10\% & 20\% & 40\% & 60\% & 80\% & 10
 
 
 
-    # results_dir:Path,
-    # cfgmap:OrderedDict,
-    # dataset_order:List[str] = ["MNIST", "CIFAR10", "CIFAR100"],
-    # outputfile_path:Path = Path("./visulaization_dir/clip_IC_noise_table.txt")
-    # ):
-    # corruption_classes = {
-    #     "MNIST": ['1-7'],
-    #     "CIFAR10": ['3-5', '6-9'],
-    #     "CIFAR100": ['47-52', '0-24'],
-    # }
-
 def generate_clip_IC_fr_dr_hr_table(
     results_dir:Path,
     cfgmap:OrderedDict,
@@ -971,6 +960,137 @@ Metric & $\alpha^\ast_a$ & $\alpha^\ast_f$ & $\hat{\alpha}^\ast_{\text{knn}}$ & 
     outputfile_path.write_text(table_tex)
     return outputfile_path
 
+
+
+def generate_clip_poison_table(
+    results_dir: Path,
+    cfgmap: OrderedDict,
+    dataset_order: List[str] = ["MNIST", "CIFAR10", "CIFAR100"],
+    dataset_forget_trsh: Dict[str, float] = {
+        "MNIST": 0.90,
+        "CIFAR10": 0.90,
+        "CIFAR100": 0.90,
+    },
+    outputfile_path: Path = Path("./visulaization_dir/clip_poison_triggers_table.txt"),
+) -> Path:
+    """
+    Build a single table (MNIST, CIFAR-10, CIFAR-100) for poison-trigger experiments.
+    Columns for each dataset: UT, FR, HR, DR.
+    Rows: θ_mix, θ_clean, τ_r, α*_a, α*_f, α̂*_psn.
+
+    Assumptions:
+      - cfgmap maps dataset name -> relative config path (no η levels).
+      - metrics.json contains 'Mix', 'Gold', 'Random Vector', float-α entries, and 'alpha_psn'.
+      - If alpha_psn == 0, we report Mix metrics for that row.
+    """
+
+    # Per-row containers: 4 cells per dataset
+    row_theta_mix   = {ds: ["-"] * 4 for ds in dataset_order}
+    row_theta_clean = {ds: ["-"] * 4 for ds in dataset_order}
+    row_tau_r       = {ds: ["-"] * 4 for ds in dataset_order}
+    row_alpha_a     = {ds: ["-"] * 4 for ds in dataset_order}
+    row_alpha_f     = {ds: ["-"] * 4 for ds in dataset_order}
+    row_alpha_psn   = {ds: ["-"] * 4 for ds in dataset_order}
+
+    def _cells_fmt(m: Dict[str, Optional[float]]) -> List[str]:
+        fm = _fmt_metrics(m)
+        # order: UT, FR, HR, DR
+        return [
+            fm.get("utility", "-"),
+            fm.get("forget_rate", "-"),
+            fm.get("healing_rate", "-"),
+            fm.get("destruction_rate", "-"),
+        ]
+
+    for ds in dataset_order:
+        config_rel = cfgmap.get(ds)
+        if not config_rel:
+            continue
+
+        metrics = _load_metrics(results_dir / config_rel)
+        if not metrics:
+            continue
+
+        # Clean out non-alpha extras; pull alpha_psn
+        metrics.pop("FT HO Clean", None)
+        metrics.pop("alpha_s4", None)
+        alpha_psn = float(metrics.pop("alpha_psn", None))
+
+
+        # Baselines (pops Mix/Gold/RV from metrics)
+        baseline = _collect_baseline_metrics(metrics)
+        # Alpha grid
+        alpha_grid = _collect_alpha_metrics(metrics)
+
+        # Fill baseline rows
+        row_theta_mix[ds]   = _cells_fmt(baseline["mix"])
+        row_theta_clean[ds] = _cells_fmt(baseline["clean"])
+        row_tau_r[ds]       = _cells_fmt(baseline["rnd"])
+
+        # Resolve alpha*_a and alpha*_f
+        alpha_a = _get_alpha_star_utility(alpha_grid)
+        alpha_f = _get_alpha_star_forgetting(alpha_grid, dataset_forget_trsh.get(ds, 0.9))
+
+        if alpha_a in alpha_grid:
+            row_alpha_a[ds] = _cells_fmt(alpha_grid[alpha_a])
+        if alpha_f in alpha_grid:
+            row_alpha_f[ds] = _cells_fmt(alpha_grid[alpha_f])
+
+        # Resolve alpha_psn → row_alpha_psn
+        psn_cells = ["-"] * 4
+        if alpha_psn is not None:
+            psn_cells = _cells_fmt(alpha_grid[alpha_psn])
+
+        row_alpha_psn[ds] = psn_cells
+
+    # ---------- render LaTeX ----------
+    def row_line(label: str, rows_by_ds: Dict[str, List[str]]) -> str:
+        cells: List[str] = []
+        for ds in dataset_order:
+            cells.extend(rows_by_ds[ds])
+        return f"{label} & " + " & ".join(cells) + r" \\"
+
+    header = r"""\begin{table}[ht]
+\centering
+\caption{}
+\label{tab:clip_sym_utility_vs_alpha}
+\scriptsize
+\renewcommand{\arraystretch}{1.3}
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{lcccccccccccc}
+\toprule
+& \multicolumn{4}{c}{MNIST} & \multicolumn{4}{c}{CIFAR-10} & \multicolumn{4}{c}{CIFAR-100} \\
+\cmidrule(lr){2-5} \cmidrule(lr){6-9} \cmidrule(lr){10-13} 
+Model & UT $\uparrow$  & FR $\uparrow$ & HR $\uparrow$ & DR $\downarrow$ & UT $\uparrow$  & FR $\uparrow$ & HR $\uparrow$ & DR $\downarrow$ & UT $\uparrow$  & FR $\uparrow$ & HR $\uparrow$ & DR $\downarrow$\\
+\midrule
+"""
+
+    body_lines = [
+        row_line(r"$\theta_{\text{mix}}$",   row_theta_mix),
+        row_line(r"$\theta_{\text{clean}}$", row_theta_clean),
+        r"\cmidrule(lr){1-13}",
+        row_line(r"$\tau_{r}$",              row_tau_r),
+        r"\cmidrule(lr){1-13}",
+        row_line(r"$\alpha^\ast_a$",         row_alpha_a),
+        row_line(r"$\alpha^\ast_f$",         row_alpha_f),
+        r"\cmidrule(lr){1-13}",
+        row_line(r"$\hat{\alpha}^\ast_{\text{psn}}$", row_alpha_psn),
+    ]
+
+    footer = r"""
+\bottomrule
+\end{tabular}
+\end{table}
+"""
+
+    table_tex = header + "\n".join(body_lines) + footer
+    outputfile_path.parent.mkdir(parents=True, exist_ok=True)
+    outputfile_path.write_text(table_tex)
+    return outputfile_path
+
+
+
+
 if __name__ == "__main__":
     with open('configmap.yaml', 'r') as file:
         configmap = yaml.full_load(file)
@@ -1045,7 +1165,9 @@ if __name__ == "__main__":
     # )
     
     # generate_clip_IC_utlity_table(clip_ic_results_dir, clip_ic_cfgs)
-    generate_clip_IC_fr_dr_hr_table(clip_ic_results_dir, clip_ic_cfgs['CIFAR10'])
+    # generate_clip_IC_fr_dr_hr_table(clip_ic_results_dir, clip_ic_cfgs['CIFAR10'])
+    generate_clip_poison_table(clip_poison_results_dir, clip_poison_cfgs)
+    
     
     regular_models_cfgs = configmap['regular_models']
     clip_models_results_dir = Path('results/single_experiment/pretrain_on_noisy')
