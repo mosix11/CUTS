@@ -60,8 +60,8 @@ clip_models:
         40: 'config43'
       poison: 'config3'
       ic:
-        '47-52': 'config1' # maple tre - oak tree
-        '0-24': 'config4' # apple cockroach
+        '47-52': 'config3' # maple tre - oak tree
+        '0-24': 'config5' # apple cockroach
 
     ho_10:
       symmetric:

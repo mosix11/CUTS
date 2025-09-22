@@ -32,6 +32,13 @@ def extract_features(
     for batch in tqdm(dataloader, desc="Extracting features", leave=False):
         x, y = prepare_batch(batch, device)[:2]
         z = feature_extractor(x)  # (B, D)
+        
+        # hard coding for DinoV3
+        if not isinstance(feature_extractor, torch.Tensor):
+            z = getattr(z, "pooler_output", None)
+            if z is None:
+                z = z.last_hidden_state[:, 0, :]
+        
         if normalize:
             z = F.normalize(z, dim=1)
         feats.append(z.detach().cpu())
