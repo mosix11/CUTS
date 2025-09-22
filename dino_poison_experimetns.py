@@ -356,13 +356,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     else:
         task_vectors['Average'] = TaskVector.mean(task_vectors)
         
-    # task_vectors['Average Pruned 0.4'] = task_vectors['Average'].prune_small_weights(rate=0.4)
-    # task_vectors['Average Pruned 0.6'] = task_vectors['Average'].prune_small_weights(rate=0.6)
-    # task_vectors['Average Pruned 0.8'] = task_vectors['Average'].prune_small_weights(rate=0.8)
-    # task_vectors['Average Pruned 0.9'] = task_vectors['Average'].prune_small_weights(rate=0.9)
-    # task_vectors['Average Pruned 0.95'] = task_vectors['Average'].prune_small_weights(rate=0.95)
-    # task_vectors['Average Pruned 0.99'] = task_vectors['Average'].prune_small_weights(rate=0.99)
-    
+
     task_vectors['Clean'] = TaskVector(mix_weights, ft_ho_clean_weights)
     
     task_vectors['Random Vector'] = task_vectors['Average'].generate_random_vector_with_same_layer_norms(seed=11)
@@ -599,7 +593,6 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         mix_ho_results, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
         mix_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
         
-        
         model.load_state_dict(gold_weights, strict=False)
         gold_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
         gold_ho_results, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
@@ -614,11 +607,9 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         results_dict['Mix'] = {'test_results': mix_test_results, 'ho_results': mix_ho_results, 'train_results': mix_train_results}
         results_dict['Gold'] = {'test_results': gold_test_results, 'ho_results': gold_ho_results, 'train_results': gold_train_results}
         results_dict['FT HO Clean'] = {'test_results': ft_ho_test_results, 'ho_results': ft_ho_ho_results, 'train_results': ft_ho_train_results}
-    
-        # results_dict = OrderedDict()
-        # for alpha in tqdm(np.linspace(-0.05, -1.5, 30)):
-        # for alpha in tqdm(np.linspace(-0.1, -2.0, 20)):
-        for alpha in tqdm(np.round(np.linspace(-0.1, -1.5, 15), 1)):
+
+
+        for alpha in tqdm(np.round(np.linspace(-0.05, -1.5, 30), 2)):
         
             model.load_state_dict(mix_weights, strict=False)
             task_vectors['Average'].apply_to(model, scaling_coef=alpha, strict=False)
@@ -635,78 +626,32 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         with open(results_dir / "metrics.json", "r") as json_file:
             results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
             
-    # Weight Space Disentanglemet Analysis
-    clean_train_ds, noisy_train_ds = dataset.get_clean_noisy_subsets('Train')
-    subset_size  = 2048
-    def random_subset(ds, k, seed: int):
-        k = min(k, len(ds))
-        g = torch.Generator().manual_seed(seed)
-        idx = torch.randperm(len(ds), generator=g)[:k].tolist()
-        return Subset(ds, idx)
-
-    clean_subset = random_subset(clean_train_ds, subset_size, dataset_seed)
-    noisy_subset = random_subset(noisy_train_ds, subset_size, dataset_seed + 1)
-    
-    records = []
-    for a_str, res in results_dict.items():
-        if a_str in ['Mix', 'Gold', 'FT HO Clean']: continue
-        a = float(a_str) if not isinstance(a_str, (int, float)) else a_str
-        test_acc  = res["test_results"]["ACC"]
-        test_loss = res["test_results"]["Loss"]
-        noisy_acc = res["train_results"]["noisy_set"]["ACC"]
-        records.append((a, test_acc, test_loss, noisy_acc))
-    alpha_max_test_acc = max(records, key=lambda x: x[1])[0]
-    alpha_min_test_loss = min(records, key=lambda x: x[2])[0]
-
-    forgetting_threshold = 0.10
-    alpha_forgetting_thrsh = None
-    for a, _, _, noisy_acc in sorted(records, key=lambda x: x[0], reverse=True):
-        if noisy_acc <= forgetting_threshold:
-            alpha_forgetting_thrsh = a
-            break
+            
+    if 'alpha_psn' not in results_dict:
+        alphas = np.round(np.linspace(-0.05, -1.5, 30), 2)
+        alpha_psn = 0.0
+        for alpha in alphas:
+            metrics = results_dict.get(alpha, None)
+            if not metrics: metrics = results_dict.get(str(alpha), None)
+            if not metrics: print('alpha not found', alpha)
+            if metrics['ho_results']['ACC'] <= 0.1:
+                alpha_psn = alpha
+                break
         
-    print(
-        'Alpha Max Test ACC:', alpha_max_test_acc,
-        'Apha Min Test Loss:', alpha_min_test_loss,
-        'Alpha Forget Threshold:', alpha_forgetting_thrsh
-        )
-    mix_vector = TaskVector(pt_weights, mix_weights)
-    noise_vector = task_vectors['Average'] * alpha_forgetting_thrsh * -1 # alpha is negative
-    clean_vector = mix_vector - noise_vector
-    
-    # model.load_state_dict(pt_weights, strict=False)
-    # clean_vector.apply_to(model, scaling_coef=1.0, strict=False)
-    # tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-    # print(tv_test_results)
-    # tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
-    # print(tv_train_results)
-    
-    # model.load_state_dict(pt_weights, strict=False)
-    # noise_vector.apply_to(model, scaling_coef=1.0, strict=False)
-    # tv_hot_results, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
-    # print(tv_hot_results)
-    # tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-    # print(tv_test_results)
-    # tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
-    # print(tv_train_results)
-    
-    # exit()
-    
-    model.load_state_dict(pt_weights, strict=False)
-    wd_results = apply_WD_analysis(
-        model=model,
-        taskvector1=clean_vector,
-        support_tv1=clean_subset,
-        taskvector2=noise_vector,
-        support_tv2=noisy_subset,
-        alhpa_range=(-3.0, 3.0),
-        step=0.3,
-        batch_size=512,
-        device=gpu
-    )
-    with open(results_dir / "WD.pkl", "wb") as f:
-        pickle.dump(wd_results, f)
-    
+        results_dict['alpha_psn'] = alpha_psn
+        with open(results_dir / 'metrics.json' , 'w') as json_file:
+            json.dump(results_dict, json_file, indent=4)
+ 
+    if 'Random Vector' not in results_dict:
+        model.load_state_dict(mix_weights, strict=False)
+        alpha_psn = results_dict['alpha_psn']
+        task_vectors['Random Vector'].apply_to(model, scaling_coef=alpha_psn, strict=False)
+        random_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+        random_ho_resutls, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
+        random_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+        results_dict['Random Vector'] = {'test_results': random_test_results, 'ho_results':random_ho_resutls, 'train_results': random_train_results}
+        with open(results_dir / 'metrics.json' , 'w') as json_file:
+            json.dump(results_dict, json_file, indent=4)
 
 from torch.distributed.elastic.multiprocessing.errors import record
 
