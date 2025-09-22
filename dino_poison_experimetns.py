@@ -278,7 +278,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         dir.mkdir(exist_ok=True, parents=True)
     
     
-    dataset_cfg = cfg['datasets'][0]
+    dataset_cfg = cfg['dataset']
     dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
     
 
