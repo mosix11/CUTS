@@ -261,8 +261,6 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     cpu = trainer_utils.get_cpu_device()
     gpu = trainer_utils.get_gpu_device()
     
-    print('-----------------------------------', gpu)
-    print('-----------------------------------', cpu)
     outputs_dir = outputs_dir / cfg_name
     
     results_dir = results_dir / cfg_name
@@ -277,8 +275,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     results_dirs['metrics'] = results_dir / 'metrics'
     for dir in results_dirs.values():
         dir.mkdir(exist_ok=True, parents=True)
-    
-    print('-----------------------------------11111')
+
     model = model_factory.create_model(cfg['model'])
     pt_weights = copy.deepcopy(model.state_dict())
     
@@ -286,11 +283,11 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     dataset_cfg['train_transforms'] = model.get_val_transforms()
     dataset_cfg['val_transforms'] = model.get_val_transforms()
     dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
-    print('-----------------------------------2222')
+
     dataset.reset_train_dl(shuffle=False)
     
     dataset_clean = copy.deepcopy(dataset)
-    print('-----------------------------------3333')
+
     strategy = cfg['strategy']
     dataset.inject_poison(**strategy['poison']['pretraining'])
     
@@ -298,7 +295,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     poison_tv_cfg['set'] = 'Heldout'
     dataset.inject_poison(**poison_tv_cfg)
 
-    print('-----------------------------------4444')
+
 
     # Load weights while removing classifier weights from the state dict
     mix_weights = torch.load(
@@ -315,7 +312,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         map_location='cpu'
     )
     
-    print('-----------------------------------55555')
+
     # ft_gradient_ascent_weights = OrderedDict(
     # (k, v) for k, v in torch.load(
     #     outputs_dir.joinpath(f"gradient_ascent/weights/ft_weights.pth"),
@@ -333,7 +330,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         poison_weights[f"{poison_tv['rate']*100:.0f}% Noise, {poison_tv['seed']} Seed"] = n_weights
         
     
-    print('-----------------------------------66666')
+
     task_vectors = OrderedDict()
     for task_name, finetuend_weights in poison_weights.items():
         task_vectors[task_name] = TaskVector(mix_weights, finetuend_weights)
@@ -349,8 +346,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     task_vectors['Random Vector'] = task_vectors['Average'].generate_random_vector_with_same_layer_norms(seed=11)
 
-    
-    print('-----------------------------------7777')
+
     
     ft_tvs_list = list(task_vectors.values())
     tv_names = list(task_vectors.keys())
@@ -364,7 +360,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             cos_sim = anchor_tv.cosine_similarity_flatten(other_tv)
             task_sim[i].append(cos_sim)
     task_sim = np.array(task_sim)
-    print('-----------------------------------8888')
+
     misc_utils.plot_confusion_matrix(
         title='Task Vector Similarity Matrix',
         cm=task_sim,
@@ -379,243 +375,66 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         filepath=results_dir / 'task_similarities.png',
         show=False
     )
-
-
     
-    # model.load_state_dict(mix_weights, strict=False)
-    # fig_comp_pt = embedding_space_analysis.all_plot_comp(
-    #     feature_extractor=model.get_image_encoder(),
-    #     dataloader=dataset_clean.get_train_dataloader(),
-    #     device=gpu,
-    #     class_names=dataset.get_class_names(),
-    # )
-    
-    # fig_comp_pt.savefig(results_dirs['embed_plots'] / "comp_pt.png", bbox_inches="tight")
-    
-    
-    # task_vectors['Average'].apply_to(model, scaling_coef=-1.0, strict=False)
-    # fig_comp_AVG_1 = embedding_space_analysis.all_plot_comp(
-    #     feature_extractor=model.get_image_encoder(),
-    #     dataloader=dataset_clean.get_train_dataloader(),
-    #     device=gpu,
-    #     class_names=dataset.get_class_names(),
-    # )
-    
-    # fig_comp_AVG_1.savefig(results_dirs['embed_plots'] / "comp_avg_tv.png", bbox_inches="tight")
-    
-    
-    # model.load_state_dict(gold_weights, strict=False)
-    # fig_comp_gold = embedding_space_analysis.all_plot_comp(
-    #     feature_extractor=model.get_image_encoder(),
-    #     dataloader=dataset_clean.get_train_dataloader(),
-    #     device=gpu,
-    #     class_names=dataset.get_class_names(),
-    # )
-    
-    # fig_comp_gold.savefig(results_dirs['embed_plots'] / "comp_gold.png", bbox_inches="tight")
-    
-    # model.load_state_dict(mix_weights, strict=False)
-    # fig_umap_pt = embedding_space_analysis.umap_plot(
-    #     feature_extractor=model.get_image_encoder(),
-    #     dataloader=dataset_clean.get_train_dataloader(),
-    #     device=gpu,
-    #     class_names=dataset.get_class_names(),
-    #     n_neighbors=5,
-    #     min_dist=1.0
-    # )
-    
-    # fig_umap_pt.savefig(results_dirs['embed_plots'] / "umap_pt.png", bbox_inches="tight")
-    
-    # task_vectors['Average'].apply_to(model, scaling_coef=-1.0, strict=False)
-    # fig_umap_AVG_1 = embedding_space_analysis.umap_plot(
-    #     feature_extractor=model.get_image_encoder(),
-    #     dataloader=dataset_clean.get_train_dataloader(),
-    #     device=gpu,
-    #     class_names=dataset.get_class_names(),
-    #     n_neighbors=5,
-    #     min_dist=1.0
-    # )
-    
-    # fig_umap_AVG_1.savefig(results_dirs['embed_plots'] / "umap_avg_tv.png", bbox_inches="tight")
-    
-    
-    # model.load_state_dict(gold_weights, strict=False)
-    # fig_umap_gold = embedding_space_analysis.umap_plot(
-    #     feature_extractor=model.get_image_encoder(),
-    #     dataloader=dataset_clean.get_train_dataloader(),
-    #     device=gpu,
-    #     class_names=dataset.get_class_names(),
-    #     n_neighbors=5,
-    #     min_dist=1.0
-    # )
-    
-    # fig_umap_gold.savefig(results_dirs['embed_plots'] / "umap_gold.png", bbox_inches="tight")
-    
-    
-    # model.load_state_dict(mix_weights, strict=False)
-    # fig_tsne_pt = embedding_space_analysis.tsne_plot(
-    #     feature_extractor=model.get_image_encoder(),
-    #     dataloader=dataset_clean.get_train_dataloader(),
-    #     device=gpu,
-    #     class_names=dataset.get_class_names(),
-    # )
-    
-    # fig_tsne_pt.savefig(results_dirs['embed_plots'] / "tsne_pt.png", bbox_inches="tight")
-    
-    # task_vectors['Average'].apply_to(model, scaling_coef=-1.0, strict=False)
-    # fig_tsne_AVG_1 = embedding_space_analysis.tsne_plot(
-    #     feature_extractor=model.get_image_encoder(),
-    #     dataloader=dataset_clean.get_train_dataloader(),
-    #     device=gpu,
-    #     class_names=dataset.get_class_names(),
-    # )
-    
-    # fig_tsne_AVG_1.savefig(results_dirs['embed_plots'] / "tsne_avg_tv.png", bbox_inches="tight")
-    
-    
-    # model.load_state_dict(gold_weights, strict=False)
-    # fig_tsne_gold = embedding_space_analysis.tsne_plot(
-    #     feature_extractor=model.get_image_encoder(),
-    #     dataloader=dataset_clean.get_train_dataloader(),
-    #     device=gpu,
-    #     class_names=dataset.get_class_names(),
-    # )
-    
-    # fig_tsne_gold.savefig(results_dirs['embed_plots'] / "tsne_gold.png", bbox_inches="tight")
-    
-    
-    # model.load_state_dict(mix_weights, strict=False)
-    # fig_pca_pt = embedding_space_analysis.pca_plot(
-    #     feature_extractor=model.get_image_encoder(),
-    #     dataloader=dataset_clean.get_train_dataloader(),
-    #     device=gpu,
-    #     class_names=dataset.get_class_names()
-    # )
-    
-    # fig_pca_pt.savefig(results_dirs['embed_plots'] / "pca_pt.png", bbox_inches="tight")
-    
-    # task_vectors['Average'].apply_to(model, scaling_coef=-1.0, strict=False)
-    # fig_pca_AVG_1 = embedding_space_analysis.pca_plot(
-    #     feature_extractor=model.get_image_encoder(),
-    #     dataloader=dataset_clean.get_train_dataloader(),
-    #     device=gpu,
-    #     class_names=dataset.get_class_names()
-    # )
-    
-    # fig_pca_AVG_1.savefig(results_dirs['embed_plots'] / "pca_avg_tv.png", bbox_inches="tight")
-    
-    
-    # def fig_to_rgb(fig):
-    #     """Return an (H, W, 3) uint8 array from a Matplotlib Figure for any backend."""
-    #     fig.canvas.draw()
-    #     w, h = fig.canvas.get_width_height()
-
-    #     # Try backends that support RGB directly (Agg, etc.)
-    #     try:
-    #         buf = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
-    #         return buf.reshape(h, w, 3)
-    #     except AttributeError:
-    #         # TkAgg gives ARGB; convert to RGB
-    #         buf = np.frombuffer(fig.canvas.tostring_argb(), dtype=np.uint8).reshape(h, w, 4)
-    #         # ARGB -> RGB by dropping alpha and reordering
-    #         return buf[:, :, 1:4]
-    
-    # def combine_figures(figs, ncols=3, nrows=2, figsize=(15, 10)):
-    #     fig, axes = plt.subplots(nrows, ncols, figsize=figsize)
-    #     for ax, f in zip(axes.flat, figs):
-    #         img = fig_to_rgb(f)
-    #         ax.imshow(img)
-    #         ax.axis("off")
-    #     for ax in axes.flat[len(figs):]:
-    #         ax.axis("off")
-    #     plt.tight_layout()
-    #     return fig
-
-    # def make_gif(figs, out_path="progress.gif", duration=0.8):
-    #     frames = [fig_to_rgb(f) for f in figs]
-    #     # Per-frame durations in seconds
-    #     with imageio.get_writer(out_path, mode="I", loop=0, duration=duration) as w:
-    #         for fr in frames:
-    #             w.append_data(fr)
-            
-    # figs_pca = []
-    # for alpha in np.round(np.linspace(0.0, -2.0, 9), 1):
-    #     model.load_state_dict(mix_weights, strict=False)
-    #     if alpha != 0.0:
-    #         task_vectors['Average'].apply_to(model, scaling_coef=alpha, strict=False)
-    #     fig_pca = embedding_space_analysis.pca_plot(
-    #         feature_extractor=model.get_image_encoder(),
-    #         dataloader=dataset_clean.get_train_dataloader(),
-    #         device=gpu,
-    #         class_names=dataset_clean.get_class_names(),
-    #         dataset_name=dataset_clean.dataset_name
-    #     )
-    #     figs_pca.append(fig_pca)
-        
-    # big_fig = combine_figures(figs_pca, ncols=3, nrows=3)
-    # big_fig.savefig(results_dirs['embed_plots'] / "pca_evol.png", bbox_inches="tight")
-    
-    # make_gif(figs_pca, results_dirs['embed_plots'] / "pca_evol.gif", duration=5.0)
-    # exit()
-    
-    # model.load_state_dict(gold_weights, strict=False)
-    # fig_pca_gold = embedding_space_analysis.pca_plot(
-    #     feature_extractor=model.get_image_encoder(),
-    #     dataloader=dataset_clean.get_train_dataloader(),
-    #     device=gpu,
-    #     class_names=dataset.get_class_names(),
-    #     dataset_name=dataset_clean.dataset_name
-    # )
-    
-    # fig_pca_gold.savefig(results_dirs['embed_plots'] / "pca_gold.png", bbox_inches="tight")
-
-    
-    # exit()
-    print('**************************1111')
-    print('**************************1111', gpu)
     results_dict = OrderedDict()
-    if not results_dir.joinpath('metrics.json').exists():
-    
-        print('**************************2222')
+    with open(results_dir / "metrics.json", "r") as json_file:
+        results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
+
+    for alpha in tqdm(np.round(np.linspace(-1.55, -3.0, 30), 2)):
+
         model.load_state_dict(mix_weights, strict=False)
-        mix_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-        mix_ho_results, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
-        mix_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
-        print('**************************3333')
-        model.load_state_dict(gold_weights, strict=False)
-        gold_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-        gold_ho_results, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
-        gold_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
-        print('**************************4444')
-        model.load_state_dict(ft_ho_clean_weights, strict=False)
-        ft_ho_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-        ft_ho_ho_results, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
-        ft_ho_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+        task_vectors['Average'].apply_to(model, scaling_coef=alpha, strict=False)
+        tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+        tv_ho_resutls, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
+        tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+
+        results_dict[alpha] = {'test_results': tv_test_results, 'ho_results': tv_ho_resutls, 'train_results': tv_train_results}
+    
+    with open(results_dir / 'metrics.json' , 'w') as json_file:
+        json.dump(results_dict, json_file, indent=4)
+
+    exit()        
+
+
+    # results_dict = OrderedDict()
+    # if not results_dir.joinpath('metrics.json').exists():
+
+    #     model.load_state_dict(mix_weights, strict=False)
+    #     mix_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+    #     mix_ho_results, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
+    #     mix_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+
+    #     model.load_state_dict(gold_weights, strict=False)
+    #     gold_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+    #     gold_ho_results, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
+    #     gold_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+
+    #     model.load_state_dict(ft_ho_clean_weights, strict=False)
+    #     ft_ho_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+    #     ft_ho_ho_results, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
+    #     ft_ho_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+
+    #     results_dict['Mix'] = {'test_results': mix_test_results, 'ho_results': mix_ho_results, 'train_results': mix_train_results}
+    #     results_dict['Gold'] = {'test_results': gold_test_results, 'ho_results': gold_ho_results, 'train_results': gold_train_results}
+    #     results_dict['FT HO Clean'] = {'test_results': ft_ho_test_results, 'ho_results': ft_ho_ho_results, 'train_results': ft_ho_train_results}
+
+    #     for alpha in tqdm(np.round(np.linspace(-0.05, -1.5, 30), 2)):
+
+    #         model.load_state_dict(mix_weights, strict=False)
+    #         task_vectors['Average'].apply_to(model, scaling_coef=alpha, strict=False)
+    #         tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+    #         tv_ho_resutls, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
+    #         tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+
+    #         results_dict[alpha] = {'test_results': tv_test_results, 'ho_results': tv_ho_resutls, 'train_results': tv_train_results}
         
-        print('**************************5555')
-        results_dict['Mix'] = {'test_results': mix_test_results, 'ho_results': mix_ho_results, 'train_results': mix_train_results}
-        results_dict['Gold'] = {'test_results': gold_test_results, 'ho_results': gold_ho_results, 'train_results': gold_train_results}
-        results_dict['FT HO Clean'] = {'test_results': ft_ho_test_results, 'ho_results': ft_ho_ho_results, 'train_results': ft_ho_train_results}
+    #     with open(results_dir / 'metrics.json' , 'w') as json_file:
+    #         json.dump(results_dict, json_file, indent=4)
 
-        print('**************************6666')
-        for alpha in tqdm(np.round(np.linspace(-0.05, -1.5, 30), 2)):
-            print('**************************', alpha)
-            model.load_state_dict(mix_weights, strict=False)
-            task_vectors['Average'].apply_to(model, scaling_coef=alpha, strict=False)
-            tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-            tv_ho_resutls, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
-            tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+    # else:
+    #     with open(results_dir / "metrics.json", "r") as json_file:
+    #         results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
 
-            results_dict[alpha] = {'test_results': tv_test_results, 'ho_results': tv_ho_resutls, 'train_results': tv_train_results}
-        
-        with open(results_dir / 'metrics.json' , 'w') as json_file:
-            json.dump(results_dict, json_file, indent=4)
-
-    else:
-        with open(results_dir / "metrics.json", "r") as json_file:
-            results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
-            
-    print('**************************8888')
     if 'alpha_psn' not in results_dict:
         alphas = np.round(np.linspace(-0.05, -1.5, 30), 2)
         alpha_psn = 0.0

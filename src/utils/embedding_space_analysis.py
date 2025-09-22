@@ -8,6 +8,13 @@ from tqdm import tqdm
 import torchdr
 from typing import List
 import datamapplot
+from src.datasets import BaseClassificationDataset
+from src.models import TaskVector
+from typing import Dict, Any, Optional, Tuple, List
+
+from pathlib import Path
+import imageio.v2 as imageio
+import pickle
 
 def prepare_batch(batch, device):
     return [t.to(device, non_blocking=True) for t in batch]
@@ -272,6 +279,100 @@ def all_plot_comp(
     return fig
 
 
+
+
+def pca_evolution_plot(
+    model: nn.Module,
+    base_weights: Dict,
+    gold_weights: Dict,
+    task_vector: TaskVector,
+    dataset: BaseClassificationDataset,
+    split: str, 
+    alpha_range: List[float],
+    device: torch.device,
+    saving_dir: Path,
+):
+    
+    def fig_to_rgb(fig):
+        """Return an (H, W, 3) uint8 array from a Matplotlib Figure for any backend."""
+        fig.canvas.draw()
+        w, h = fig.canvas.get_width_height()
+
+        # Try backends that support RGB directly (Agg, etc.)
+        try:
+            buf = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
+            return buf.reshape(h, w, 3)
+        except AttributeError:
+            # TkAgg gives ARGB; convert to RGB
+            buf = np.frombuffer(fig.canvas.tostring_argb(), dtype=np.uint8).reshape(h, w, 4)
+            # ARGB -> RGB by dropping alpha and reordering
+            return buf[:, :, 1:4]
+    
+    def combine_figures(figs, ncols=3, nrows=2, figsize=(15, 10)):
+        fig, axes = plt.subplots(nrows, ncols, figsize=figsize)
+        for ax, f in zip(axes.flat, figs):
+            img = fig_to_rgb(f)
+            ax.imshow(img)
+            ax.axis("off")
+        for ax in axes.flat[len(figs):]:
+            ax.axis("off")
+        plt.tight_layout()
+        return fig
+
+    def make_gif(figs, out_path="progress.gif", duration=0.8):
+        frames = [fig_to_rgb(f) for f in figs]
+        # Per-frame durations in seconds
+        with imageio.get_writer(out_path, mode="I", loop=0, duration=duration) as w:
+            for fr in frames:
+                w.append_data(fr)
+    
+    
+    dataloader = None
+    if split == 'Test':
+        dataloader = dataset.get_test_dataloader()
+    elif split == 'Train':
+        dataloader = dataset.get_train_dataloader()
+    elif split == 'Heldout':
+        dataloader = dataset.get_heldout_dataloader()
+    else: raise ValueError(f'Invalid dataset split {split}')
+    
+    figs_alpha = []
+    for alpha in alpha_range:
+        model.load_state_dict(base_weights, strict=False)
+        if alpha != 0.0:
+            task_vector.apply_to(model, scaling_coef=alpha, strict=False)
+        fig_pca = pca_plot(
+            feature_extractor=model.get_image_encoder(),
+            dataloader=dataset.get_test_dataloader(),
+            class_names=dataset.get_class_names(),
+            dataset_name=dataset.dataset_name,
+            device=device,
+        )
+        
+        figs_alpha.append(fig_pca)
+    
+    with open(saving_dir / "pca_alpha_figs.pkl", "wb") as f:
+        pickle.dump(figs_alpha, f)
+    
+    model.load_state_dict(gold_weights, strict=False)
+    fig_gold = pca_plot(
+        feature_extractor=model.get_image_encoder(),
+        dataloader=dataloader,
+        class_names=dataset.get_class_names(),
+        dataset_name=dataset.dataset_name,
+        device=device,
+    )
+    
+    with open(saving_dir / "pca_gold_fig.pkl", "wb") as f:
+        pickle.dump(figs_alpha, f)
+    
+    # big_fig.savefig(results_dirs['embed_plots'] / "pca_evol_test.png", bbox_inches="tight")
+    
+    # make_gif(figs_pca, results_dirs['embed_plots'] / "pca_evol_test.gif", duration=5.0)
+    
+    # fig_pca_gold.savefig(results_dirs['embed_plots'] / "pca_gold.png", bbox_inches="tight")
+
+    return figs_alpha, fig_gold
 
 def get_color_mappings(dataset_name:str):
     
