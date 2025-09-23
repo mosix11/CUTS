@@ -389,187 +389,6 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     #     show=False
     # )
 
-
-    
-    
-    # task_vectors['Average'].apply_to(model, scaling_coef=-1.0, strict=False)
-    # fig_comp_AVG_1 = embedding_space_analysis.all_plot_comp(
-    #     feature_extractor=model.get_image_encoder(),
-    #     dataloader=dataset_clean.get_train_dataloader(),
-    #     device=gpu,
-    #     class_names=dataset.get_class_names(),
-    # )
-    
-    # fig_comp_AVG_1.savefig(results_dirs['embed_plots'] / "comp_avg_tv.png", bbox_inches="tight")
-    
-    
-    # model.load_state_dict(gold_weights, strict=False)
-    # fig_comp_gold = embedding_space_analysis.all_plot_comp(
-    #     feature_extractor=model.get_image_encoder(),
-    #     dataloader=dataset_clean.get_train_dataloader(),
-    #     device=gpu,
-    #     class_names=dataset.get_class_names(),
-    # )
-    
-    # fig_comp_gold.savefig(results_dirs['embed_plots'] / "comp_gold.png", bbox_inches="tight")
-    
-    # model.load_state_dict(mix_weights, strict=False)
-    # fig_umap_pt = embedding_space_analysis.umap_plot(
-    #     feature_extractor=model.get_image_encoder(),
-    #     dataloader=dataset_clean.get_train_dataloader(),
-    #     device=gpu,
-    #     class_names=dataset.get_class_names(),
-    #     n_neighbors=5,
-    #     min_dist=1.0
-    # )
-    
-    # fig_umap_pt.savefig(results_dirs['embed_plots'] / "umap_pt.png", bbox_inches="tight")
-    
-    # task_vectors['Average'].apply_to(model, scaling_coef=-1.0, strict=False)
-    # fig_umap_AVG_1 = embedding_space_analysis.umap_plot(
-    #     feature_extractor=model.get_image_encoder(),
-    #     dataloader=dataset_clean.get_train_dataloader(),
-    #     device=gpu,
-    #     class_names=dataset.get_class_names(),
-    #     n_neighbors=5,
-    #     min_dist=1.0
-    # )
-    
-    # fig_umap_AVG_1.savefig(results_dirs['embed_plots'] / "umap_avg_tv.png", bbox_inches="tight")
-    
-    
-    # model.load_state_dict(gold_weights, strict=False)
-    # fig_umap_gold = embedding_space_analysis.umap_plot(
-    #     feature_extractor=model.get_image_encoder(),
-    #     dataloader=dataset_clean.get_train_dataloader(),
-    #     device=gpu,
-    #     class_names=dataset.get_class_names(),
-    #     n_neighbors=5,
-    #     min_dist=1.0
-    # )
-    
-    # fig_umap_gold.savefig(results_dirs['embed_plots'] / "umap_gold.png", bbox_inches="tight")
-    
-    
-    # model.load_state_dict(mix_weights, strict=False)
-    # fig_tsne_pt = embedding_space_analysis.tsne_plot(
-    #     feature_extractor=model.get_image_encoder(),
-    #     dataloader=dataset_clean.get_train_dataloader(),
-    #     device=gpu,
-    #     class_names=dataset.get_class_names(),
-    # )
-    
-    # fig_tsne_pt.savefig(results_dirs['embed_plots'] / "tsne_pt.png", bbox_inches="tight")
-    
-    # task_vectors['Average'].apply_to(model, scaling_coef=-1.0, strict=False)
-    # fig_tsne_AVG_1 = embedding_space_analysis.tsne_plot(
-    #     feature_extractor=model.get_image_encoder(),
-    #     dataloader=dataset_clean.get_train_dataloader(),
-    #     device=gpu,
-    #     class_names=dataset.get_class_names(),
-    # )
-    
-    # fig_tsne_AVG_1.savefig(results_dirs['embed_plots'] / "tsne_avg_tv.png", bbox_inches="tight")
-    
-    
-    # model.load_state_dict(gold_weights, strict=False)
-    # fig_tsne_gold = embedding_space_analysis.tsne_plot(
-    #     feature_extractor=model.get_image_encoder(),
-    #     dataloader=dataset_clean.get_train_dataloader(),
-    #     device=gpu,
-    #     class_names=dataset.get_class_names(),
-    # )
-    
-    # fig_tsne_gold.savefig(results_dirs['embed_plots'] / "tsne_gold.png", bbox_inches="tight")
-    
-    
-    # model.load_state_dict(mix_weights, strict=False)
-    # fig_pca_pt = embedding_space_analysis.pca_plot(
-    #     feature_extractor=model.get_image_encoder(),
-    #     dataloader=dataset_clean.get_train_dataloader(),
-    #     device=gpu,
-    #     class_names=dataset.get_class_names()
-    # )
-    
-    # fig_pca_pt.savefig(results_dirs['embed_plots'] / "pca_pt.png", bbox_inches="tight")
-    
-    # task_vectors['Average'].apply_to(model, scaling_coef=-1.0, strict=False)
-    # fig_pca_AVG_1 = embedding_space_analysis.pca_plot(
-    #     feature_extractor=model.get_image_encoder(),
-    #     dataloader=dataset_clean.get_train_dataloader(),
-    #     device=gpu,
-    #     class_names=dataset.get_class_names()
-    # )
-    
-    # fig_pca_AVG_1.savefig(results_dirs['embed_plots'] / "pca_avg_tv.png", bbox_inches="tight")
-    
-    
-    # def fig_to_rgb(fig):
-    #     """Return an (H, W, 3) uint8 array from a Matplotlib Figure for any backend."""
-    #     fig.canvas.draw()
-    #     w, h = fig.canvas.get_width_height()
-
-    #     # Try backends that support RGB directly (Agg, etc.)
-    #     try:
-    #         buf = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
-    #         return buf.reshape(h, w, 3)
-    #     except AttributeError:
-    #         # TkAgg gives ARGB; convert to RGB
-    #         buf = np.frombuffer(fig.canvas.tostring_argb(), dtype=np.uint8).reshape(h, w, 4)
-    #         # ARGB -> RGB by dropping alpha and reordering
-    #         return buf[:, :, 1:4]
-    
-    # def combine_figures(figs, ncols=3, nrows=2, figsize=(15, 10)):
-    #     fig, axes = plt.subplots(nrows, ncols, figsize=figsize)
-    #     for ax, f in zip(axes.flat, figs):
-    #         img = fig_to_rgb(f)
-    #         ax.imshow(img)
-    #         ax.axis("off")
-    #     for ax in axes.flat[len(figs):]:
-    #         ax.axis("off")
-    #     plt.tight_layout()
-    #     return fig
-
-    # def make_gif(figs, out_path="progress.gif", duration=0.8):
-    #     frames = [fig_to_rgb(f) for f in figs]
-    #     # Per-frame durations in seconds
-    #     with imageio.get_writer(out_path, mode="I", loop=0, duration=duration) as w:
-    #         for fr in frames:
-    #             w.append_data(fr)
-            
-    # figs_pca = []
-    # for alpha in np.round(np.linspace(0.0, -2.0, 9), 1):
-    #     model.load_state_dict(mix_weights, strict=False)
-    #     if alpha != 0.0:
-    #         task_vectors['Average'].apply_to(model, scaling_coef=alpha, strict=False)
-    #     fig_pca = embedding_space_analysis.pca_plot(
-    #         feature_extractor=model.get_image_encoder(),
-    #         dataloader=dataset_clean.get_train_dataloader(),
-    #         device=gpu,
-    #         class_names=dataset_clean.get_class_names(),
-    #         dataset_name=dataset_clean.dataset_name
-    #     )
-    #     figs_pca.append(fig_pca)
-        
-    # big_fig = combine_figures(figs_pca, ncols=3, nrows=3)
-    # big_fig.savefig(results_dirs['embed_plots'] / "pca_evol.png", bbox_inches="tight")
-    
-    # make_gif(figs_pca, results_dirs['embed_plots'] / "pca_evol.gif", duration=5.0)
-    # exit()
-    
-    # model.load_state_dict(gold_weights, strict=False)
-    # fig_pca_gold = embedding_space_analysis.pca_plot(
-    #     feature_extractor=model.get_image_encoder(),
-    #     dataloader=dataset_clean.get_train_dataloader(),
-    #     device=gpu,
-    #     class_names=dataset.get_class_names(),
-    #     dataset_name=dataset_clean.dataset_name
-    # )
-    
-    # fig_pca_gold.savefig(results_dirs['embed_plots'] / "pca_gold.png", bbox_inches="tight")
-
-    
-    # exit()
     
     results_dict = OrderedDict()
     if not results_dir.joinpath('metrics.json').exists():
@@ -645,6 +464,19 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         with open(results_dir / 'metrics.json' , 'w') as json_file:
             json.dump(results_dict, json_file, indent=4)
     
+    
+    
+    figs_alpha, fig_gold = embedding_space_analysis.pca_evolution_plot(
+        model=model,
+        base_weights=mix_weights,
+        gold_weights=gold_weights,
+        dataset=dataset,
+        task_vector=task_vectors['Average'],
+        split='Heldout',
+        alpha_range=np.round(np.linspace(0.0, results_dict['alpha_IC'], 4) / 0.05) * 0.05,
+        device=gpu,
+        saving_dir=results_dirs['embed_plots']
+    )
     # print(results_dict)
     
     # with open(results_dir / 'tv_metrics.json' , 'w') as json_file:
