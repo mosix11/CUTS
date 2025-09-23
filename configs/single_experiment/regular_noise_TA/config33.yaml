@@ -22,7 +22,7 @@ dataset:
   num_classes: &num_classes 100
   img_size: [224, 224]
   batch_size: 256
-  heldout_conf: 0.1
+  heldout_conf: 0.02
   grayscale: False
   normalize_imgs: True
   valset_ratio: 0.0

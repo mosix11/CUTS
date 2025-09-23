@@ -25,7 +25,7 @@ dataset:
   num_classes: &num_classes 10
   img_size: [28, 28]
   batch_size: 1024
-  heldout_conf: 0.1
+  heldout_conf: 0.02
   normalize_imgs: True
   flatten: True
   valset_ratio: 0.0
