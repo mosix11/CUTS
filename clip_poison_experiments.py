@@ -243,7 +243,7 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
             # Exclude clean samples from target class
             poison_tv['set'] = 'Heldout'
             dataset.inject_poison(**poison_tv)
-            clean_ho_ds, poinsoned_ho_ds = base_dataset.get_clean_noisy_subsets('Heldout')
+            clean_ho_ds, poinsoned_ho_ds = dataset.get_clean_noisy_subsets('Heldout')
             dataset.set_trainset(poinsoned_ho_ds, shuffle=True)
             
                 
@@ -446,13 +446,18 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             
             
     if 'alpha_psn' not in results_dict:
+        forget_rate_thrsh = {
+            'MNIST': 0.1,
+            'CIFAR10': 0.1,
+            'CIFAR100': 0.01
+        }
         alphas = np.round(np.linspace(-0.05, -1.5, 30), 2)
         alpha_psn = 0.0
         for alpha in alphas:
             metrics = results_dict.get(alpha, None)
             if not metrics: metrics = results_dict.get(str(alpha), None)
             if not metrics: print('alpha not found', alpha)
-            if round(metrics['ho_results']['ACC'], 2) <= 0.1:
+            if round(metrics['ho_results']['ACC'], 2) <= forget_rate_thrsh[dataset.dataset_name]:
                 alpha_psn = alpha
                 break
         

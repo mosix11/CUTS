@@ -773,8 +773,8 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             
             
     if 'alpha_KNN' not in results_dict:        
-        from test_alpha import select_alpha_star, plot_alpha_metrics
-        best, records, alpha_best = select_alpha_star(
+        from estimate_alpha import select_alpha_by_knn_self_agreement
+        alpha_kNN = select_alpha_by_knn_self_agreement(
             model=model,
             feature_extractor=model.get_feature_extractor(),
             classifier=model.get_active_head(),
@@ -785,11 +785,8 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             alphas=np.round(np.linspace(-0.05, -3.0, 60), 2),
             device=gpu
         )
-        alpha_kNN = alpha_best['alpha_kNN']
-        alpha_s4 = alpha_best['alpha_S4']
 
         results_dict['alpha_KNN'] = alpha_kNN
-        results_dict['alpha_s4'] = alpha_s4
         with open(results_dir / 'metrics.json' , 'w') as json_file:
             json.dump(results_dict, json_file, indent=4)
 

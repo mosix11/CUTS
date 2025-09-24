@@ -45,52 +45,6 @@ from WD_analysis import apply_WD_analysis
 
 
 
-
-def show_poisoned_samples(dataset, n=9, unnormalize=False):
-    """
-    Show `n` poisoned samples from a DatasetWithIndex-wrapped dataset.
-    dataset: your ds.get_trainset() or similar
-    unnormalize: if True, try to undo CIFAR-10 normalization for visualization
-    """
-
-    # Collect poisoned samples
-    poisoned_imgs = []
-    poisoned_labels = []
-    for idx in range(len(dataset)):
-        x, y, *_rest = dataset[idx]
-        # last element in your tuple is is_poison flag
-        is_poison = _rest[-1].item() if torch.is_tensor(_rest[-1]) else bool(_rest[-1])
-        if is_poison:
-            poisoned_imgs.append(x)
-            poisoned_labels.append(y)
-            if len(poisoned_imgs) >= n:
-                break
-
-    if not poisoned_imgs:
-        print("No poisoned samples found!")
-        return
-
-    # CIFAR-10 normalization parameters
-    cifar_mean = torch.tensor([0.4914, 0.4822, 0.4465]).view(3,1,1)
-    cifar_std  = torch.tensor([0.2023, 0.1994, 0.2010]).view(3,1,1)
-
-    # Plot grid
-    fig, axes = plt.subplots(3, 3, figsize=(8,8))
-    for ax, img, label in zip(axes.flat, poisoned_imgs, poisoned_labels):
-        if unnormalize:
-            img = img * cifar_std + cifar_mean
-            
-        print(type(img))
-        img = img.clamp(0,1)
-        if img.shape[0] == 1:  # grayscale
-            ax.imshow(img.squeeze(0).cpu(), cmap="gray")
-        else:
-            ax.imshow(img.permute(1,2,0).cpu())
-        ax.set_title(f"Label={label}", fontsize=10)
-        ax.axis("off")
-
-    plt.tight_layout()
-    plt.show()
     
     
 def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
@@ -307,10 +261,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         map_location='cpu'
     )
     
-    ft_ho_clean_weights = torch.load(
-        outputs_dir.joinpath(f"finetune_clean/weights/ft_weights.pth"),
-        map_location='cpu'
-    )
+
     
 
     # ft_gradient_ascent_weights = OrderedDict(
@@ -342,7 +293,6 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         task_vectors['Average'] = TaskVector.mean(task_vectors)
         
 
-    task_vectors['Clean'] = TaskVector(mix_weights, ft_ho_clean_weights)
     
     task_vectors['Random Vector'] = task_vectors['Average'].generate_random_vector_with_same_layer_norms(seed=11)
 
@@ -390,16 +340,11 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         gold_ho_results, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
         gold_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
 
-        model.load_state_dict(ft_ho_clean_weights, strict=False)
-        ft_ho_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-        ft_ho_ho_results, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
-        ft_ho_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
-
         results_dict['Mix'] = {'test_results': mix_test_results, 'ho_results': mix_ho_results, 'train_results': mix_train_results}
         results_dict['Gold'] = {'test_results': gold_test_results, 'ho_results': gold_ho_results, 'train_results': gold_train_results}
-        results_dict['FT HO Clean'] = {'test_results': ft_ho_test_results, 'ho_results': ft_ho_ho_results, 'train_results': ft_ho_train_results}
 
-        for alpha in tqdm(np.round(np.linspace(-0.05, -1.5, 30), 2)):
+
+        for alpha in tqdm(np.round(np.linspace(-0.05, -3.0, 60), 2)):
 
             model.load_state_dict(mix_weights, strict=False)
             task_vectors['Average'].apply_to(model, scaling_coef=alpha, strict=False)
@@ -417,13 +362,18 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
 
     if 'alpha_psn' not in results_dict:
-        alphas = np.round(np.linspace(-0.05, -1.5, 30), 2)
+        forget_rate_thrsh = {
+            'MNIST': 0.01,
+            'CIFAR10': 0.01,
+            'CIFAR100': 0.01
+        }
+        alphas = np.round(np.linspace(-0.05, -3.0, 60), 2)
         alpha_psn = 0.0
         for alpha in alphas:
             metrics = results_dict.get(alpha, None)
             if not metrics: metrics = results_dict.get(str(alpha), None)
             if not metrics: print('alpha not found', alpha)
-            if round(metrics['ho_results']['ACC'], 2) <= 0.1:
+            if round(metrics['ho_results']['ACC'], 2) <= forget_rate_thrsh[dataset.dataset_name]:
                 alpha_psn = alpha
                 break
         

@@ -42,93 +42,7 @@ from src.utils import embedding_space_analysis
 from helper_funcs import evaluate_model, eval_model_on_clean_noise_splits, search_optimal_coefficient, get_confusion_matrix, row_normalize
 from src.utils import weight_norm_analysis
 
-def eval_model_on_tvs(model, taskvectors, results_dict, cfg, dataset, num_classes, device):
-    
-    results = results_dict
-    
-    
-    for tv_name, tv in taskvectors.items():
-        results[tv_name] = OrderedDict()
-        
-        base_model = copy.deepcopy(model)
-        results[tv_name]["-1.0"] = OrderedDict()
-        tv.apply_to(base_model, scaling_coef=-1.0)
-        base_test_results, _, _ = evaluate_model(base_model, dataset.get_test_dataloader(), device)
-        base_train_split_results = eval_model_on_clean_noise_splits(base_model, cfg, dataset, device)
-        results[tv_name]["-1.0"]['test_results'] = base_test_results
-        results[tv_name]["-1.0"]['train_results'] = base_train_split_results
-        
-        base_model = copy.deepcopy(model)
 
-        best_coef, best_results, best_cm = search_optimal_coefficient(
-            base_model=base_model,
-            task_vector=tv,
-            search_range=(-2.0, 0.0),
-            dataset=dataset,
-            num_classes=num_classes,
-            device=device
-        )
-        
-        results[tv_name][best_coef] = OrderedDict()
-        results[tv_name][best_coef]['test_results'] = best_results
-        
-        tv.apply_to(base_model, scaling_coef=best_coef)
-        
-        after_tv_metrics = eval_model_on_clean_noise_splits(base_model, cfg, dataset, device)
-        results[tv_name][best_coef]['train_results'] = after_tv_metrics
-        
-        
-    return results    
-
-
-import matplotlib.pyplot as plt
-
-
-def show_poisoned_samples(dataset, n=9, unnormalize=False):
-    """
-    Show `n` poisoned samples from a DatasetWithIndex-wrapped dataset.
-    dataset: your ds.get_trainset() or similar
-    unnormalize: if True, try to undo CIFAR-10 normalization for visualization
-    """
-
-    # Collect poisoned samples
-    poisoned_imgs = []
-    poisoned_labels = []
-    for idx in range(len(dataset)):
-        x, y, *_rest = dataset[idx]
-        # last element in your tuple is is_poison flag
-        is_poison = _rest[-1].item() if torch.is_tensor(_rest[-1]) else bool(_rest[-1])
-        if is_poison:
-            poisoned_imgs.append(x)
-            poisoned_labels.append(y)
-            if len(poisoned_imgs) >= n:
-                break
-
-    if not poisoned_imgs:
-        print("No poisoned samples found!")
-        return
-
-    # CIFAR-10 normalization parameters
-    cifar_mean = torch.tensor([0.4914, 0.4822, 0.4465]).view(3,1,1)
-    cifar_std  = torch.tensor([0.2023, 0.1994, 0.2010]).view(3,1,1)
-
-    # Plot grid
-    fig, axes = plt.subplots(3, 3, figsize=(8,8))
-    for ax, img, label in zip(axes.flat, poisoned_imgs, poisoned_labels):
-        if unnormalize:
-            img = img * cifar_std + cifar_mean
-            
-        img = img.clamp(0,1)
-        if img.shape[0] == 1:  # grayscale
-            ax.imshow(img.squeeze(0).cpu(), cmap="gray")
-        else:
-            ax.imshow(img.permute(1,2,0).cpu())
-        ax.set_title(f"Label={label}", fontsize=10)
-        ax.axis("off")
-
-    plt.tight_layout()
-    plt.show()
-    
     
 def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     cfg['trainer']['pretraining']['comet_api_key'] = os.getenv("COMET_API_KEY")
@@ -335,10 +249,6 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         map_location='cpu'
     )
     
-    ft_ho_clean_weights = torch.load(
-        outputs_dir.joinpath(f"finetune_clean/weights/ft_weights.pth"),
-        map_location='cpu'
-    )
     
     
     # ft_gradient_ascent_weights = OrderedDict(
@@ -369,14 +279,13 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     else:
         task_vectors['Average TV'] = TaskVector.mean(task_vectors)
         
-    task_vectors['Average TV Pruned 0.4'] = task_vectors['Average TV'].prune_small_weights(rate=0.4)
-    task_vectors['Average TV Pruned 0.6'] = task_vectors['Average TV'].prune_small_weights(rate=0.6)
-    task_vectors['Average TV Pruned 0.8'] = task_vectors['Average TV'].prune_small_weights(rate=0.8)
-    task_vectors['Average TV Pruned 0.9'] = task_vectors['Average TV'].prune_small_weights(rate=0.9)
-    task_vectors['Average TV Pruned 0.95'] = task_vectors['Average TV'].prune_small_weights(rate=0.95)
-    task_vectors['Average TV Pruned 0.99'] = task_vectors['Average TV'].prune_small_weights(rate=0.99)
+    # task_vectors['Average TV Pruned 0.4'] = task_vectors['Average TV'].prune_small_weights(rate=0.4)
+    # task_vectors['Average TV Pruned 0.6'] = task_vectors['Average TV'].prune_small_weights(rate=0.6)
+    # task_vectors['Average TV Pruned 0.8'] = task_vectors['Average TV'].prune_small_weights(rate=0.8)
+    # task_vectors['Average TV Pruned 0.9'] = task_vectors['Average TV'].prune_small_weights(rate=0.9)
+    # task_vectors['Average TV Pruned 0.95'] = task_vectors['Average TV'].prune_small_weights(rate=0.95)
+    # task_vectors['Average TV Pruned 0.99'] = task_vectors['Average TV'].prune_small_weights(rate=0.99)
     
-    task_vectors['Clean'] = TaskVector(mix_weights, ft_ho_clean_weights)
     
     task_vectors['Random Vector'] = task_vectors['Average TV'].generate_random_vector_with_same_layer_norms(seed=11)
 
@@ -413,198 +322,6 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
 
 
     
-    # model.load_state_dict(mix_weights, strict=False)
-    # fig_comp_pt = embedding_space_analysis.all_plot_comp(
-    #     feature_extractor=model.get_image_encoder(),
-    #     dataloader=dataset_clean.get_train_dataloader(),
-    #     device=gpu,
-    #     class_names=dataset.get_class_names(),
-    # )
-    
-    # fig_comp_pt.savefig(results_dirs['embed_plots'] / "comp_pt.png", bbox_inches="tight")
-    
-    
-    # task_vectors['Average TV'].apply_to(model, scaling_coef=-1.0, strict=False)
-    # fig_comp_AVG_1 = embedding_space_analysis.all_plot_comp(
-    #     feature_extractor=model.get_image_encoder(),
-    #     dataloader=dataset_clean.get_train_dataloader(),
-    #     device=gpu,
-    #     class_names=dataset.get_class_names(),
-    # )
-    
-    # fig_comp_AVG_1.savefig(results_dirs['embed_plots'] / "comp_avg_tv.png", bbox_inches="tight")
-    
-    
-    # model.load_state_dict(gold_weights, strict=False)
-    # fig_comp_gold = embedding_space_analysis.all_plot_comp(
-    #     feature_extractor=model.get_image_encoder(),
-    #     dataloader=dataset_clean.get_train_dataloader(),
-    #     device=gpu,
-    #     class_names=dataset.get_class_names(),
-    # )
-    
-    # fig_comp_gold.savefig(results_dirs['embed_plots'] / "comp_gold.png", bbox_inches="tight")
-    
-    # model.load_state_dict(mix_weights, strict=False)
-    # fig_umap_pt = embedding_space_analysis.umap_plot(
-    #     feature_extractor=model.get_image_encoder(),
-    #     dataloader=dataset_clean.get_train_dataloader(),
-    #     device=gpu,
-    #     class_names=dataset.get_class_names(),
-    #     n_neighbors=5,
-    #     min_dist=1.0
-    # )
-    
-    # fig_umap_pt.savefig(results_dirs['embed_plots'] / "umap_pt.png", bbox_inches="tight")
-    
-    # task_vectors['Average TV'].apply_to(model, scaling_coef=-1.0, strict=False)
-    # fig_umap_AVG_1 = embedding_space_analysis.umap_plot(
-    #     feature_extractor=model.get_image_encoder(),
-    #     dataloader=dataset_clean.get_train_dataloader(),
-    #     device=gpu,
-    #     class_names=dataset.get_class_names(),
-    #     n_neighbors=5,
-    #     min_dist=1.0
-    # )
-    
-    # fig_umap_AVG_1.savefig(results_dirs['embed_plots'] / "umap_avg_tv.png", bbox_inches="tight")
-    
-    
-    # model.load_state_dict(gold_weights, strict=False)
-    # fig_umap_gold = embedding_space_analysis.umap_plot(
-    #     feature_extractor=model.get_image_encoder(),
-    #     dataloader=dataset_clean.get_train_dataloader(),
-    #     device=gpu,
-    #     class_names=dataset.get_class_names(),
-    #     n_neighbors=5,
-    #     min_dist=1.0
-    # )
-    
-    # fig_umap_gold.savefig(results_dirs['embed_plots'] / "umap_gold.png", bbox_inches="tight")
-    
-    
-    # model.load_state_dict(mix_weights, strict=False)
-    # fig_tsne_pt = embedding_space_analysis.tsne_plot(
-    #     feature_extractor=model.get_image_encoder(),
-    #     dataloader=dataset_clean.get_train_dataloader(),
-    #     device=gpu,
-    #     class_names=dataset.get_class_names(),
-    # )
-    
-    # fig_tsne_pt.savefig(results_dirs['embed_plots'] / "tsne_pt.png", bbox_inches="tight")
-    
-    # task_vectors['Average TV'].apply_to(model, scaling_coef=-1.0, strict=False)
-    # fig_tsne_AVG_1 = embedding_space_analysis.tsne_plot(
-    #     feature_extractor=model.get_image_encoder(),
-    #     dataloader=dataset_clean.get_train_dataloader(),
-    #     device=gpu,
-    #     class_names=dataset.get_class_names(),
-    # )
-    
-    # fig_tsne_AVG_1.savefig(results_dirs['embed_plots'] / "tsne_avg_tv.png", bbox_inches="tight")
-    
-    
-    # model.load_state_dict(gold_weights, strict=False)
-    # fig_tsne_gold = embedding_space_analysis.tsne_plot(
-    #     feature_extractor=model.get_image_encoder(),
-    #     dataloader=dataset_clean.get_train_dataloader(),
-    #     device=gpu,
-    #     class_names=dataset.get_class_names(),
-    # )
-    
-    # fig_tsne_gold.savefig(results_dirs['embed_plots'] / "tsne_gold.png", bbox_inches="tight")
-    
-    
-    # model.load_state_dict(mix_weights, strict=False)
-    # fig_pca_pt = embedding_space_analysis.pca_plot(
-    #     feature_extractor=model.get_image_encoder(),
-    #     dataloader=dataset_clean.get_train_dataloader(),
-    #     device=gpu,
-    #     class_names=dataset.get_class_names()
-    # )
-    
-    # fig_pca_pt.savefig(results_dirs['embed_plots'] / "pca_pt.png", bbox_inches="tight")
-    
-    # task_vectors['Average TV'].apply_to(model, scaling_coef=-1.0, strict=False)
-    # fig_pca_AVG_1 = embedding_space_analysis.pca_plot(
-    #     feature_extractor=model.get_image_encoder(),
-    #     dataloader=dataset_clean.get_train_dataloader(),
-    #     device=gpu,
-    #     class_names=dataset.get_class_names()
-    # )
-    
-    # fig_pca_AVG_1.savefig(results_dirs['embed_plots'] / "pca_avg_tv.png", bbox_inches="tight")
-    
-    
-    # def fig_to_rgb(fig):
-    #     """Return an (H, W, 3) uint8 array from a Matplotlib Figure for any backend."""
-    #     fig.canvas.draw()
-    #     w, h = fig.canvas.get_width_height()
-
-    #     # Try backends that support RGB directly (Agg, etc.)
-    #     try:
-    #         buf = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
-    #         return buf.reshape(h, w, 3)
-    #     except AttributeError:
-    #         # TkAgg gives ARGB; convert to RGB
-    #         buf = np.frombuffer(fig.canvas.tostring_argb(), dtype=np.uint8).reshape(h, w, 4)
-    #         # ARGB -> RGB by dropping alpha and reordering
-    #         return buf[:, :, 1:4]
-    
-    # def combine_figures(figs, ncols=3, nrows=2, figsize=(15, 10)):
-    #     fig, axes = plt.subplots(nrows, ncols, figsize=figsize)
-    #     for ax, f in zip(axes.flat, figs):
-    #         img = fig_to_rgb(f)
-    #         ax.imshow(img)
-    #         ax.axis("off")
-    #     for ax in axes.flat[len(figs):]:
-    #         ax.axis("off")
-    #     plt.tight_layout()
-    #     return fig
-
-    # def make_gif(figs, out_path="progress.gif", duration=0.8):
-    #     frames = [fig_to_rgb(f) for f in figs]
-    #     # Per-frame durations in seconds
-    #     with imageio.get_writer(out_path, mode="I", loop=0, duration=duration) as w:
-    #         for fr in frames:
-    #             w.append_data(fr)
-            
-    # figs_pca = []
-    # for alpha in np.linspace(0.0, -2.0, 9):
-    #     model.load_state_dict(mix_weights, strict=False)
-    #     if alpha != 0.0:
-    #         task_vectors['Average TV'].apply_to(model, scaling_coef=alpha, strict=False)
-    #     fig_pca = embedding_space_analysis.pca_plot(
-    #         feature_extractor=model.get_image_encoder(),
-    #         dataloader=dataset_clean.get_train_dataloader(),
-    #         device=gpu,
-    #         class_names=dataset_clean.get_class_names(),
-    #         dataset_name=dataset_clean.dataset_name
-    #     )
-    #     figs_pca.append(fig_pca)
-        
-    # big_fig = combine_figures(figs_pca, ncols=3, nrows=3)
-    # big_fig.savefig(results_dirs['embed_plots'] / "pca_evol.png", bbox_inches="tight")
-    
-    # make_gif(figs_pca, results_dirs['embed_plots'] / "pca_evol.gif", duration=5.0)
-    # exit()
-    
-    # model.load_state_dict(gold_weights, strict=False)
-    # fig_pca_gold = embedding_space_analysis.pca_plot(
-    #     feature_extractor=model.get_image_encoder(),
-    #     dataloader=dataset_clean.get_train_dataloader(),
-    #     device=gpu,
-    #     class_names=dataset.get_class_names(),
-    #     dataset_name=dataset_clean.dataset_name
-    # )
-    
-    # fig_pca_gold.savefig(results_dirs['embed_plots'] / "pca_gold.png", bbox_inches="tight")
-
-    
-    # exit()
-    
-    
-
     model.load_state_dict(mix_weights, strict=False)
     mix_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
     mix_ho_results, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
@@ -616,17 +333,12 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     gold_ho_results, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
     gold_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
     
-    model.load_state_dict(ft_ho_clean_weights, strict=False)
-    ft_ho_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-    ft_ho_ho_results, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
-    ft_ho_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
-    
+
     
     results_dict = OrderedDict()
     
     results_dict['Mix'] = {'test_results': mix_test_results, 'ho_results': mix_ho_results, 'train_results': mix_train_results}
     results_dict['Gold'] = {'test_results': gold_test_results, 'ho_results': gold_ho_results, 'train_results': gold_train_results}
-    results_dict['FT HO Clean'] = {'test_results': ft_ho_test_results, 'ho_results': ft_ho_ho_results, 'train_results': ft_ho_train_results}
     
     # results_dict = OrderedDict()
     # for alpha in tqdm(np.linspace(-0.05, -1.5, 30)):
