@@ -250,6 +250,9 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     poison_tv_cfg = strategy['poison']['finetuning'][0]
     poison_tv_cfg['set'] = 'Heldout'
     dataset.inject_poison(**poison_tv_cfg)
+    # Exclude clean samples from target class
+    clean_ho_ds, poinsoned_ho_ds = dataset.get_clean_noisy_subsets('Heldout')
+    dataset.set_heldoutset(poinsoned_ho_ds)
 
 
 
