@@ -41,17 +41,36 @@ import imageio.v2 as imageio
 from src.utils import embedding_space_analysis
 from helper_funcs import evaluate_model, eval_model_on_clean_noise_splits, search_optimal_coefficient, get_confusion_matrix, row_normalize
 from src.utils import weight_norm_analysis
+from WD_analysis import apply_WD_analysis
 
 
+
+    
     
 def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     cfg['trainer']['pretraining']['comet_api_key'] = os.getenv("COMET_API_KEY")
     cfg['trainer']['finetuning']['comet_api_key'] = os.getenv("COMET_API_KEY")
     
-    augmentations = [
-        transformsv2.RandomCrop(224, padding=4),
-    ]
-    
+    augmentations = None
+    if cfg['dataset']['name'] == 'cifar10':
+        augmentations = [
+            transformsv2.RandomCrop(224, padding=4),
+        ]
+        # augmentations = [
+        #     transformsv2.RandomCrop(32, padding=4),
+        #     transformsv2.RandomHorizontalFlip(),
+        # ]
+    elif cfg['dataset']['name'] == 'cifar100':
+        augmentations = [
+            transformsv2.RandomCrop(224, padding=4),
+        ]
+        # augmentations = [
+        #     transformsv2.RandomCrop(32, padding=4),
+        #     transformsv2.RandomHorizontalFlip(),
+        # ]
+    elif cfg['dataset']['name'] == 'mnist':
+        pass
+
     
     base_dataset, num_classes = dataset_factory.create_dataset(cfg['dataset'], augmentations)
     base_model = model_factory.create_model(cfg['model'], num_classes)
@@ -75,9 +94,14 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
         plots_dir.mkdir(exist_ok=True, parents=True)
         
         
+        finetuning_cfg = None
+        if 'mix' in cfg['trainer']['finetuning']:
+            finetuning_cfg = cfg['trainer']['finetuning']['mix']
+            finetuning_cfg['comet_api_key'] =  os.getenv("COMET_API_KEY")
+        else: finetuning_cfg = cfg['trainer']['finetuning']
         trainer = StandardTrainer(
             outputs_dir=outputs_dir,
-            **cfg['trainer']['pretraining'],
+            **finetuning_cfg,
             exp_name=experiment_name,
             exp_tags=None,
         )
@@ -102,9 +126,14 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
         plots_dir = experiment_dir / Path("plots")
         plots_dir.mkdir(exist_ok=True, parents=True)
         
+        finetuning_cfg = None
+        if 'clean' in cfg['trainer']['finetuning']:
+            finetuning_cfg = cfg['trainer']['finetuning']['clean']
+            finetuning_cfg['comet_api_key'] =  os.getenv("COMET_API_KEY")
+        else: finetuning_cfg = cfg['trainer']['finetuning']
         trainer = StandardTrainer(
             outputs_dir=outputs_dir,
-            **cfg['trainer']['pretraining'],
+            **finetuning_cfg,
             exp_name=experiment_name,
             exp_tags=None,
         )
@@ -113,40 +142,7 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
         torch.save(model.state_dict(), weights_dir / Path("ft_weights.pth"))
         
         
-    # Finetune on the set we use for noise vectors but with uncorrupted labels.
-    if not outputs_dir.joinpath(f"{cfg_name}/finetune_clean/weights/ft_weights.pth").exists() and strategy['finetuning_set'] == 'Heldout':
-        dataset = copy.deepcopy(base_dataset)
-        model = copy.deepcopy(base_model)
         
-        mix_model_ckp_path = outputs_dir/ Path(f"{cfg_name}/mix") / Path('weights/ft_weights.pth')
-        checkpoint = torch.load(mix_model_ckp_path)
-        model.load_state_dict(checkpoint)
-        
-        
-        dataset.set_trainset(dataset.get_heldoutset(), shuffle=True)
-        # To fix the transforms issues
-        dataset.inject_poison(set='Train', rate=0)
-        
-        
-        experiment_name = f"{cfg_name}/finetune_clean"
-        experiment_dir = outputs_dir / Path(experiment_name)
-
-        weights_dir = experiment_dir / Path("weights")
-        weights_dir.mkdir(exist_ok=True, parents=True)
-
-        plots_dir = experiment_dir / Path("plots")
-        plots_dir.mkdir(exist_ok=True, parents=True)
-        
-        trainer = StandardTrainer(
-            outputs_dir=outputs_dir,
-            **cfg['trainer']['finetuning'],
-            exp_name=experiment_name,
-            exp_tags=None,
-        )
-        
-        results = trainer.fit(model, dataset, resume=False)
-        torch.save(model.state_dict(), weights_dir / Path("ft_weights.pth"))
-  
         
     for idx, poison_tv in enumerate(strategy['poison']['finetuning']):
         if not outputs_dir.joinpath(f"{cfg_name}/finetune_{poison_tv['rate']}_{poison_tv['seed']}/weights/ft_weights.pth").exists():
@@ -166,25 +162,20 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
             plots_dir = experiment_dir / Path("plots")
             plots_dir.mkdir(exist_ok=True, parents=True)
             
-            if strategy['finetuning_set'] == 'Heldout':
-                dataset.set_trainset(dataset.get_heldoutset(), shuffle=True)
-                dataset.inject_poison(**poison_tv)
-            
-            # def freeze_batchnorm(module, freeze_affine=True):
-            #     for m in module.modules():
-            #         if isinstance(m, torch.nn.modules.batchnorm._BatchNorm):
-            #             print(m)
-            #             m.eval()                           # use running stats
-            #             if freeze_affine:
-            #                 if m.weight is not None: m.weight.requires_grad_(False)
-            #                 if m.bias   is not None: m.bias.requires_grad_(False)
-
-            # freeze_batchnorm(model)
-            # exit()
-
+            # Exclude clean samples from target class
+            poison_tv['set'] = 'Heldout'
+            dataset.inject_poison(**poison_tv)
+            clean_ho_ds, poinsoned_ho_ds = dataset.get_clean_noisy_subsets('Heldout')
+            dataset.set_trainset(poinsoned_ho_ds, shuffle=True)
+                
+            finetuning_cfg = None
+            if 'poison' in cfg['trainer']['finetuning']:
+                finetuning_cfg = cfg['trainer']['finetuning']['poison']
+                finetuning_cfg['comet_api_key'] =  os.getenv("COMET_API_KEY")
+            else: finetuning_cfg = cfg['trainer']['finetuning']
             trainer = StandardTrainer(
                 outputs_dir=outputs_dir,
-                **cfg['trainer']['finetuning'],
+                **finetuning_cfg,
                 exp_name=experiment_name,
                 exp_tags=None,
             )
@@ -195,6 +186,7 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
 
 def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     training_seed = cfg['training_seed']
+    dataset_seed = cfg['dataset_seed']
     if training_seed:
         random.seed(training_seed)
         np.random.seed(training_seed)
@@ -203,7 +195,6 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     cpu = trainer_utils.get_cpu_device()
     gpu = trainer_utils.get_gpu_device()
-    
     
     outputs_dir = outputs_dir / cfg_name
     
@@ -219,22 +210,25 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     results_dirs['metrics'] = results_dir / 'metrics'
     for dir in results_dirs.values():
         dir.mkdir(exist_ok=True, parents=True)
-    
-    
+
     dataset, num_classes = dataset_factory.create_dataset(cfg['dataset'])
+    
     model = model_factory.create_model(cfg['model'], num_classes)
-    
-    
+    pt_weights = copy.deepcopy(model.state_dict())
+
     dataset.reset_train_dl(shuffle=False)
     
     dataset_clean = copy.deepcopy(dataset)
-    
+
     strategy = cfg['strategy']
     dataset.inject_poison(**strategy['poison']['pretraining'])
     
     poison_tv_cfg = strategy['poison']['finetuning'][0]
     poison_tv_cfg['set'] = 'Heldout'
     dataset.inject_poison(**poison_tv_cfg)
+    # Exclude clean samples from target class
+    clean_ho_ds, poinsoned_ho_ds = dataset.get_clean_noisy_subsets('Heldout')
+    dataset.set_heldoutset(poinsoned_ho_ds)
 
 
 
@@ -243,14 +237,14 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         outputs_dir.joinpath(f"mix/weights/ft_weights.pth"),
         map_location='cpu'
     )
-    
     gold_weights = torch.load(
         outputs_dir.joinpath(f"clean/weights/ft_weights.pth"),
         map_location='cpu'
     )
     
+
     
-    
+
     # ft_gradient_ascent_weights = OrderedDict(
     # (k, v) for k, v in torch.load(
     #     outputs_dir.joinpath(f"gradient_ascent/weights/ft_weights.pth"),
@@ -268,29 +262,22 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         poison_weights[f"{poison_tv['rate']*100:.0f}% Noise, {poison_tv['seed']} Seed"] = n_weights
         
     
-            
+
     task_vectors = OrderedDict()
     for task_name, finetuend_weights in poison_weights.items():
         task_vectors[task_name] = TaskVector(mix_weights, finetuend_weights)
         
     if len(task_vectors) == 1:
         only_tv = task_vectors.popitem(last=False)[1]
-        task_vectors['Average TV'] = only_tv
+        task_vectors['Average'] = only_tv
     else:
-        task_vectors['Average TV'] = TaskVector.mean(task_vectors)
+        task_vectors['Average'] = TaskVector.mean(task_vectors)
         
-    # task_vectors['Average TV Pruned 0.4'] = task_vectors['Average TV'].prune_small_weights(rate=0.4)
-    # task_vectors['Average TV Pruned 0.6'] = task_vectors['Average TV'].prune_small_weights(rate=0.6)
-    # task_vectors['Average TV Pruned 0.8'] = task_vectors['Average TV'].prune_small_weights(rate=0.8)
-    # task_vectors['Average TV Pruned 0.9'] = task_vectors['Average TV'].prune_small_weights(rate=0.9)
-    # task_vectors['Average TV Pruned 0.95'] = task_vectors['Average TV'].prune_small_weights(rate=0.95)
-    # task_vectors['Average TV Pruned 0.99'] = task_vectors['Average TV'].prune_small_weights(rate=0.99)
-    
-    
-    task_vectors['Random Vector'] = task_vectors['Average TV'].generate_random_vector_with_same_layer_norms(seed=11)
 
     
-    
+    task_vectors['Random Vector'] = task_vectors['Average'].generate_random_vector_with_same_layer_norms(seed=11)
+
+
     
     ft_tvs_list = list(task_vectors.values())
     tv_names = list(task_vectors.keys())
@@ -304,7 +291,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             cos_sim = anchor_tv.cosine_similarity_flatten(other_tv)
             task_sim[i].append(cos_sim)
     task_sim = np.array(task_sim)
-    
+
     misc_utils.plot_confusion_matrix(
         title='Task Vector Similarity Matrix',
         cm=task_sim,
@@ -319,49 +306,73 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         filepath=results_dir / 'task_similarities.png',
         show=False
     )
-
-
-    
-    model.load_state_dict(mix_weights, strict=False)
-    mix_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-    mix_ho_results, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
-    mix_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
-    
-    
-    model.load_state_dict(gold_weights, strict=False)
-    gold_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-    gold_ho_results, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
-    gold_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
     
 
-    
     results_dict = OrderedDict()
-    
-    results_dict['Mix'] = {'test_results': mix_test_results, 'ho_results': mix_ho_results, 'train_results': mix_train_results}
-    results_dict['Gold'] = {'test_results': gold_test_results, 'ho_results': gold_ho_results, 'train_results': gold_train_results}
-    
-    # results_dict = OrderedDict()
-    # for alpha in tqdm(np.linspace(-0.05, -1.5, 30)):
-    # for alpha in tqdm(np.linspace(-0.1, -2.0, 20)):
-    for alpha in tqdm(np.linspace(-0.1, -1.5, 15)):
-    
-        model.load_state_dict(mix_weights, strict=False)
-        task_vectors['Average TV'].apply_to(model, scaling_coef=alpha, strict=False)
-        tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-        tv_ho_resutls, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
-        tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+    if not results_dir.joinpath('metrics.json').exists():
 
-        results_dict[alpha] = {'test_results': tv_test_results, 'ho_results': tv_ho_resutls, 'train_results': tv_train_results}
-    
-    with open(results_dir / 'metrics.json' , 'w') as json_file:
-        json.dump(results_dict, json_file, indent=4)
-    
-    # print(results_dict)
-    
-    # with open(results_dir / 'tv_metrics.json' , 'w') as json_file:
-    #     json.dump(results_dict, json_file, indent=4)
-    
-    
+        model.load_state_dict(mix_weights, strict=False)
+        mix_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+        mix_ho_results, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
+        mix_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+
+        model.load_state_dict(gold_weights, strict=False)
+        gold_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+        gold_ho_results, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
+        gold_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+
+        results_dict['Mix'] = {'test_results': mix_test_results, 'ho_results': mix_ho_results, 'train_results': mix_train_results}
+        results_dict['Gold'] = {'test_results': gold_test_results, 'ho_results': gold_ho_results, 'train_results': gold_train_results}
+
+
+        for alpha in tqdm(np.round(np.linspace(-0.05, -2.0, 40), 2)):
+
+            model.load_state_dict(mix_weights, strict=False)
+            task_vectors['Average'].apply_to(model, scaling_coef=alpha, strict=False)
+            tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+            tv_ho_resutls, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
+            tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+
+            results_dict[alpha] = {'test_results': tv_test_results, 'ho_results': tv_ho_resutls, 'train_results': tv_train_results}
+        
+        with open(results_dir / 'metrics.json' , 'w') as json_file:
+            json.dump(results_dict, json_file, indent=4)
+
+    else:
+        with open(results_dir / "metrics.json", "r") as json_file:
+            results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
+
+    if 'alpha_psn' not in results_dict:
+        forget_rate_thrsh = {
+            'MNIST': 0.01,
+            'CIFAR10': 0.01,
+            'CIFAR100': 0.01
+        }
+        alphas = np.round(np.linspace(-0.05, -2.0, 40), 2)
+        alpha_psn = 0.0
+        for alpha in alphas:
+            metrics = results_dict.get(alpha, None)
+            if not metrics: metrics = results_dict.get(str(alpha), None)
+            if not metrics: print('alpha not found', alpha)
+            if round(metrics['ho_results']['ACC'], 2) <= forget_rate_thrsh[dataset.dataset_name]:
+                alpha_psn = alpha
+                break
+        
+        results_dict['alpha_psn'] = alpha_psn
+        with open(results_dir / 'metrics.json' , 'w') as json_file:
+            json.dump(results_dict, json_file, indent=4)
+ 
+    if 'Random Vector' not in results_dict:
+        model.load_state_dict(mix_weights, strict=False)
+        alpha_psn = results_dict['alpha_psn']
+        task_vectors['Random Vector'].apply_to(model, scaling_coef=alpha_psn, strict=False)
+        random_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+        random_ho_resutls, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
+        random_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+        results_dict['Random Vector'] = {'test_results': random_test_results, 'ho_results':random_ho_resutls, 'train_results': random_train_results}
+        with open(results_dir / 'metrics.json' , 'w') as json_file:
+            json.dump(results_dict, json_file, indent=4)
+
 
 from torch.distributed.elastic.multiprocessing.errors import record
 

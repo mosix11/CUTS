@@ -57,12 +57,14 @@ def show_image_grid(
     images: Sequence[torch.Tensor],
     labels: Sequence[Union[str, int]],
     max_images: int = 64,
+    n_rows: int = 8,
+    n_cols: int = 8,
     figsize_per_cell: Tuple[float, float] = (2.2, 2.6),
     title: Optional[str] = None,
     label_wrap: int = 24,
     label_fontsize: int = 9,
-    image_height_frac: float = 0.78,   # fraction of the cell height used by the image
-    label_band_frac: float = 0.18,     # explicit label band height (leave a bit of gap below)
+    image_height_frac: float = 0.88,   # fraction of the cell height used by the image
+    label_band_frac: float = 0.1,     # explicit label band height (leave a bit of gap below)
     hspace: float = 0.25,              # vertical spacing between grid rows
     wspace: float = 0.08,              # horizontal spacing between grid cols
 ):
@@ -81,8 +83,10 @@ def show_image_grid(
         raise ValueError("No images to display.")
 
     # --- near-square grid
-    cols = math.ceil(math.sqrt(n))
-    rows = math.ceil(n / cols)
+    if n_cols: cols = n_cols
+    else: cols = math.ceil(math.sqrt(n))
+    if n_rows: rows = n_rows
+    else: rows = math.ceil(n / cols)
 
     # --- figure size
     fig_w = max(1.0, cols * figsize_per_cell[0])
@@ -315,16 +319,30 @@ def apply(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     dataset_cfg['val_transforms'] = model.get_val_transforms()
     dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
     
+    dataset.reset_train_dl(shuffle=False)
+    
+    dataset_clean = copy.deepcopy(dataset)
+    
+    strategy = cfg['strategy']
+    dataset.inject_noise(**strategy['noise']['pretraining'])
+    
+    train_indices = np.array(dataset.get_train_indices())
+
+    heldout_indices = np.array(dataset.get_heldout_indices())
+    
+    # consistency_scores = consistency_scores[train_indices]
+    # cs_lbls = cs_lbls[train_indices]
+    
     original_dataset = None
     consistency_scores = None
     if dataset_cfg['name'] == 'cifar10':
         original_dataset = CIFAR10()
-        consistency_scores = np.load('consistency_scorse/cifar10-cscores.npz')['scores']
-        cs_lbls = np.load('cifar10-cscores.npz')['labels']
+        consistency_scores = np.load('./consistency_scores/cifar10-cscores.npz')['scores']
+        cs_lbls = np.load('./consistency_scores/cifar10-cscores.npz')['labels']
     elif dataset_cfg['name'] == 'cifar100':
         original_dataset = CIFAR100()
-        consistency_scores = np.load('consistency_scorse/cifar100-cscores.npz')['scores']
-        cs_lbls = np.load('cifar100-cscores.npz')['labels']
+        consistency_scores = np.load('./consistency_scores/cifar100-cscores.npz')['scores']
+        cs_lbls = np.load('./consistency_scores/cifar100-cscores.npz')['labels']
     elif dataset_cfg['name'] == 'mnist':
         original_dataset = MNIST()
         # TODO find the cons score for MNIST with matching samples indices with torch version.
@@ -332,24 +350,75 @@ def apply(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         # cs_lbls = np.load('cifar100-cscores.npz')['labels']
     original_dataset.reset_train_dl(shuffle=False)
     
-    train_indices = np.array(dataset.get_train_indices())
     
-    heldout_indices = np.array(dataset.get_heldout_indices())
+        # alpha -1.35
+    cifar10_cfg30_clean_forgotten_indices = {
+        5019: (5, 3),
+        11246: (5, 2),
+        23870: (0, 8),
+        31937: (8, 2),
+        32367: (5, 3),
+        32426: (5, 7),
+        36395: (3, 6),
+        36419: (7, 4)
+    }
     
-    # consistency_scores = consistency_scores[train_indices]
-    # cs_lbls = cs_lbls[train_indices]
+    # alpha -0.8
+    cifar100_cfg31_clean_forgotten_indices = {
+        9981: (42, 88),
+        15980: (60, 71),
+        19370: (11, 2),
+        25514: (88, 44),
+        25318: (98, 46),
+        31295: (51, 46),
+        38595: (92, 62),
+        44764: (33, 51),
+    }
+    
+    # alpha -0.8
+    mnist_cfg37_clean_forgotten_indices = {
+        52341: (9, 4),
+        10777: (3, 9),
+        26057: (7, 1),
+        29483: (9, 5),
+        34638: (5, 6),
+        39366: (5, 3),
+        42606: (5, 3),
+        58724: (4, 7),
+    }
+    
+    imgs = []
+    
+    for idx in train_indices[list(mnist_cfg37_clean_forgotten_indices.keys())]:
+        img, lbl, dx = original_dataset.get_trainset()[idx]
+        imgs.append(img)
+        # lbls.append(lbl)
+    
+    
+    class_names = dict(enumerate(original_dataset.get_class_names()))
+    vectorized_converter = np.vectorize(lambda x: class_names[x])
+    # labels_str = vectorized_converter(lbls)
+    misclassified_strs = [
+        fr"{vectorized_converter(t)} $\rightarrow$ {vectorized_converter(p)}"
+        for (t, p) in list(mnist_cfg37_clean_forgotten_indices.values())
+    ]
+        
+    fig = show_image_grid(
+        images=imgs,
+        labels=misclassified_strs,
+        n_cols=2,
+        n_rows=4,
+        label_fontsize=12,
+        label_wrap=36,
+        hspace=0.05,
+        wspace=0.01
+        # max_images=32,
+    )
+    fig.savefig(fname=Path('./visulaization_dir')/ 'mnist_cfg37_clean_forgotten.png', bbox_inches="tight", dpi=300)
+    plt.show()
     
 
-    
-    dataset.reset_train_dl(shuffle=False)
-    
-    dataset_clean = copy.deepcopy(dataset)
-    
-    strategy = cfg['strategy']
-    dataset.inject_noise(**strategy['noise']['pretraining'])
-
-
-
+    exit()
     # Load weights while removing classifier weights from the state dict
     mix_weights = OrderedDict(
     (k, v) for k, v in torch.load(
@@ -357,19 +426,7 @@ def apply(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         map_location='cpu'
     ).items() if "classifier_heads" not in k)
     
-    gold_weights = OrderedDict(
-    (k, v) for k, v in torch.load(
-        outputs_dir.joinpath(f"clean/weights/ft_weights.pth"),
-        map_location='cpu'
-    ).items() if "classifier_heads" not in k)
-    
-    ft_ho_clean_weights = OrderedDict(
-    (k, v) for k, v in torch.load(
-        outputs_dir.joinpath(f"finetune_clean/weights/ft_weights.pth"),
-        map_location='cpu'
-    ).items() if "classifier_heads" not in k)
-    
-    
+
     noise_weights = OrderedDict()
     
     for noise_tv in cfg['strategy']['noise']['finetuning']:
@@ -389,31 +446,25 @@ def apply(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         
     if len(task_vectors) == 1:
         only_tv = task_vectors.popitem(last=False)[1]
-        task_vectors['Average TV'] = only_tv
+        task_vectors['Average'] = only_tv
     else:
-        task_vectors['Average TV'] = TaskVector.mean(task_vectors)
+        task_vectors['Average'] = TaskVector.mean(task_vectors)
         
-    
-    task_vectors['Clean'] = TaskVector(mix_weights, ft_ho_clean_weights)
-    
-
 
     model.load_state_dict(mix_weights, strict=False)
     
-    task_vectors['Average TV'].apply_to(model, scaling_coef=-0.5, strict=False)
+    task_vectors['Average'].apply_to(model, scaling_coef=-0.95, strict=False)
     train_results, misclassified_cleans, misclassified_cleans_smp, misclassified_heals = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
     print(train_results)
-    print(misclassified_cleans)
-    # print(consistency_scores[misclassified_cleans])
+
+    
+    misclassified_mapping = dict(zip(misclassified_cleans, misclassified_cleans_smp))
+
+    for idx, (key, value) in enumerate(misclassified_mapping.items()):
+        print(idx+1, key, value)
+    print(consistency_scores[misclassified_cleans])
     
     imgs = []
-    # lbls = []
-    
-    # k = 32
-    # for idx in np.argsort(consistency_scores)[:k]:
-    #     img, lbl, dx = original_dataset.get_trainset()[idx]
-    #     imgs.append(img)
-    #     lbls.append(lbl)
     
     for idx in train_indices[misclassified_cleans]:
         img, lbl, dx = original_dataset.get_trainset()[idx]
@@ -425,7 +476,7 @@ def apply(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     vectorized_converter = np.vectorize(lambda x: class_names[x])
     # labels_str = vectorized_converter(lbls)
     misclassified_strs = [
-        f"{vectorized_converter(t)} -> {vectorized_converter(p)}"
+        fr"{vectorized_converter(t)} $\rightarrow$ {vectorized_converter(p)}"
         for (t, p) in misclassified_cleans_smp
     ]
         
@@ -445,13 +496,6 @@ def apply(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
 
 if __name__ == "__main__":
     
-
-    os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
-    torch.backends.cudnn.enabled = True
-    torch.backends.cudnn.benchmark = False
-    torch.use_deterministic_algorithms(True) 
-    torch.set_float32_matmul_precision("high")
-
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "-c",

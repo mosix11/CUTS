@@ -1273,7 +1273,7 @@ def plot_alpha_poison_interplay_dual(
     return save_path
 
 
-def plot_alpha_noise_vs_poison_interplay_dual(
+def plot_alpha_noise_and_poison_interplay_dual(
     results_dir_noise: Path,
     config_rel_path_noise: str,
     results_dir_poison: Path,
@@ -1282,7 +1282,7 @@ def plot_alpha_noise_vs_poison_interplay_dual(
     dataset_name_poison: str = "CIFAR10",
     forget_threshold_noise: float = 0.9,
     forget_threshold_poison: float = 0.9,
-    out_dir: Path = Path("./visulaization_dir"),
+    save_path: Path = Path("./visulaization_dir/noise_and_poison_interplay_dual.png"),
 ) -> Path:
     """
     Make a 1x2 figure of UT/FR/HR/DR vs α for two experiments of DIFFERENT types:
@@ -1328,10 +1328,10 @@ def plot_alpha_noise_vs_poison_interplay_dual(
         # Inject Mix at α=0
         mix_alpha = 0.0
         alpha_grid[mix_alpha] = {
-            "utility": baselines["mix"]["utility"],
-            "forget_rate": baselines["mix"]["forget_rate"],
-            "healing_rate": baselines["mix"]["healing_rate"],
-            "destruction_rate": baselines["mix"]["destruction_rate"],
+            "utility": baselines["mix"].get("utility", 0),
+            "forget_rate": baselines["mix"].get("forget_rate", 0),
+            "healing_rate": baselines["mix"].get("healing_rate", 0),
+            "destruction_rate": baselines["mix"].get("destruction_rate", 0),
         }
 
         # Resolve α*’s
@@ -1390,10 +1390,7 @@ def plot_alpha_noise_vs_poison_interplay_dual(
     )
 
     # ---------- plotting ----------
-    out_dir.mkdir(parents=True, exist_ok=True)
-    nameA = re.sub(r"[^\w\-]+", "_", str(config_rel_path_noise))
-    nameB = re.sub(r"[^\w\-]+", "_", str(config_rel_path_poison))
-    save_path = out_dir / f"interplay_noise_vs_poison_{nameA}__{nameB}.png"
+
 
     fig, axes = plt.subplots(1, 2, figsize=(11.6, 4.2), dpi=220, sharey=True)
 
@@ -1602,16 +1599,16 @@ if __name__ == "__main__":
     #     clip_poison_cfgs,
     #     outputfile_path=Path("./visulaization_dir/clip_poison_triggers_table.txt")
     #     )
-    plot_alpha_poison_interplay_dual(
-        clip_poison_results_dir,
-        clip_poison_cfgs['CIFAR10'],
-        clip_poison_cfgs['CIFAR100'],
-        dataset_name_A="CIFAR-10 (10%)",
-        dataset_name_B="CIFAR-100 (10%)",
-        forget_threshold_A=0.99,
-        forget_threshold_B=0.99,
-        save_path=Path("./visulaization_dir/clip_poison_triggers_plot.png")
-    )
+    # plot_alpha_poison_interplay_dual(
+    #     clip_poison_results_dir,
+    #     clip_poison_cfgs['CIFAR10'],
+    #     clip_poison_cfgs['CIFAR100'],
+    #     dataset_name_A="CIFAR-10 (10%)",
+    #     dataset_name_B="CIFAR-100 (10%)",
+    #     forget_threshold_A=0.99,
+    #     forget_threshold_B=0.99,
+    #     save_path=Path("./visulaization_dir/clip_poison_triggers_plot.png")
+    # )
     
     # generate_clip_noise_utlity_table(
     #     dino_noise_results_dir,
@@ -1634,17 +1631,28 @@ if __name__ == "__main__":
     #     outputfile_path=Path("./visulaization_dir/dino_poison_trigger_table.txt")
     # )
     
-    # plot_alpha_noise_vs_poison_interplay_dual(
-    #     results_dir_noise=Path('results/single_experiment/clip_noise_TA'),
-    #     config_rel_path_noise=dino_symmetric_cfgs['CIFAR10'][40],  # NOISE exp
-    #     results_dir_poison=Path('results/single_experiment/clip_poison_TA'),
-    #     config_rel_path_poison=clip_poison_cfgs['CIFAR10'],        # POISON exp
-    #     dataset_name_noise="CIFAR-10 (40%)",
-    #     dataset_name_poison="CIFAR-10 (10%)",
-    #     forget_threshold_noise=0.89,
-    #     forget_threshold_poison=0.9,
-    #     out_dir=Path("./visulaization_dir"),
+    # plot_alpha_poison_interplay_dual(
+    #     clip_poison_results_dir,
+    #     clip_poison_cfgs['CIFAR10'],
+    #     clip_poison_cfgs['CIFAR100'],
+    #     dataset_name_A="CIFAR-10 (10%)",
+    #     dataset_name_B="CIFAR-100 (10%)",
+    #     forget_threshold_A=0.99,
+    #     forget_threshold_B=0.99,
+    #     save_path=Path("./visulaization_dir/clip_poison_triggers_plot.png")
     # )
+    
+    plot_alpha_noise_and_poison_interplay_dual(
+        results_dir_noise=dino_noise_results_dir,
+        config_rel_path_noise=dino_symmetric_cfgs['CIFAR10'][40],  # NOISE exp
+        results_dir_poison=dino_poison_results_dir,
+        config_rel_path_poison=clip_poison_cfgs['CIFAR10'],        # POISON exp
+        dataset_name_noise="CIFAR-10 (40%)",
+        dataset_name_poison="CIFAR-10 (10%)",
+        forget_threshold_noise=0.89,
+        forget_threshold_poison=0.99,
+        save_path=Path("./visulaization_dir/dino_noise_poison_interplay_plot.png"),
+    )
     
     
     

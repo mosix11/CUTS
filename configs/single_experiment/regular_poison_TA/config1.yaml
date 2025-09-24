@@ -25,24 +25,24 @@ strategy:
 dataset:
   name: "mnist"
   num_classes: &num_classes 10
-  img_size: [224, 224]
-  grayscale: False
-  batch_size: 256
+  img_size: [28, 28]
+  batch_size: 1024
   heldout_conf: 0.02
+  normalize_imgs: True
+  flatten: True
   valset_ratio: 0.0
-  num_workers: 12
+  num_workers: 8
   seed: *dataset_seed
 
 
 model:
-  type: 'torchvision_resnet18'
-  num_classes: *num_classes
-  img_size: [224, 224]
-  grayscale: False
+  type: 'fc1'
+  input_dim: 784
+  hidden_dim: 32768
+  output_dim: *num_classes
   loss_fn:
     type: 'CE'
   metrics: ['ACC', 'F1']
-
 
 
 trainer:
