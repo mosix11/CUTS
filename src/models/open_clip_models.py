@@ -241,7 +241,7 @@ class OpenClipMultiHeadImageClassifier(BaseModel):
     def get_active_head(self):
         return self.classifier_heads[self.active_head]
     
-    def get_image_encoder(self):
+    def get_feature_extractor(self):
         return self.image_encoder
     
     def get_train_transforms(self):

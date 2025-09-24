@@ -592,7 +592,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         from test_alpha import select_alpha_star, plot_alpha_metrics
         best, records, alpha_best = select_alpha_star(
             model=model,
-            feature_extractor=model.get_image_encoder(),
+            feature_extractor=model.get_feature_extractor(),
             classifier=model.get_classifier_head(),
             state0=mix_weights,
             taskvector=task_vectors['Average'],

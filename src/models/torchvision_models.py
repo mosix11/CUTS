@@ -77,6 +77,54 @@ class TorchvisionModels(BaseModel):
         return self.net(x)
     
     
+    
+    def get_feature_extractor(self) -> nn.Module:
+        """
+        Returns a module that maps input -> pre-logit features
+        (exactly the tensor consumed by the final Linear head).
+        """
+        if self.model_type.startswith('resnet'):
+            # All children except the final fc; add Flatten to match fc input
+            backbone = nn.Sequential(*list(self.net.children())[:-1], nn.Flatten(1))
+            return backbone
+
+        elif self.model_type.startswith('vit'):
+            # Mirror torchvision ViT forward up to heads (pre-classifier)
+            class _ViTFeatureExtractor(nn.Module):
+                def __init__(self, vit):
+                    super().__init__()
+                    self.vit = vit  
+                def forward(self, x):
+                    x = self.vit._process_input(x)                
+                    n = x.shape[0]
+                    cls = self.vit.class_token.expand(n, -1, -1)  
+                    x = torch.cat((cls, x), dim=1)                
+                    x = self.vit.encoder(x)                      
+                    if self.vit._classifier == "token":
+                        x = x[:, 0]                               
+                    elif self.vit._classifier == "gap":
+                        x = x.mean(dim=1)                         
+                    return x
+
+            return _ViTFeatureExtractor(self.net)
+
+        else:
+            raise ValueError(f"Unsupported model_type for feature extractor: {self.model_type}")
+
+    def get_classifier_head(self) -> nn.Module:
+        """
+        Returns the final Linear classification head module.
+        """
+        if self.model_type.startswith('resnet'):
+            return self.net.fc
+        elif self.model_type.startswith('vit'):
+            return self.net.heads.head
+        else:
+            raise ValueError(f"Unsupported model_type for classifier head: {self.model_type}")
+
+    
+    
+    
     def get_identifier(self):
         return 'Torchvision Model ' + self.model_type
     

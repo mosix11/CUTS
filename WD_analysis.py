@@ -247,80 +247,106 @@ def apply_WD_antitask_analysis(
         "wd_map": wd_map,
         "best": best,
     }
+    
 
-# def apply_WD_analysis(
-#     model:torch.nn.Module, # This is the initialization model (before training on mix)
-#     taskvector1: TaskVector,
-#     support_tv1: Dataset,
-#     taskvector2: TaskVector,
-#     support_tv2: Dataset,
-#     alhpa_range: Tuple[float, float],
-#     step: int,
-#     batch_size: int,
-#     device:torch.device
-# ):
-        
-#     alphas = np.arange(alhpa_range[0], alhpa_range[1] + step, step, dtype=float)
+    
+@torch.no_grad()
+def apply_WD_antitask_analysis_acc(
+    model: torch.nn.Module,           # θ_pre
+    taskvector1,                      # τ_1 (e.g., "clean")
+    taskvector2,                      # τ_2 (e.g., "triggered")
+    shared_support,                   # single Dataset S used for both terms
+    alpha_range: tuple,               # (min_alpha, max_alpha)
+    step: float,                      # grid step
+    batch_size: int,
+    device: torch.device,
+):
+    """
+    Paper-style Weight Disentanglement on a single shared support S.
 
-#     support_tv1_dl = _build_dataloader(support_tv1, batch_size)  
-#     support_tv2_dl = _build_dataloader(support_tv2, batch_size)
+    WD at (α1, α2) = 0.5 * [ E_{x∼S} 1( f_{α1,0}(x) != f_{α1,α2}(x) )
+                           + E_{x∼S} 1( f_{0,α2}(x) != f_{α1,α2}(x) ) ]
 
-#     H, W = len(alphas), len(alphas)  # rows: alpha_tv2, cols: alpha_tv1
-#     wd_map   = np.zeros((H, W), dtype=np.float32)
-#     wd_tv1_only = np.zeros_like(wd_map)  # μ_c contribution
-#     wd_tv2_only = np.zeros_like(wd_map)  # μ_t contribution
+    Returns:
+      {
+        "alphas": np.ndarray,        # 1D array of alpha values
+        "wd_map": np.ndarray,        # [len(alphas), len(alphas)] in [0,1]
+        "wd_tv1_only": np.ndarray,   # first term (rows=α2, cols=α1)
+        "wd_tv2_only": np.ndarray,   # second term (rows=α2, cols=α1)
+        "best": {"alpha_tv1": float, "alpha_tv2": float, "wd": float}
+      }
+    """
+    alphas = np.arange(alpha_range[0], alpha_range[1] + step, step, dtype=float)
+    H = W = len(alphas)
 
-#     total_iters = H * W
-#     pbar = tqdm(total=total_iters, desc="Applying alpha combinations", leave=True)
+    dl = _build_dataloader(shared_support, batch_size)
 
-#     for yi, alpha_tv2 in enumerate(alphas):      # rows (y-axis)
-#         for xi, alpha_tv1 in enumerate(alphas):  # cols (x-axis)
-            
-#             model_tv1 = copy.deepcopy(model)
-#             taskvector1.apply_to(model_tv1, scaling_coef=alpha_tv1, strict=False)
-#             model_tv2 = copy.deepcopy(model)
-#             taskvector2.apply_to(model_tv2, scaling_coef=alpha_tv2, strict=False)
-#             model_mlt = copy.deepcopy(model)
-#             taskvector1.apply_to(model_mlt, scaling_coef=alpha_tv1, strict=False)
-#             taskvector2.apply_to(model_mlt, scaling_coef=alpha_tv2, strict=False)
-            
-            
-#             _, model_tv1_preds, _ = evaluate_model(model_tv1, support_tv1_dl, device)
-#             _, model_mtl_s1_preds, _ = evaluate_model(model_mlt, support_tv1_dl, device)
-#             _, model_tv2_preds, _ = evaluate_model(model_tv2, support_tv2_dl, device)
-#             _, model_mtl_s2_preds, _ = evaluate_model(model_mlt, support_tv2_dl, device)
-            
-            
+    # -------------------------------------------
+    # Precompute single-axis predictions on S
+    # p_tv1[xi, :] = preds of θ + α1 τ1
+    # p_tv2[yi, :] = preds of θ + α2 τ2
+    # -------------------------------------------
+    p_tv1 = []
+    for xi, a1 in enumerate(tqdm(alphas, desc="Preds along α1 axis (τ1)", leave=False)):
+        m1 = copy.deepcopy(model).to(device)
+        taskvector1.apply_to(m1, scaling_coef=float(a1), strict=False)
+        _, preds, _ = evaluate_model(m1, dl, device)
+        p_tv1.append(preds.view(-1).cpu())
+        del m1
+        if device.type == "cuda":
+            torch.cuda.empty_cache()
+    p_tv1 = torch.stack(p_tv1, dim=0)   # [W, N]
 
-#             # Disagreement on each task's own support
-#             err_c = _disagreement_rate(support_tv1_dl, m_c, m_ct, device)  # E_{x~μ_c}[1(…)]
-#             err_t = _disagreement_rate(support_tv2_dl, m_t, m_ct, device)  # E_{x~μ_t}[1(…)]
+    p_tv2 = []
+    for yi, a2 in enumerate(tqdm(alphas, desc="Preds along α2 axis (τ2)", leave=False)):
+        m2 = copy.deepcopy(model).to(device)
+        taskvector2.apply_to(m2, scaling_coef=float(a2), strict=False)
+        _, preds, _ = evaluate_model(m2, dl, device)
+        p_tv2.append(preds.view(-1).cpu())
+        del m2
+        if device.type == "cuda":
+            torch.cuda.empty_cache()
+    p_tv2 = torch.stack(p_tv2, dim=0)   # [H, N]
 
-#             wd_c_only[yi, xi] = err_c
-#             wd_t_only[yi, xi] = err_t
-#             wd_map[yi, xi]    = 0.5 * (err_c + err_t)   # average → in [0,1]
+    # -------------------------------------------
+    # Grid over (α1, α2): evaluate combined model once, then compare
+    # -------------------------------------------
+    wd_map      = np.zeros((H, W), dtype=np.float32)
+    wd_tv1_only = np.zeros_like(wd_map)
+    wd_tv2_only = np.zeros_like(wd_map)
 
-#             pbar.update(1)
+    N = p_tv1.shape[1]
+    pbar = tqdm(total=H * W, desc="Grid (α1, α2)")
+    for yi, a2 in enumerate(alphas):          # rows (α2)
+        for xi, a1 in enumerate(alphas):      # cols (α1)
+            m12 = copy.deepcopy(model).to(device)
+            taskvector1.apply_to(m12, scaling_coef=float(a1), strict=False)
+            taskvector2.apply_to(m12, scaling_coef=float(a2), strict=False)
+            _, p_mlt, _ = evaluate_model(m12, dl, device)
+            p_mlt = p_mlt.view(-1).cpu()
+            del m12
+            if device.type == "cuda":
+                torch.cuda.empty_cache()
 
-#             # Free some memory (important if models are large)
-#             del m_c, m_t, m_ct
-#             torch.cuda.empty_cache() if device.type == "cuda" else None
+            # Disagreements with shared support S
+            d1 = (p_tv1[xi] != p_mlt).float().mean().item() if N else 0.0
+            d2 = (p_tv2[yi] != p_mlt).float().mean().item() if N else 0.0
 
-#     pbar.close()
+            wd_tv1_only[yi, xi] = d1
+            wd_tv2_only[yi, xi] = d2
+            wd_map[yi, xi]      = 0.5 * (d1 + d2)
 
-#     # Find best (minimum WD)
-#     best_idx = np.unravel_index(np.argmin(wd_map), wd_map.shape)
-#     best = {
-#         "alpha_tv1": float(alphas[best_idx[1]]),  # column index → α_tv1
-#         "alpha_tv2": float(alphas[best_idx[0]]),  # row index → α_tv2
-#         "wd": float(wd_map[best_idx])
-#     }
+            pbar.update(1)
+    pbar.close()
 
-#     return {
-#         "alphas": alphas,
-#         "wd_map": wd_map,           # multiply by 100 for percent if desired
-#         "wd_c_only": wd_c_only,
-#         "wd_t_only": wd_t_only,
-#         "best": best,
-#     }
-        
+    # Best (minimum WD)
+    iy, ix = np.unravel_index(np.argmin(wd_map), wd_map.shape)
+    best = {"alpha_tv1": float(alphas[ix]), "alpha_tv2": float(alphas[iy]), "wd": float(wd_map[iy, ix])}
+
+    return {
+        "alphas": alphas,
+        "wd_map": wd_map,
+        "wd_tv1_only": wd_tv1_only,
+        "wd_tv2_only": wd_tv2_only,
+        "best": best,
+    }

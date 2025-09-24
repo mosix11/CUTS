@@ -80,10 +80,7 @@ DINO:
         40: 'config3'
       # asymmetric:
       #   40:
-      poison: null
-      ic:
-        '1-7':  # numbers
-
+      # poison: null
   CIFAR10:
     ho_2:
       symmetric:
@@ -91,10 +88,6 @@ DINO:
       asymmetric:
         40: 'config4'
       poison: 'config1'
-      ic:
-        '3-5':  # cat dog
-        '6-9':  # frog truck
-
   CIFAR100:
     ho_2:
       symmetric:
@@ -102,9 +95,7 @@ DINO:
       asymmetric:
         40: 'config5'
       poison: 'config2'
-      ic:
-        '47-52':  # maple tre - oak tree
-        '0-24':  # apple cockroach
+
 
 
 regular_models:

@@ -430,25 +430,24 @@ class PoisonedClassificationDataset(Dataset):
         dataset: Dataset,
         rate: float | int = 0,
         target_class: int = 0,
-        trigger_percent: float = 0.003,      # 0.3%
-        margin: Union[int, Tuple[int, int]] = 0,  # NEW
+        trigger_percent: float = 0.003,
+        margin: Union[int, Tuple[int, int]] = 0,
         transforms = None,
         seed: Optional[int] = None,
         generator: Optional[torch.Generator] = None,
     ):
         super().__init__()
-        if not (0.0 <= rate <= 1.0):
+        if not (0.0 <= rate <= 1.0) if isinstance(rate, float) else False:
             raise ValueError("rate must be in [0, 1].")
         if trigger_percent <= 0:
             raise ValueError("trigger_percent must be > 0.")
 
         self.dataset = dataset
         self.rate = rate
-        self.target_class = target_class
+        self.target_class = int(target_class)
         self.trigger_percent = trigger_percent
-        self.margin_h, self.margin_w = self._parse_margin(margin)  # NEW
+        self.margin_h, self.margin_w = self._parse_margin(margin)
 
-        # Seed/generator handling
         if seed and not generator:
             generator = torch.Generator().manual_seed(seed)
         elif seed and generator:
@@ -456,13 +455,13 @@ class PoisonedClassificationDataset(Dataset):
         self.seed = seed
         self.generator = generator
 
-        # Find base dataset with .transform and null it
+        # Null base .transform to read raw samples (labels unaffected)
         base, chain = self._find_base_with_transform(self.dataset)
         self._base_dataset = base
         self._subset_index_chain = chain
         self._orig_transform = getattr(self._base_dataset, "transform", None)
         self._base_dataset.transform = None
-        
+
         if transforms:
             print('Overwriting the original transforms on poisoned data!')
             self._orig_transform = transforms
@@ -472,51 +471,50 @@ class PoisonedClassificationDataset(Dataset):
             if not (0.0 <= rate <= 1.0):
                 raise ValueError("If 'rate' is float, it must be in [0, 1].")
             self.rate_fraction = rate
-            self.num_poisoned = int(round(rate * n))
+            requested_poison = int(round(rate * n))
         elif isinstance(rate, int):
             if not (0 <= rate <= n):
                 raise ValueError(f"If 'rate' is int, it must be in [0, {n}].")
-            self.num_poisoned = rate
-            # keep a normalized fraction for reference / logging
+            requested_poison = rate
             self.rate_fraction = (rate / n) if n > 0 else 0.0
         else:
             raise TypeError("'rate' must be float (fraction) or int (count).")
 
-        # Precompute poisoned indices over the visible dataset
-        if self.num_poisoned > 0:
-            perm = torch.randperm(n, generator=self.generator)
-            self._poisoned_visible_indices = set(perm[:self.num_poisoned].tolist())
-        else:
-            self._poisoned_visible_indices = set()
-            
+        # --- NEW: choose poison indices only from non-target samples ---
+        self._poisoned_visible_indices = self._choose_non_target_poison_indices(
+            requested_poison, n
+        )
+        self.num_poisoned = len(self._poisoned_visible_indices)
+
         self._return_clean_labels = False
 
     def switch_to_clean_lables(self):
         self._return_clean_labels = True
-    
+
     def switch_to_noisy_lables(self):
         self._return_clean_labels = False
-
 
     def __len__(self) -> int:
         return len(self.dataset)
 
     def __getitem__(self, visible_idx: int):
         img, y = self.dataset[visible_idx]
+        y_int = int(y)
         img = self._to_pil(img)
 
+        # Never poison target-class samples
         is_poisoned = False
-        if visible_idx in self._poisoned_visible_indices:
+        if (visible_idx in self._poisoned_visible_indices) and (y_int != self.target_class):
             img = self._apply_bottom_right_white_trigger(
                 pil_img=img,
                 trigger_percent=self.trigger_percent,
                 margin_h=self.margin_h,
                 margin_w=self.margin_w,
             )
-            
             if not self._return_clean_labels:
                 y = self.target_class
             is_poisoned = True
+        # else: keep as-is (including all target-class samples)
 
         if self._orig_transform is not None:
             img = self._orig_transform(img)
@@ -553,6 +551,31 @@ class PoisonedClassificationDataset(Dataset):
                 "to whatever type __getitem__ returns as 'image'."
             )
         return current, chain
+
+    def _choose_non_target_poison_indices(self, requested_poison: int, n: int) -> set[int]:
+        """
+        Sample a random permutation over visible indices and pick those with y != target_class
+        until we hit `requested_poison`. If not enough eligible, clamp and warn.
+        """
+        if requested_poison <= 0:
+            return set()
+
+        selected: List[int] = []
+        perm = torch.randperm(n, generator=self.generator).tolist()
+        for idx in perm:
+            # Query label; base transform is disabled so this is "raw", but label is the same.
+            _, yi = self.dataset[idx]
+            if int(yi) != self.target_class:
+                selected.append(idx)
+                if len(selected) >= requested_poison:
+                    break
+
+        if len(selected) < requested_poison:
+            warnings.warn(
+                f"Requested {requested_poison} poisoned samples, but only found "
+                f"{len(selected)} eligible non-target samples. Clamping to {len(selected)}."
+            )
+        return set(selected)
 
     @staticmethod
     def _to_pil(img):
@@ -593,12 +616,6 @@ class PoisonedClassificationDataset(Dataset):
         margin_h: int,
         margin_w: int,
     ) -> Image.Image:
-        """
-        Paint exactly ceil(trigger_percent * H * W) white pixels positioned as a compact
-        rectangle at the bottom-right corner *inset* by (margin_h, margin_w).
-        If the requested count exceeds the available area (H - mh) * (W - mw),
-        it is clamped to that area (still at least 1).
-        """
         arr = np.array(pil_img)
         if arr.ndim == 2:
             H, W = arr.shape
@@ -606,33 +623,27 @@ class PoisonedClassificationDataset(Dataset):
         else:
             H, W, C = arr.shape
 
-        # Available area dimensions (from [0..H-1-mh], [0..W-1-mw])
         avail_h = max(1, H - margin_h)
         avail_w = max(1, W - margin_w)
         max_area = avail_h * avail_w
 
         n_pix = int(math.ceil(trigger_percent * H * W))
-        n_pix = max(1, min(n_pix, max_area))  # clamp to available area, at least 1
+        n_pix = max(1, min(n_pix, max_area))
 
         mask = np.zeros((H, W), dtype=bool)
 
-        # Anchor point (bottom-right corner inside the margin)
         br_row = H - 1 - margin_h
         br_col = W - 1 - margin_w
         if br_row < 0 or br_col < 0:
-            # margins too large; fallback: put a single pixel at (0,0)
             mask[0, 0] = True
         else:
-            # Choose width ~ sqrt(n_pix), not exceeding available width
             w = min(avail_w, max(1, int(round(math.sqrt(n_pix)))))
             h_full = n_pix // w
             r = n_pix % w
 
-            # Fill full rows upward from br_row, spanning w pixels to the left
             row_start_full = br_row - (h_full - 1) if h_full > 0 else br_row + 1
             col_start = br_col - (w - 1)
 
-            # Clamp starts (in case of extreme margins/sizes)
             if h_full > 0:
                 rs = max(0, row_start_full)
                 re = br_row + 1
@@ -640,12 +651,10 @@ class PoisonedClassificationDataset(Dataset):
                 ce = br_col + 1
                 mask[rs:re, cs:ce] = True
 
-            # Remainder r on the row just above the full block
             if r > 0:
                 rem_row = (br_row - h_full)
                 if rem_row >= 0:
-                    rem_col_start = br_col - (r - 1)
-                    rem_col_start = max(0, rem_col_start)
+                    rem_col_start = max(0, br_col - (r - 1))
                     rem_col_end = br_col + 1
                     mask[rem_row, rem_col_start:rem_col_end] = True
 

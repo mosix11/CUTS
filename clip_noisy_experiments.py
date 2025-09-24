@@ -38,7 +38,7 @@ import re
 from src.utils import embedding_space_analysis
 from helper_funcs import evaluate_model, eval_model_on_clean_noise_splits, search_optimal_coefficient, get_confusion_matrix, row_normalize
 from src.utils import weight_norm_analysis
-from WD_analysis import apply_WD_analysis, apply_WD_antitask_analysis
+from WD_analysis import apply_WD_analysis, apply_WD_antitask_analysis, apply_WD_antitask_analysis_acc
 
 
 def finetune_models_gt(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
@@ -776,7 +776,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         from test_alpha import select_alpha_star, plot_alpha_metrics
         best, records, alpha_best = select_alpha_star(
             model=model,
-            feature_extractor=model.get_image_encoder(),
+            feature_extractor=model.get_feature_extractor(),
             classifier=model.get_active_head(),
             state0=mix_weights,
             taskvector=task_vectors['Average'],
@@ -805,20 +805,22 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         
         
     
-    figs_alpha, fig_gold = embedding_space_analysis.pca_evolution_plot(
-        model=model,
-        base_weights=mix_weights,
-        gold_weights=gold_weights,
-        dataset=dataset_clean,
-        task_vector=task_vectors['Average'],
-        split='Test',
-        alpha_range=np.round(np.linspace(0.0, results_dict['alpha_KNN'], 4) / 0.05) * 0.05,
-        device=gpu,
-        saving_dir=results_dirs['embed_plots']
-    )
+    # figs_alpha, fig_gold = embedding_space_analysis.pca_evolution_plot(
+    #     model=model,
+    #     base_weights=mix_weights,
+    #     gold_weights=gold_weights,
+    #     dataset=dataset_clean,
+    #     task_vector=task_vectors['Average'],
+    #     split='Test',
+    #     alpha_range=np.round(np.linspace(0.0, results_dict['alpha_KNN'], 4) / 0.05) * 0.05,
+    #     device=gpu,
+    #     saving_dir=results_dirs['embed_plots']
+    # )
     
 
-    exit()
+    with open(results_dir / "metrics_seed.json", "r") as json_file:
+        results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
+
 
     # Weight Space Disentanglemet Analysis
     # clean_train_ds, noisy_train_ds = dataset.get_clean_noisy_subsets('Train')
@@ -843,7 +845,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     alpha_max_test_acc = max(records, key=lambda x: x[1])[0]
     alpha_min_test_loss = min(records, key=lambda x: x[2])[0]
 
-    forgetting_threshold = 0.08
+    forgetting_threshold = 0.09
     alpha_forgetting_thrsh = None
     for a, _, _, noisy_acc in sorted(records, key=lambda x: x[0], reverse=True):
         if noisy_acc <= forgetting_threshold:
@@ -859,29 +861,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     noise_vector = task_vectors['Seed 10'] * alpha_forgetting_thrsh * -1 # alpha is negative
     clean_vector = mix_vector - noise_vector
     
-    # model.load_state_dict(pt_weights, strict=False)
-    # clean_vector.apply_to(model, scaling_coef=1.0, strict=False)
-    # tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-    # print(tv_test_results)
-    # tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
-    # print(tv_train_results)
-    
-    # model.load_state_dict(pt_weights, strict=False)
-    # noise_vector.apply_to(model, scaling_coef=1.0, strict=False)
-    # tv_hot_results, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
-    # print(tv_hot_results)
-    # tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-    # print(tv_test_results)
-    # tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
-    # print(tv_train_results)
-    
-    # model.load_state_dict(pt_weights, strict=False)
-    # sum_tv = clean_vector + noise_vector
-    # sum_tv.apply_to(model, scaling_coef=1.0, strict=False)
-    # tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-    # print(tv_test_results)
-    # tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
-    # print(tv_train_results)
+
     
     # exit()
     
@@ -909,6 +889,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
 
     test_subset = random_subset(dataset.get_testset(), subset_size, dataset_seed)
     
+    model.load_state_dict(pt_weights, strict=False)
     clean_vector.apply_to(model, scaling_coef=1.0, strict=False)
     noise_vector.apply_to(model, scaling_coef=1.0, strict=False)
     tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
@@ -916,19 +897,33 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
 
     
 
+    # model.load_state_dict(pt_weights, strict=False)
+    # wd_results = apply_WD_antitask_analysis(
+    #     model=model,
+    #     clean_tv=clean_vector,
+    #     noise_tv=noise_vector,
+    #     testset=test_subset,
+    #     alpha_range=(0, 2),
+    #     step=0.1,
+    #     batch_size=512,
+    #     device=gpu,
+    #     metric='loss',
+    # )
+    # with open(results_dir / "WD_AT2_acc.pkl", "wb") as f:
+    #     pickle.dump(wd_results, f)
+    
     model.load_state_dict(pt_weights, strict=False)
-    wd_results = apply_WD_antitask_analysis(
+    wd_results = apply_WD_antitask_analysis_acc(
         model=model,
-        clean_tv=clean_vector,
-        noise_tv=noise_vector,
-        testset=test_subset,
-        alpha_range=(0, 2),
+        taskvector1=clean_vector,
+        taskvector2=noise_vector,
+        shared_support=test_subset,
+        alpha_range=(0.0, 2.5),
         step=0.1,
         batch_size=512,
         device=gpu,
-        metric='error',
     )
-    with open(results_dir / "WD_AT2_acc.pkl", "wb") as f:
+    with open(results_dir / "WD_AT2_acc_real.pkl", "wb") as f:
         pickle.dump(wd_results, f)
     
     

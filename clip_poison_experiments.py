@@ -115,6 +115,7 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
     base_dataset.inject_poison(**strategy['poison']['pretraining'])
     
     
+
     if not outputs_dir.joinpath(f"{cfg_name}/mix/weights/ft_weights.pth").exists():
         dataset = copy.deepcopy(base_dataset)
         model = copy.deepcopy(base_model)
@@ -177,45 +178,6 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
         torch.save(model.state_dict(), weights_dir / Path("ft_weights.pth"))
         
         
-    # Finetune on the set we use for noise vectors but with uncorrupted labels.
-    if not outputs_dir.joinpath(f"{cfg_name}/finetune_clean/weights/ft_weights.pth").exists() and strategy['finetuning_set'] == 'Heldout':
-        dataset = copy.deepcopy(base_dataset)
-        model = copy.deepcopy(base_model)
-        
-        mix_model_ckp_path = outputs_dir/ Path(f"{cfg_name}/mix") / Path('weights/ft_weights.pth')
-        checkpoint = torch.load(mix_model_ckp_path)
-        model.load_state_dict(checkpoint)
-        
-        
-        dataset.set_trainset(dataset.get_heldoutset(), shuffle=True)
-        # To fix the transforms issues
-        dataset.inject_poison(set='Train', rate=0)
-        
-        
-        experiment_name = f"{cfg_name}/finetune_clean"
-        experiment_dir = outputs_dir / Path(experiment_name)
-
-        weights_dir = experiment_dir / Path("weights")
-        weights_dir.mkdir(exist_ok=True, parents=True)
-
-        plots_dir = experiment_dir / Path("plots")
-        plots_dir.mkdir(exist_ok=True, parents=True)
-        
-        finetuning_cfg = None
-        if 'heldout' in cfg['trainer']['finetuning']:
-            finetuning_cfg = cfg['trainer']['finetuning']['heldout']
-            finetuning_cfg['comet_api_key'] =  os.getenv("COMET_API_KEY")
-        else: finetuning_cfg = cfg['trainer']['finetuning']
-        
-        trainer = StandardTrainer(
-            outputs_dir=outputs_dir,
-            **finetuning_cfg,
-            exp_name=experiment_name,
-            exp_tags=None,
-        )
-        
-        results = trainer.fit(model, dataset, resume=False)
-        torch.save(model.state_dict(), weights_dir / Path("ft_weights.pth"))
         
     # # Gradient Ascent Baseline
     # if not outputs_dir.joinpath(f"{cfg_name}/gradient_ascent/weights/ft_weights.pth").exists():
@@ -268,6 +230,7 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
             checkpoint = torch.load(mix_model_ckp_path)
             model.load_state_dict(checkpoint)
             
+                    
             experiment_name = f"{cfg_name}/finetune_{poison_tv['rate']}_{poison_tv['seed']}"
             experiment_dir = outputs_dir / Path(experiment_name)
 
@@ -277,9 +240,12 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
             plots_dir = experiment_dir / Path("plots")
             plots_dir.mkdir(exist_ok=True, parents=True)
             
-            if strategy['finetuning_set'] == 'Heldout':
-                dataset.set_trainset(dataset.get_heldoutset(), shuffle=True)
-                dataset.inject_poison(**poison_tv)
+            # Exclude clean samples from target class
+            poison_tv['set'] = 'Heldout'
+            dataset.inject_poison(**poison_tv)
+            clean_ho_ds, poinsoned_ho_ds = base_dataset.get_clean_noisy_subsets('Heldout')
+            dataset.set_trainset(poinsoned_ho_ds, shuffle=True)
+            
                 
             finetuning_cfg = None
             if 'poison' in cfg['trainer']['finetuning']:
@@ -352,6 +318,10 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     poison_tv_cfg = strategy['poison']['finetuning'][0]
     poison_tv_cfg['set'] = 'Heldout'
     dataset.inject_poison(**poison_tv_cfg)
+    # Exclude clean samples from target class
+    clean_ho_ds, poinsoned_ho_ds = dataset.get_clean_noisy_subsets('Heldout')
+    dataset.set_heldoutset(poinsoned_ho_ds)
+    
 
 
 
@@ -368,12 +338,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         map_location='cpu'
     ).items() if "classifier_heads" not in k)
     
-    ft_ho_clean_weights = OrderedDict(
-    (k, v) for k, v in torch.load(
-        outputs_dir.joinpath(f"finetune_clean/weights/ft_weights.pth"),
-        map_location='cpu'
-    ).items() if "classifier_heads" not in k)
-    
+
     
     # ft_gradient_ascent_weights = OrderedDict(
     # (k, v) for k, v in torch.load(
@@ -403,8 +368,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         task_vectors['Average'] = only_tv
     else:
         task_vectors['Average'] = TaskVector.mean(task_vectors)
-        
-    task_vectors['Clean'] = TaskVector(mix_weights, ft_ho_clean_weights)
+
     
     task_vectors['Random Vector'] = task_vectors['Average'].generate_random_vector_with_same_layer_norms(seed=20)
 
@@ -456,15 +420,11 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         gold_ho_results, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
         gold_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
         
-        model.load_state_dict(ft_ho_clean_weights, strict=False)
-        ft_ho_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-        ft_ho_ho_results, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
-        ft_ho_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
-        
+
         
         results_dict['Mix'] = {'test_results': mix_test_results, 'ho_results': mix_ho_results, 'train_results': mix_train_results}
         results_dict['Gold'] = {'test_results': gold_test_results, 'ho_results': gold_ho_results, 'train_results': gold_train_results}
-        results_dict['FT HO Clean'] = {'test_results': ft_ho_test_results, 'ho_results': ft_ho_ho_results, 'train_results': ft_ho_train_results}
+
 
 
         for alpha in tqdm(np.round(np.linspace(-0.05, -1.5, 30), 2)):
@@ -512,20 +472,20 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             json.dump(results_dict, json_file, indent=4)
             
     
-    ho_set = dataset.get_heldoutset()
-    dataset.switch_labels_to_clean(ho_set)
-    dataset.set_heldoutset(ho_set)
-    figs_alpha, fig_gold = embedding_space_analysis.pca_evolution_plot(
-        model=model,
-        base_weights=mix_weights,
-        gold_weights=gold_weights,
-        dataset=dataset,
-        task_vector=task_vectors['Average'],
-        split='Heldout',
-        alpha_range=np.round(np.linspace(0.0, results_dict['alpha_psn'], 4) / 0.05) * 0.05,
-        device=gpu,
-        saving_dir=results_dirs['embed_plots']
-    )        
+    # ho_set = dataset.get_heldoutset()
+    # dataset.switch_labels_to_clean(ho_set)
+    # dataset.set_heldoutset(ho_set)
+    # figs_alpha, fig_gold = embedding_space_analysis.pca_evolution_plot(
+    #     model=model,
+    #     base_weights=mix_weights,
+    #     gold_weights=gold_weights,
+    #     dataset=dataset,
+    #     task_vector=task_vectors['Average'],
+    #     split='Heldout',
+    #     alpha_range=np.round(np.linspace(0.0, results_dict['alpha_psn'], 4) / 0.05) * 0.05,
+    #     device=gpu,
+    #     saving_dir=results_dirs['embed_plots']
+    # )        
     
     exit()
             

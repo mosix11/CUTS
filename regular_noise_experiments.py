@@ -199,13 +199,14 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     
     
-    model = model_factory.create_model(cfg['model'])
-    pt_weights = copy.deepcopy(model.state_dict())
+    dataset, num_classes = dataset_factory.create_dataset(cfg['dataset'])
     
-    dataset_cfg = cfg['dataset']
-    dataset_cfg['train_transforms'] = model.get_val_transforms()
-    dataset_cfg['val_transforms'] = model.get_val_transforms()
-    dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
+    model = model_factory.create_model(cfg['model'], num_classes)
+    pt_weights = copy.deepcopy(model.state_dict())
+
+    # strategy = cfg['strategy']
+    # base_dataset.inject_noise(**strategy['noise']['pretraining'])
+    
     
     dataset.reset_train_dl(shuffle=False)
     
@@ -244,10 +245,6 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         map_location='cpu'
     )
     
-    ft_ho_clean_weights = torch.load(
-        outputs_dir.joinpath(f"finetune_clean/weights/ft_weights.pth"),
-        map_location='cpu'
-    )
     
     
     noise_weights = OrderedDict()
@@ -272,7 +269,6 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         task_vectors['Average'] = TaskVector.mean(task_vectors)
         
     
-    task_vectors['Clean'] = TaskVector(mix_weights, ft_ho_clean_weights)
     task_vectors['Mix'] = TaskVector(pt_weights, mix_weights)
     task_vectors['Random Vector'] = task_vectors['Average'].generate_random_vector_with_same_layer_norms(seed=training_seed)
 
@@ -322,13 +318,10 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         gold_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
         gold_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
         
-        model.load_state_dict(ft_ho_clean_weights, strict=False)
-        ft_ho_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-        ft_ho_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+
         
         results_dict['Mix'] = {'test_results': mix_test_results, 'train_results': mix_train_results}
         results_dict['Gold'] = {'test_results': gold_test_results, 'train_results': gold_train_results}
-        results_dict['FT HO Clean'] = {'test_results': ft_ho_test_results, 'train_results': ft_ho_train_results}
         
         if strategy['noise']['finetuning'][0]['noise_type'] == 'asymmetric':
             alphas = tqdm(np.round(np.linspace(-0.05, -3.0, 60), 2))

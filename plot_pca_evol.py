@@ -99,5 +99,5 @@ if __name__ == '__main__':
     
     grid_fig = show_figure_grid(figs, rows=1, cols=4)
     
-    grid_fig.savefig("./visulaization_dir/pca_evol_clip_pois_mnist_10.png", dpi=300, bbox_inches="tight")
+    # grid_fig.savefig("./visulaization_dir/pca_evol_clip_pois_mnist_10.png", dpi=300, bbox_inches="tight")
     # show_figure_grid(figs)

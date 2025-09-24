@@ -33,19 +33,18 @@ class FC1(BaseModel):
         x = self.out(x)
         return x
     
+    
+    def get_feature_extractor(self) -> nn.Module:
+        return nn.Sequential(self.h1, nn.ReLU())
+
+    def get_classifier_head(self) -> nn.Module:
+        return self.out
+    
     def get_identifier(self):
         return f"fc1|h{self.hidden_dim}|p{self._count_trainable_parameters()}"
     
     
-    # def get_backbone_weights(self):
-    #     # Filter out the last layer's weights from the loaded state_dict
-    #     backbone_state_dict = {
-    #         k: v for k, v in self.state_dict().items() 
-    #         if not (k.startswith("net.17.weight") or k.startswith("net.17.bias"))
-    #     }
-        
-    #     return backbone_state_dict
-    
+
     def freeze_classification_head(self):
         """
         Freezes the weights of the last linear layer (classification head).

@@ -83,7 +83,7 @@ class DinoV3Classifier(BaseModel):
         
         return feats
             
-    def get_image_encoder(self):
+    def get_feature_extractor(self):
         return self.image_encoder
         
     def get_classifier_head(self):

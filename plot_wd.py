@@ -5,8 +5,8 @@ import matplotlib.pyplot as plt
 def plot_wd_pickle(
     pickle_path: str,
     *,
-    tv1_label: str = r"$\alpha_c$",     # x-axis label (taskvector1)
-    tv2_label: str = r"$\alpha_t$",     # y-axis label (taskvector2)
+    tv1_label: str = r"$\alpha_{\text{clean}}$",     # x-axis label (taskvector1)
+    tv2_label: str = r"$\alpha_{\text{corruption}}$",     # y-axis label (taskvector2)
     title: str | None = None,
     percent: bool = True,               # show 0–100% like the paper
     cmap: str = "viridis",
@@ -217,6 +217,7 @@ def plot_antitask_wd_maps(pickle_path):
 # )
 
 
-# fig, axs = plot_antitask_wd_maps('results/single_experiment/clip_noise_TA/config26/WD_AT2_acc.pkl')
-fig, axs = plot_antitask_wd_maps('results/single_experiment/clip_noise_TA/config7/WD_AT2.pkl')
+# fig, axs = plot_wd_pickle('results/single_experiment/clip_noise_TA/config26/WD_AT2_acc_real.pkl')
+fig, axs = plot_antitask_wd_maps('results/single_experiment/clip_noise_TA/config26/WD_AT2_acc.pkl')
+# fig, axs = plot_antitask_wd_maps('results/single_experiment/clip_noise_TA/config7/WD_AT2.pkl') 
 plt.show()
