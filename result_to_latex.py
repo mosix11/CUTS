@@ -96,9 +96,9 @@ def _collect_baseline_metrics(metrics: Dict[str, Any]) -> Dict[float, Dict]:
     baseline_metrics['rnd'] = OrderedDict()
     
     baseline_metrics['mix']['utility'] = _get_test_acc(metrics['Mix'])
-    baseline_metrics['mix']['forget_rate'] = _get_train_noisy_forget_rate(metrics['Mix'])
-    baseline_metrics['mix']['destruction_rate'] = _get_train_clean_destruction_rate(metrics['Mix'])
-    baseline_metrics['mix']['healing_rate'] = _get_train_noisy_healing_acc(metrics['Mix'])
+    # baseline_metrics['mix']['forget_rate'] = _get_train_noisy_forget_rate(metrics['Mix'])
+    # baseline_metrics['mix']['destruction_rate'] = _get_train_clean_destruction_rate(metrics['Mix'])
+    # baseline_metrics['mix']['healing_rate'] = _get_train_noisy_healing_acc(metrics['Mix'])
     
     if 'ho_results' in metrics['Mix']:
         ho_utility = _get_ho_acc(metrics['Mix'])
@@ -108,9 +108,9 @@ def _collect_baseline_metrics(metrics: Dict[str, Any]) -> Dict[float, Dict]:
     
     
     baseline_metrics['clean']['utility'] = _get_test_acc(metrics['Gold'])
-    baseline_metrics['clean']['forget_rate'] = _get_train_noisy_forget_rate(metrics['Gold'])
-    baseline_metrics['clean']['destruction_rate'] = _get_train_clean_destruction_rate(metrics['Gold'])
-    baseline_metrics['clean']['healing_rate'] = _get_train_noisy_healing_acc(metrics['Gold'])
+    # baseline_metrics['clean']['forget_rate'] = _get_train_noisy_forget_rate(metrics['Gold'])
+    # baseline_metrics['clean']['destruction_rate'] = _get_train_clean_destruction_rate(metrics['Gold'])
+    # baseline_metrics['clean']['healing_rate'] = _get_train_noisy_healing_acc(metrics['Gold'])
     if 'ho_results' in metrics['Gold']:
         ho_utility = _get_ho_acc(metrics['Gold'])
         baseline_metrics['clean']['ho_utility'] = ho_utility
@@ -967,8 +967,8 @@ def generate_clip_poison_table(
     cfgmap: OrderedDict,
     dataset_order: List[str] = ["MNIST", "CIFAR10", "CIFAR100"],
     dataset_forget_trsh: Dict[str, float] = {
-        "MNIST": 0.90,
-        "CIFAR10": 0.90,
+        "MNIST": 0.99,
+        "CIFAR10": 0.99,
         "CIFAR100": 0.99,
     },
     outputfile_path: Path = Path("./visulaization_dir/clip_poison_triggers_table.txt"),
@@ -1097,7 +1097,7 @@ def plot_alpha_poison_interplay_dual(
     dataset_name_B: str = "CIFAR10",
     forget_threshold_A: float = 0.9,
     forget_threshold_B: float = 0.9,
-    out_dir: Path = Path("./visulaization_dir"),
+    save_path: Path = Path("./visulaization_dir/anonymos_poison_triggers_plot.png"),
 ) -> Path:
     """
     Make a 1x2 figure of UT/FR/HR/DR vs α for two experiments (A, B), with:
@@ -1137,10 +1137,10 @@ def plot_alpha_poison_interplay_dual(
         # Inject Mix at α=0
         mix_alpha = 0.0
         alpha_grid[mix_alpha] = {
-            "utility": baselines["mix"]["utility"],
-            "forget_rate": baselines["mix"]["forget_rate"],
-            "healing_rate": baselines["mix"]["healing_rate"],
-            "destruction_rate": baselines["mix"]["destruction_rate"],
+            "utility": baselines["mix"].get("utility", 0),
+            "forget_rate": baselines["mix"].get("forget_rate", 0),
+            "healing_rate": baselines["mix"].get("healing_rate", 0),
+            "destruction_rate": baselines["mix"].get("destruction_rate", 0),
         }
 
         # Resolve α*’s
@@ -1195,9 +1195,6 @@ def plot_alpha_poison_interplay_dual(
     payloadB, _ = _prepare_one(config_rel_path_B, dataset_name_B, forget_threshold_B)
 
     # ---------- plotting ----------
-    nameA = re.sub(r"[^\w\-]+", "_", str(config_rel_path_A))
-    nameB = re.sub(r"[^\w\-]+", "_", str(config_rel_path_B))
-    save_path = out_dir / f"interplay_poison_{nameA}__{nameB}.png"
 
     fig, axes = plt.subplots(1, 2, figsize=(11.6, 4.2), dpi=220, sharey=True)
 
@@ -1600,16 +1597,21 @@ if __name__ == "__main__":
     
     # generate_clip_IC_utlity_table(clip_ic_results_dir, clip_ic_cfgs)
     # generate_clip_IC_fr_dr_hr_table(clip_ic_results_dir, clip_ic_cfgs['CIFAR10'])
-    # generate_clip_poison_table(clip_poison_results_dir, clip_poison_cfgs)
-    # plot_alpha_poison_interplay_dual(
+    # generate_clip_poison_table(
     #     clip_poison_results_dir,
-    #     clip_poison_cfgs['CIFAR10'],
-    #     clip_poison_cfgs['CIFAR100'],
-    #     dataset_name_A="CIFAR-10 (10%)",
-    #     dataset_name_B="CIFAR-100 (10%)",
-    #     forget_threshold_A=0.9,
-    #     forget_threshold_B=0.99,
-    # )
+    #     clip_poison_cfgs,
+    #     outputfile_path=Path("./visulaization_dir/clip_poison_triggers_table.txt")
+    #     )
+    plot_alpha_poison_interplay_dual(
+        clip_poison_results_dir,
+        clip_poison_cfgs['CIFAR10'],
+        clip_poison_cfgs['CIFAR100'],
+        dataset_name_A="CIFAR-10 (10%)",
+        dataset_name_B="CIFAR-100 (10%)",
+        forget_threshold_A=0.99,
+        forget_threshold_B=0.99,
+        save_path=Path("./visulaization_dir/clip_poison_triggers_plot.png")
+    )
     
     # generate_clip_noise_utlity_table(
     #     dino_noise_results_dir,
@@ -1625,12 +1627,12 @@ if __name__ == "__main__":
     #     noise_levels=[40],
     #     outputfile_path=Path("./visulaization_dir/dino_asymmetric_noise_table.txt")
     # )
-    generate_clip_poison_table(
-        dino_poison_results_dir,
-        dino_poison_cfgs,
-        dataset_order= ["CIFAR10", "CIFAR100"],
-        outputfile_path=Path("./visulaization_dir/dino_poison_trigger_table.txt")
-    )
+    # generate_clip_poison_table(
+    #     dino_poison_results_dir,
+    #     dino_poison_cfgs,
+    #     dataset_order= ["CIFAR10", "CIFAR100"],
+    #     outputfile_path=Path("./visulaization_dir/dino_poison_trigger_table.txt")
+    # )
     
     # plot_alpha_noise_vs_poison_interplay_dual(
     #     results_dir_noise=Path('results/single_experiment/clip_noise_TA'),

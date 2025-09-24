@@ -152,7 +152,7 @@ def pca_evolution_plot(
 
     # -------- reference at alpha = 0 (anchor space) --------
     model.load_state_dict(base_weights, strict=False)
-    feats0, labs0, _ = extract_features(model.get_image_encoder(), dataloader, normalize=normalize, device=device)
+    feats0, labs0, _ = extract_features(model.get_feature_extractor(), dataloader, normalize=normalize, device=device)
     Z0 = _pca_coords(feats0, device)
     labels_str0 = _labels_to_names(labs0, dataset.get_class_names())
     del feats0, labs0
@@ -174,7 +174,7 @@ def pca_evolution_plot(
         if alpha != 0.0:
             task_vector.apply_to(model, scaling_coef=alpha, strict=False)
 
-        feats, labs, _ = extract_features(model.get_image_encoder(), dataloader, normalize=normalize, device=device)
+        feats, labs, _ = extract_features(model.get_feature_extractor(), dataloader, normalize=normalize, device=device)
         Z = _pca_coords(feats, device)
         labels_str = _labels_to_names(labs, dataset.get_class_names())
 
@@ -207,7 +207,7 @@ def pca_evolution_plot(
 
     # include gold model in bounds
     model.load_state_dict(gold_weights, strict=False)
-    feats_g, labs_g, _ = extract_features(model.get_image_encoder(), dataloader, normalize=normalize, device=device)
+    feats_g, labs_g, _ = extract_features(model.get_feature_extractor(), dataloader, normalize=normalize, device=device)
     Zg = _pca_coords(feats_g, device)
     labels_str_g = _labels_to_names(labs_g, dataset.get_class_names())
     if align_on == "points":
@@ -246,7 +246,7 @@ def pca_evolution_plot(
         if alpha != 0.0:
             task_vector.apply_to(model, scaling_coef=alpha, strict=False)
 
-        feats, labs, _ = extract_features(model.get_image_encoder(), dataloader, normalize=normalize, device=device)
+        feats, labs, _ = extract_features(model.get_feature_extractor(), dataloader, normalize=normalize, device=device)
         Z = _pca_coords(feats, device)
         labels_str = _labels_to_names(labs, dataset.get_class_names())
 
@@ -280,7 +280,7 @@ def pca_evolution_plot(
 
     # gold figure
     model.load_state_dict(gold_weights, strict=False)
-    feats_g, labs_g, _ = extract_features(model.get_image_encoder(), dataloader, normalize=normalize, device=device)
+    feats_g, labs_g, _ = extract_features(model.get_feature_extractor(), dataloader, normalize=normalize, device=device)
     Zg = _pca_coords(feats_g, device)
     labels_str_g = _labels_to_names(labs_g, dataset.get_class_names())
     if align_on == "points":
@@ -613,7 +613,7 @@ def all_plot_comp(
 #         if alpha != 0.0:
 #             task_vector.apply_to(model, scaling_coef=alpha, strict=False)
 #         fig_pca = pca_plot(
-#             feature_extractor=model.get_image_encoder(),
+#             feature_extractor=model.get_feature_extractor(),
 #             dataloader=dataset.get_test_dataloader(),
 #             class_names=dataset.get_class_names(),
 #             dataset_name=dataset.dataset_name,
@@ -627,7 +627,7 @@ def all_plot_comp(
     
 #     model.load_state_dict(gold_weights, strict=False)
 #     fig_gold = pca_plot(
-#         feature_extractor=model.get_image_encoder(),
+#         feature_extractor=model.get_feature_extractor(),
 #         dataloader=dataloader,
 #         class_names=dataset.get_class_names(),
 #         dataset_name=dataset.dataset_name,

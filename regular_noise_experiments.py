@@ -204,10 +204,6 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     model = model_factory.create_model(cfg['model'], num_classes)
     pt_weights = copy.deepcopy(model.state_dict())
 
-    # strategy = cfg['strategy']
-    # base_dataset.inject_noise(**strategy['noise']['pretraining'])
-    
-    
     dataset.reset_train_dl(shuffle=False)
     
     
@@ -274,7 +270,6 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
 
     
     
-    
     ft_tvs_list = list(task_vectors.values())
     tv_names = list(task_vectors.keys())
     
@@ -324,9 +319,9 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         results_dict['Gold'] = {'test_results': gold_test_results, 'train_results': gold_train_results}
         
         if strategy['noise']['finetuning'][0]['noise_type'] == 'asymmetric':
-            alphas = tqdm(np.round(np.linspace(-0.05, -3.0, 60), 2))
+            alphas = tqdm(np.round(np.linspace(-0.05, -2.0, 40), 2))
         else:
-            alphas = tqdm(np.round(np.linspace(-0.05, -3.0, 60), 2))
+            alphas = tqdm(np.round(np.linspace(-0.05, -2.0, 40), 2))
         for alpha in alphas:
             
             model.load_state_dict(mix_weights, strict=False)
@@ -352,7 +347,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             taskvector=task_vectors['Average'],
             unlabeled_loader=dataset_clean.get_heldout_dataloader(),
             # K=dataset.get_num_classes(),
-            alphas=np.round(np.linspace(-0.05, -3.0, 60), 2),
+            alphas=np.round(np.linspace(-0.05, -2.0, 40), 2),
             device=gpu
         )
 
