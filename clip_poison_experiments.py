@@ -447,8 +447,8 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             
     if 'alpha_psn' not in results_dict:
         forget_rate_thrsh = {
-            'MNIST': 0.1,
-            'CIFAR10': 0.1,
+            'MNIST': 0.01,
+            'CIFAR10': 0.01,
             'CIFAR100': 0.01
         }
         alphas = np.round(np.linspace(-0.05, -1.5, 30), 2)

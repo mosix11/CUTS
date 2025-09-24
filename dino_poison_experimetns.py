@@ -183,9 +183,11 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
             plots_dir = experiment_dir / Path("plots")
             plots_dir.mkdir(exist_ok=True, parents=True)
             
-            if strategy['finetuning_set'] == 'Heldout':
-                dataset.set_trainset(dataset.get_heldoutset(), shuffle=True)
-                dataset.inject_poison(**poison_tv)
+            # Exclude clean samples from target class
+            poison_tv['set'] = 'Heldout'
+            dataset.inject_poison(**poison_tv)
+            clean_ho_ds, poinsoned_ho_ds = dataset.get_clean_noisy_subsets('Heldout')
+            dataset.set_trainset(poinsoned_ho_ds, shuffle=True)
                 
             finetuning_cfg = None
             if 'poison' in cfg['trainer']['finetuning']:
