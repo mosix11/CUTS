@@ -142,7 +142,7 @@ regular_models:
           resnet101:
             40:
         poison:
-          resnet18: 'config1'
+          resnet18: 'config2'
 
     pretrained:
       ho_2:
@@ -190,24 +190,5 @@ regular_models:
             40:
           resnet101:
             40:
-
-    pretrained:
-      ho_2:
-        symmetric:
-          resnet18:
-            40:
-          resnet34:
-            40:
-          resnet50:
-            40:
-          resnet101:
-            40:
-        asymmetric:
-          resnet18:
-            40:
-          resnet34:
-            40:
-          resnet50:
-            40:
-          resnet101:
-            40:
+        poison:
+          resnet18: 'config3'
