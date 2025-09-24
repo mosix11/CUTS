@@ -94,14 +94,9 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
         plots_dir.mkdir(exist_ok=True, parents=True)
         
         
-        finetuning_cfg = None
-        if 'mix' in cfg['trainer']['finetuning']:
-            finetuning_cfg = cfg['trainer']['finetuning']['mix']
-            finetuning_cfg['comet_api_key'] =  os.getenv("COMET_API_KEY")
-        else: finetuning_cfg = cfg['trainer']['finetuning']
         trainer = StandardTrainer(
             outputs_dir=outputs_dir,
-            **finetuning_cfg,
+            **cfg['trainer']['pretraining'],
             exp_name=experiment_name,
             exp_tags=None,
         )
@@ -126,14 +121,9 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
         plots_dir = experiment_dir / Path("plots")
         plots_dir.mkdir(exist_ok=True, parents=True)
         
-        finetuning_cfg = None
-        if 'clean' in cfg['trainer']['finetuning']:
-            finetuning_cfg = cfg['trainer']['finetuning']['clean']
-            finetuning_cfg['comet_api_key'] =  os.getenv("COMET_API_KEY")
-        else: finetuning_cfg = cfg['trainer']['finetuning']
         trainer = StandardTrainer(
             outputs_dir=outputs_dir,
-            **finetuning_cfg,
+            **cfg['trainer']['pretraining'],
             exp_name=experiment_name,
             exp_tags=None,
         )
@@ -168,14 +158,9 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
             clean_ho_ds, poinsoned_ho_ds = dataset.get_clean_noisy_subsets('Heldout')
             dataset.set_trainset(poinsoned_ho_ds, shuffle=True)
                 
-            finetuning_cfg = None
-            if 'poison' in cfg['trainer']['finetuning']:
-                finetuning_cfg = cfg['trainer']['finetuning']['poison']
-                finetuning_cfg['comet_api_key'] =  os.getenv("COMET_API_KEY")
-            else: finetuning_cfg = cfg['trainer']['finetuning']
             trainer = StandardTrainer(
                 outputs_dir=outputs_dir,
-                **finetuning_cfg,
+                **cfg['trainer']['finetuning'],
                 exp_name=experiment_name,
                 exp_tags=None,
             )
