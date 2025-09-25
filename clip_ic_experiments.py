@@ -466,11 +466,19 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     
     
+    
+    tmp_dataset = copy.deepcopy(dataset_clean)
+    tmp_dataset.inject_noise(**noise_tv)
+    # Exclude clean samples from target class
+    clean_ho_ds, noisy_ho_ds = tmp_dataset.get_clean_noisy_subsets('Heldout')
+    tmp_dataset.switch_labels_to_clean(noisy_ho_ds)
+    tmp_dataset.set_heldoutset(noisy_ho_ds)
+    
     figs_alpha, fig_gold = embedding_space_analysis.pca_evolution_plot(
         model=model,
         base_weights=mix_weights,
-        gold_weights=gold_weights,
-        dataset=dataset,
+        gold_weights=None,
+        dataset=tmp_dataset,
         task_vector=task_vectors['Average'],
         split='Heldout',
         alpha_range=np.round(np.linspace(0.0, results_dict['alpha_IC'], 4) / 0.05) * 0.05,

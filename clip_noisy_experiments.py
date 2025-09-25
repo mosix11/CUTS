@@ -802,17 +802,17 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         
         
     
-    # figs_alpha, fig_gold = embedding_space_analysis.pca_evolution_plot(
-    #     model=model,
-    #     base_weights=mix_weights,
-    #     gold_weights=gold_weights,
-    #     dataset=dataset_clean,
-    #     task_vector=task_vectors['Average'],
-    #     split='Test',
-    #     alpha_range=np.round(np.linspace(0.0, results_dict['alpha_KNN'], 4) / 0.05) * 0.05,
-    #     device=gpu,
-    #     saving_dir=results_dirs['embed_plots']
-    # )
+    figs_alpha, fig_gold = embedding_space_analysis.pca_evolution_plot(
+        model=model,
+        base_weights=mix_weights,
+        gold_weights=None,
+        dataset=dataset_clean,
+        task_vector=task_vectors['Average'],
+        split='Test',
+        alpha_range=np.round(np.linspace(0.0, results_dict['alpha_KNN'], 4) / 0.05) * 0.05,
+        device=gpu,
+        saving_dir=results_dirs['embed_plots']
+    )
     
     exit()
     with open(results_dir / "metrics_seed.json", "r") as json_file:

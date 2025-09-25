@@ -78,13 +78,21 @@ def show_figure_grid(figs, rows=None, cols=None, dpi=150, strip_axes=True,
     
     
 if __name__ == '__main__':
+    
+    # with open('results/single_experiment/dino_noise_TA/config1/embedding_plots/pca_alpha_4_figs.pkl', 'rb') as f:
+    # with open('results/single_experiment/dino_noise_TA/config3/embedding_plots/pca_alpha_4_figs.pkl', 'rb') as f:
+    # with open('results/single_experiment/dino_poison_TA/config1/embedding_plots/pca_alpha_4_figs.pkl', 'rb') as f:
 
     # with open('results/single_experiment/clip_poison_TA/config2/embedding_plots/pca_alpha_4_figs.pkl', 'rb') as f:
-    with open('results/single_experiment/clip_poison_TA/config1/embedding_plots/pca_alpha_4_figs.pkl', 'rb') as f:
+    # with open('results/single_experiment/clip_poison_TA/config1/embedding_plots/pca_alpha_4_figs.pkl', 'rb') as f:
     
+    # with open('results/single_experiment/clip_noise_TA/config28/embedding_plots/pca_alpha_4_figs.pkl', 'rb') as f:
     # with open('results/single_experiment/clip_noise_TA/config41/embedding_plots/pca_alpha_16_figs.pkl', 'rb') as f:
     # with open('results/single_experiment/clip_noise_TA/config42/embedding_plots/pca_alpha_4_figs.pkl', 'rb') as f:
     # with open('results/single_experiment/clip_noise_TA/config26/embedding_plots/pca_alpha_figs.pkl', 'rb') as f:
+    
+    with open('results/single_experiment/clip_IC_TA/config2/embedding_plots/pca_alpha_4_figs.pkl', 'rb') as f:
+    
         figs = pickle.load(f)
     for f in figs:
             plt.close(f)
@@ -99,5 +107,5 @@ if __name__ == '__main__':
     
     grid_fig = show_figure_grid(figs, rows=1, cols=4)
     
-    grid_fig.savefig("./visulaization_dir/pca_evol_clip_pois_mnist_10.png", dpi=300, bbox_inches="tight")
+    # grid_fig.savefig("./visulaization_dir/pca_evol_dino_sym_cifar10_40.png", dpi=300, bbox_inches="tight")
     # show_figure_grid(figs)

@@ -425,7 +425,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     figs_alpha, fig_gold = embedding_space_analysis.pca_evolution_plot(
         model=model,
         base_weights=mix_weights,
-        gold_weights=gold_weights,
+        gold_weights=None,
         dataset=dataset_clean,
         task_vector=task_vectors['Average'],
         split='Test',

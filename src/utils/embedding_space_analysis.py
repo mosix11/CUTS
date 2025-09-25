@@ -212,30 +212,31 @@ def pca_evolution_plot(
             torch.cuda.empty_cache()
 
     # include gold model in bounds
-    model.load_state_dict(gold_weights, strict=False)
-    feats_g, labs_g, _ = extract_features(model.get_feature_extractor(), dataloader, normalize=normalize, device=device)
-    Zg = _pca_coords(feats_g, device)
-    labels_str_g = _labels_to_names(labs_g, dataset.get_class_names())
-    if align_on == "points":
-        Rg = _orthogonal_matrix(Zg, X_anchor, allow_reflection=allow_reflection)
-    else:
-        Yg, orderg = _centroids(Zg, labels_str_g)
-        if not np.array_equal(orderg, order0):
-            remap = {lab: i for i, lab in enumerate(orderg)}
-            Yg = np.stack([Yg[remap[lab]] for lab in order0], axis=0)
-        Rg = _orthogonal_matrix(Yg, X_anchor, allow_reflection=allow_reflection)
-    Zg_aligned_tmp = Zg @ Rg
-    global_xmin = min(global_xmin, Zg_aligned_tmp[:, 0].min())
-    global_xmax = max(global_xmax, Zg_aligned_tmp[:, 0].max())
-    global_ymin = min(global_ymin, Zg_aligned_tmp[:, 1].min())
-    global_ymax = max(global_ymax, Zg_aligned_tmp[:, 1].max())
-    # clean temp arrays from gold (we'll recompute in pass 2)
-    del feats_g, labs_g, Zg, labels_str_g, Zg_aligned_tmp, Rg
-    if align_on == "centroids":
-        del Yg, orderg
-    gc.collect()
-    if device.type == "cuda":
-        torch.cuda.empty_cache()
+    if gold_weights:
+        model.load_state_dict(gold_weights, strict=False)
+        feats_g, labs_g, _ = extract_features(model.get_feature_extractor(), dataloader, normalize=normalize, device=device)
+        Zg = _pca_coords(feats_g, device)
+        labels_str_g = _labels_to_names(labs_g, dataset.get_class_names())
+        if align_on == "points":
+            Rg = _orthogonal_matrix(Zg, X_anchor, allow_reflection=allow_reflection)
+        else:
+            Yg, orderg = _centroids(Zg, labels_str_g)
+            if not np.array_equal(orderg, order0):
+                remap = {lab: i for i, lab in enumerate(orderg)}
+                Yg = np.stack([Yg[remap[lab]] for lab in order0], axis=0)
+            Rg = _orthogonal_matrix(Yg, X_anchor, allow_reflection=allow_reflection)
+        Zg_aligned_tmp = Zg @ Rg
+        global_xmin = min(global_xmin, Zg_aligned_tmp[:, 0].min())
+        global_xmax = max(global_xmax, Zg_aligned_tmp[:, 0].max())
+        global_ymin = min(global_ymin, Zg_aligned_tmp[:, 1].min())
+        global_ymax = max(global_ymax, Zg_aligned_tmp[:, 1].max())
+        # clean temp arrays from gold (we'll recompute in pass 2)
+        del feats_g, labs_g, Zg, labels_str_g, Zg_aligned_tmp, Rg
+        if align_on == "centroids":
+            del Yg, orderg
+        gc.collect()
+        if device.type == "cuda":
+            torch.cuda.empty_cache()
 
     # finalize global limits
     pad = 0.03
@@ -285,42 +286,46 @@ def pca_evolution_plot(
             torch.cuda.empty_cache()
 
     # gold figure
-    model.load_state_dict(gold_weights, strict=False)
-    feats_g, labs_g, _ = extract_features(model.get_feature_extractor(), dataloader, normalize=normalize, device=device)
-    Zg = _pca_coords(feats_g, device)
-    labels_str_g = _labels_to_names(labs_g, dataset.get_class_names())
-    if align_on == "points":
-        Rg = _orthogonal_matrix(Zg, X_anchor, allow_reflection=allow_reflection)
-    else:
-        Yg, orderg = _centroids(Zg, labels_str_g)
-        if not np.array_equal(orderg, order0):
-            remap = {lab: i for i, lab in enumerate(orderg)}
-            Yg = np.stack([Yg[remap[lab]] for lab in order0], axis=0)
-        Rg = _orthogonal_matrix(Yg, X_anchor, allow_reflection=allow_reflection)
-    Zg_aligned = Zg @ Rg
+    fig_gold = None
+    if gold_weights:
+        model.load_state_dict(gold_weights, strict=False)
+        feats_g, labs_g, _ = extract_features(model.get_feature_extractor(), dataloader, normalize=normalize, device=device)
+        Zg = _pca_coords(feats_g, device)
+        labels_str_g = _labels_to_names(labs_g, dataset.get_class_names())
+        if align_on == "points":
+            Rg = _orthogonal_matrix(Zg, X_anchor, allow_reflection=allow_reflection)
+        else:
+            Yg, orderg = _centroids(Zg, labels_str_g)
+            if not np.array_equal(orderg, order0):
+                remap = {lab: i for i, lab in enumerate(orderg)}
+                Yg = np.stack([Yg[remap[lab]] for lab in order0], axis=0)
+            Rg = _orthogonal_matrix(Yg, X_anchor, allow_reflection=allow_reflection)
+        Zg_aligned = Zg @ Rg
 
-    fig_gold, axg = datamapplot.create_plot(
-        Zg_aligned, labels_str_g,
-        label_color_map=color_mapping,
-        label_over_points=True,
-        label_font_size=30,
-    )
-    axg.set_xlim(*xlim)
-    axg.set_ylim(*ylim)
+        fig_gold, axg = datamapplot.create_plot(
+            Zg_aligned, labels_str_g,
+            label_color_map=color_mapping,
+            label_over_points=True,
+            label_font_size=30,
+        )
+        axg.set_xlim(*xlim)
+        axg.set_ylim(*ylim)
 
-    # clean arrays; keep figure
-    del feats_g, labs_g, Zg, labels_str_g, Zg_aligned, Rg
-    if align_on == "centroids":
-        del Yg, orderg
-    gc.collect()
-    if device.type == "cuda":
-        torch.cuda.empty_cache()
+        # clean arrays; keep figure
+        del feats_g, labs_g, Zg, labels_str_g, Zg_aligned, Rg
+        
+        if align_on == "centroids":
+            del Yg, orderg
+        gc.collect()
+        if device.type == "cuda":
+            torch.cuda.empty_cache()
         
     saving_dir.mkdir(parents=True, exist_ok=True)
     with open(saving_dir / f"pca_alpha_{len(alpha_range)}_figs.pkl", "wb") as f:
         pickle.dump(figs_alpha, f) 
-    with open(saving_dir / "pca_gold_fig.pkl", "wb") as f:
-        pickle.dump(fig_gold, f)
+    if gold_weights:
+        with open(saving_dir / "pca_gold_fig.pkl", "wb") as f:
+            pickle.dump(fig_gold, f)
 
     return figs_alpha, fig_gold
 

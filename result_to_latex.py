@@ -1632,8 +1632,8 @@ if __name__ == "__main__":
     #     clip_poison_results_dir,
     #     clip_poison_cfgs['CIFAR10'],
     #     clip_poison_cfgs['CIFAR100'],
-    #     dataset_name_A="CIFAR-10 (10%)",
-    #     dataset_name_B="CIFAR-100 (10%)",
+    #     dataset_name_A="CIFAR-10 (2%)",
+    #     dataset_name_B="CIFAR-100 (2%)",
     #     forget_threshold_A=0.99,
     #     forget_threshold_B=0.99,
     #     save_path=Path("./visulaization_dir/clip_poison_triggers_plot.png")
@@ -1659,27 +1659,27 @@ if __name__ == "__main__":
     # )
     
     
-    # plot_alpha_noise_and_poison_interplay_dual(
-    #     results_dir_noise=dino_noise_results_dir,
-    #     config_rel_path_noise=dino_symmetric_cfgs['CIFAR10'][40],  # NOISE exp
-    #     results_dir_poison=dino_poison_results_dir,
-    #     config_rel_path_poison=clip_poison_cfgs['CIFAR10'],        # POISON exp
-    #     dataset_name_noise="CIFAR-10 (40%)",
-    #     dataset_name_poison="CIFAR-10 (10%)",
-    #     forget_threshold_noise=0.89,
-    #     forget_threshold_poison=0.99,
-    #     save_path=Path("./visulaization_dir/dino_noise_poison_interplay_plot.png"),
-    # )
+    plot_alpha_noise_and_poison_interplay_dual(
+        results_dir_noise=dino_noise_results_dir,
+        config_rel_path_noise=dino_symmetric_cfgs['CIFAR10'][40],  # NOISE exp
+        results_dir_poison=dino_poison_results_dir,
+        config_rel_path_poison=dino_poison_cfgs['CIFAR10'],        # POISON exp
+        dataset_name_noise="CIFAR-10 (40%)",
+        dataset_name_poison="CIFAR-10 (2%)",
+        forget_threshold_noise=0.89,
+        forget_threshold_poison=0.99,
+        save_path=Path("./visulaization_dir/dino_noise_poison_interplay_plot.png"),
+    )
     
     
     
     #################################################################################
     #########                        Regular models                         #########
     
-    generate_clip_noise_utlity_table(
-        regular_noise_results_dir,
-        regular_symmetric_cfgs,
-        outputfile_path= Path("./visulaization_dir/regular_symmetric_noise_table.txt")
-        )
+    # generate_clip_noise_utlity_table(
+    #     regular_noise_results_dir,
+    #     regular_symmetric_cfgs,
+    #     outputfile_path= Path("./visulaization_dir/regular_symmetric_noise_table.txt")
+    #     )
 
     
