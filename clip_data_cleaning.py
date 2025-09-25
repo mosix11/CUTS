@@ -179,11 +179,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     
     strategy = cfg['strategy']
-    noise_tv = strategy['noise']['finetuning'][0]
-    noise_tv['set'] = 'Heldout'
-
     dataset_clean = copy.deepcopy(dataset)
-    dataset.inject_noise(**noise_tv)
 
     # Load weights while removing classifier weights from the state dict
     mix_weights = OrderedDict(
