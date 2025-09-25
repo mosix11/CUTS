@@ -204,8 +204,8 @@ def generate_clip_noise_utlity_table(
 
             metrics = _load_metrics(results_dir/config)
             
-            metrics.pop('FT HO Clean')
-            metrics.pop('alpha_s4')
+            metrics.pop('FT HO Clean', None)
+            metrics.pop('alpha_s4', None)
             alpha_KNN = metrics.pop('alpha_KNN')
         
             baseline_metrics = _collect_baseline_metrics(metrics)
@@ -1544,11 +1544,39 @@ if __name__ == "__main__":
     
     # ------------------- regular models -------------------
     regular_models_cfgs = configmap['regular_models']
+    regular_noise_results_dir = Path('results/single_experiment/regular_noise_TA')
+    regular_poison_results_dir = Path('results/single_experiment/regular_poison_TA')
+    
+    regular_symmetric_cfgs = OrderedDict()
+    regular_symmetric_cfgs['MNIST'] = regular_models_cfgs['MNIST']['scratch']['ho_2']['symmetric']['fc1']
+    regular_symmetric_cfgs['CIFAR10'] = regular_models_cfgs['CIFAR10']['scratch']['ho_2']['symmetric']['resnet18']
+    regular_symmetric_cfgs['CIFAR100'] = regular_models_cfgs['CIFAR100']['scratch']['ho_2']['symmetric']['resnet18']
     
     
+    regular_asymmetric_cfgs = OrderedDict()
+    regular_asymmetric_cfgs['MNIST'] = regular_models_cfgs['MNIST']['scratch']['ho_2']['asymmetric']['fc1']
+    regular_asymmetric_cfgs['CIFAR10'] = regular_models_cfgs['CIFAR10']['scratch']['ho_2']['asymmetric']['resnet18']
+    regular_asymmetric_cfgs['CIFAR100'] = regular_models_cfgs['CIFAR100']['scratch']['ho_2']['asymmetric']['resnet18']
     
-    # regular_models_cfgs = configmap['regular_models']
-    # clip_models_results_dir = Path('results/single_experiment/pretrain_on_noisy')
+    
+    regular_poison_cfgs = OrderedDict()
+    regular_poison_cfgs['MNIST'] = regular_models_cfgs['MNIST']['scratch']['ho_2']['poison']['fc1']
+    regular_poison_cfgs['CIFAR10'] = regular_models_cfgs['CIFAR10']['scratch']['ho_2']['poison']['resnet18']
+    regular_poison_cfgs['CIFAR100'] = regular_models_cfgs['CIFAR100']['scratch']['ho_2']['poison']['resnet18']
+    
+    
+    regular_symmetric_comp_cfgs = OrderedDict()
+    regular_symmetric_comp_cfgs['CIFAR10'] = OrderedDict({
+        'resnet18': (regular_models_cfgs['CIFAR10']['scratch']['ho_2']['symmetric']['resnet18'], regular_models_cfgs['CIFAR10']['pretrained']['ho_2']['symmetric']['resnet18']),
+        'resnet34': (regular_models_cfgs['CIFAR10']['scratch']['ho_2']['symmetric']['resnet34'], regular_models_cfgs['CIFAR10']['pretrained']['ho_2']['symmetric']['resnet34']),
+        'resnet50': (regular_models_cfgs['CIFAR10']['scratch']['ho_2']['symmetric']['resnet50'], regular_models_cfgs['CIFAR10']['pretrained']['ho_2']['symmetric']['resnet50']),
+        'resnet101': (regular_models_cfgs['CIFAR10']['scratch']['ho_2']['symmetric']['resnet101'], regular_models_cfgs['CIFAR10']['pretrained']['ho_2']['symmetric']['resnet101'])
+    })
+
+    
+    
+    #################################################################################
+    #########                           CLIP models                         #########
     
     # generate_clip_noise_utlity_table(clip_noise_results_dir, clip_symmetric_cfgs)
     # generate_clip_symmetric_noise_fr_dr_hr_table(clip_noise_results_dir, clip_symmetric_cfgs['CIFAR10'])
@@ -1611,12 +1639,10 @@ if __name__ == "__main__":
     #     save_path=Path("./visulaization_dir/clip_poison_triggers_plot.png")
     # )
     
-    # generate_clip_noise_utlity_table(
-    #     dino_noise_results_dir,
-    #     dino_symmetric_cfgs,
-    #     noise_levels=[40],
-    #     outputfile_path=Path("./visulaization_dir/dino_symmetric_noise_table.txt")
-    # )
+    
+    
+    #################################################################################
+    #########                           DINO models                         #########
     
     # generate_clip_noise_utlity_table(
     #     dino_noise_results_dir,
@@ -1632,29 +1658,28 @@ if __name__ == "__main__":
     #     outputfile_path=Path("./visulaization_dir/dino_poison_trigger_table.txt")
     # )
     
-    # plot_alpha_poison_interplay_dual(
-    #     clip_poison_results_dir,
-    #     clip_poison_cfgs['CIFAR10'],
-    #     clip_poison_cfgs['CIFAR100'],
-    #     dataset_name_A="CIFAR-10 (10%)",
-    #     dataset_name_B="CIFAR-100 (10%)",
-    #     forget_threshold_A=0.99,
-    #     forget_threshold_B=0.99,
-    #     save_path=Path("./visulaization_dir/clip_poison_triggers_plot.png")
+    
+    # plot_alpha_noise_and_poison_interplay_dual(
+    #     results_dir_noise=dino_noise_results_dir,
+    #     config_rel_path_noise=dino_symmetric_cfgs['CIFAR10'][40],  # NOISE exp
+    #     results_dir_poison=dino_poison_results_dir,
+    #     config_rel_path_poison=clip_poison_cfgs['CIFAR10'],        # POISON exp
+    #     dataset_name_noise="CIFAR-10 (40%)",
+    #     dataset_name_poison="CIFAR-10 (10%)",
+    #     forget_threshold_noise=0.89,
+    #     forget_threshold_poison=0.99,
+    #     save_path=Path("./visulaization_dir/dino_noise_poison_interplay_plot.png"),
     # )
     
-    plot_alpha_noise_and_poison_interplay_dual(
-        results_dir_noise=dino_noise_results_dir,
-        config_rel_path_noise=dino_symmetric_cfgs['CIFAR10'][40],  # NOISE exp
-        results_dir_poison=dino_poison_results_dir,
-        config_rel_path_poison=clip_poison_cfgs['CIFAR10'],        # POISON exp
-        dataset_name_noise="CIFAR-10 (40%)",
-        dataset_name_poison="CIFAR-10 (10%)",
-        forget_threshold_noise=0.89,
-        forget_threshold_poison=0.99,
-        save_path=Path("./visulaization_dir/dino_noise_poison_interplay_plot.png"),
-    )
     
     
+    #################################################################################
+    #########                        Regular models                         #########
     
+    generate_clip_noise_utlity_table(
+        regular_noise_results_dir,
+        regular_symmetric_cfgs,
+        outputfile_path= Path("./visulaization_dir/regular_symmetric_noise_table.txt")
+        )
+
     

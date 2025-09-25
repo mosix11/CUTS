@@ -150,6 +150,11 @@ class TaskVector:
         return torch.sqrt(self.dot(self))
     
     
+    def to(self, device:torch.device):
+        """For chaning the vector device"""
+        for key in self.vector:
+            self.vector[key].to(device)
+    
     @staticmethod
     def mean(tvs: Union[List, Dict]):
         if isinstance(tvs, Dict):

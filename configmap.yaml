@@ -127,11 +127,11 @@ regular_models:
             60: 'config24'
             80: 'config25'
           resnet34:
-            40:
+            40: 'config35'
           resnet50:
-            40:
+            40: 'config37'
           resnet101:
-            40:
+            40: 'config39'
         asymmetric:
           resnet18:
             40: 'config32'
@@ -148,13 +148,13 @@ regular_models:
       ho_2:
         symmetric:
           resnet18:
-            40:
+            40: 'config34'
           resnet34:
-            40:
+            40: 'config36'
           resnet50:
-            40:
+            40: 'config38'
           resnet101:
-            40:
+            40: 'config40'
         asymmetric:
           resnet18:
             40:

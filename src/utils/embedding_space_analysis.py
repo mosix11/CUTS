@@ -54,6 +54,11 @@ def extract_features(
             x, y, ind = batch
             isn = torch.zeros_like(y)
         z = feature_extractor(x)      # shape (B, D)
+        # hard coding for DinoV3 (kept as-is)
+        if not isinstance(z, torch.Tensor):
+            z = getattr(z, "pooler_output", None)
+            if z is None:
+                z = z.last_hidden_state[:, 0, :]
         if normalize:
             z = F.normalize(z, dim=1)    
         feats.append(z.detach().cpu())
@@ -171,6 +176,7 @@ def pca_evolution_plot(
 
     for alpha in alpha_range:
         model.load_state_dict(base_weights, strict=False)
+        model.to(device)
         if alpha != 0.0:
             task_vector.apply_to(model, scaling_coef=alpha, strict=False)
 

@@ -814,7 +814,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     #     saving_dir=results_dirs['embed_plots']
     # )
     
-
+    exit()
     with open(results_dir / "metrics_seed.json", "r") as json_file:
         results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
 
