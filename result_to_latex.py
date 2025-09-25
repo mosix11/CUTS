@@ -151,6 +151,7 @@ def _get_alpha_star_forgetting(alpha_metrics: Dict[float, Dict], threshold:float
             best_alpha = alpha
             break
     if best_alpha == None:
+        print('No forgetting alpha was found, returning the biggest alpha.')
         best_alpha = list(alpha_metrics.keys())[-1]
     return best_alpha     
 
