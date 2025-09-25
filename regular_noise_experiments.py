@@ -299,14 +299,13 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     )
 
     
-    
     results_dict = OrderedDict()
     with open(results_dir / "metrics.json", "r") as json_file:
         results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
     if strategy['noise']['finetuning'][0]['noise_type'] == 'asymmetric':
         alphas = tqdm(np.round(np.linspace(-0.05, -2.0, 40), 2))
     else:
-        alphas = tqdm(np.round(np.linspace(-2.05, -3.0, 20), 2))
+        alphas = tqdm(np.round(np.linspace(-4.05, -5.0, 20), 2))
     for alpha in alphas:
         
         model.load_state_dict(mix_weights, strict=False)
@@ -318,7 +317,8 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     with open(results_dir / 'metrics.json' , 'w') as json_file:
         json.dump(results_dict, json_file, indent=4)
         
-    
+        
+
     # results_dict = OrderedDict()
     # if not results_dir.joinpath('metrics.json').exists():
 
@@ -365,7 +365,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         taskvector=task_vectors['Average'],
         unlabeled_loader=dataset_clean.get_heldout_dataloader(),
         # K=dataset.get_num_classes(),
-        alphas=np.round(np.linspace(-0.05, -2.0, 40), 2),
+        alphas=np.round(np.linspace(-0.05, -5.0, 100), 2),
         device=gpu
     )
 

@@ -36,8 +36,7 @@ dataset:
 
 
 model:
-  type: 'torchvision_resnet18'
-  pt_weights: 'IMAGENET1K_V1'
+  type: 'torchvision_resnet50'
   num_classes: *num_classes
   img_size: [224, 224]
   grayscale: False
@@ -46,12 +45,13 @@ model:
   metrics: ['ACC', 'F1']
 
 
+
 trainer:
   pretraining:
-    max_epochs: &max_epochs 120
+    max_epochs: &max_epochs 150
     optimizer_cfg: 
       type: "adamw"
-      lr: 5.0e-4
+      lr: 1.0e-3
       betas: [0.9, 0.999]
     lr_schedule_cfg:
       type: 'cosann'
@@ -86,5 +86,4 @@ trainer:
     log_comet: True
     comet_project_name: 'regular-noise-TA'
     seed: *training_seed
-
 

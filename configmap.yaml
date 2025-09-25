@@ -104,14 +104,14 @@ regular_models:
       ho_2:
         symmetric:
           fc1:
-            10:
-            20:
-            40:
-            60:
-            80:
+            10: 'config16'
+            20: 'config17'
+            40: 'config18'
+            60: 'config19'
+            80: 'config20'
         asymmetric:
           fc1:
-            40:
+            40: 'config31'
         poison:
           fc1: 'config1'
 
@@ -121,11 +121,11 @@ regular_models:
       ho_2:
         symmetric:
           resnet18:
-            10:
-            20:
-            40:
-            60:
-            80:
+            10: 'config21'
+            20: 'config22'
+            40: 'config23'
+            60: 'config24'
+            80: 'config25'
           resnet34:
             40:
           resnet50:
@@ -134,7 +134,7 @@ regular_models:
             40:
         asymmetric:
           resnet18:
-            40:
+            40: 'config32'
           resnet34:
             40:
           resnet50:
@@ -170,25 +170,13 @@ regular_models:
       ho_2:
         symmetric:
           resnet18:
-            10:
-            20:
-            40:
-            60:
-            80:
-          resnet34:
-            40:
-          resnet50:
-            40:
-          resnet101:
-            40:
+            10: 'config26'
+            20: 'config27'
+            40: 'config28'
+            60: 'config29'
+            80: 'config30'
         asymmetric:
           resnet18:
-            40:
-          resnet34:
-            40:
-          resnet50:
-            40:
-          resnet101:
-            40:
+            40: 'config33'
         poison:
           resnet18: 'config3'
