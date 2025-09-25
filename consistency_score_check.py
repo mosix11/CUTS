@@ -256,28 +256,38 @@ def eval_model_on_clean_noise_splits(
     if cfg is not None:
         strategy = cfg['strategy']
         dataset_cpy.inject_noise(**strategy['noise']['pretraining'])
-    clean_set, noisy_set = dataset_cpy.get_clean_noisy_subsets(set='Train')
+        
+    try:
+        clean_set, noisy_set = dataset_cpy.get_clean_noisy_subsets(set='Train')
+    except:
+        clean_set, noisy_set = dataset.get_trainset(), None
     
     dataset_cpy.set_trainset(clean_set, shuffle=False)
     clean_metric, _, _, misclassified_cleans, misclassified_cleans_smp = evaluate_model(model, dataloader=dataset_cpy.get_train_dataloader(), device=device)
     
-    dataset_cpy.set_trainset(noisy_set, shuffle=False)
-    noisy_metric, _, _, _, _ = evaluate_model(model, dataloader=dataset_cpy.get_train_dataloader(), device=device)
     
-    dummy_instance = noisy_set
-    while not isinstance(dummy_instance, dataset_wrappers.NoisyClassificationDataset):
-        dummy_instance = dummy_instance.dataset
-    dummy_instance.switch_to_clean_lables()
-    
-    dataset_cpy.set_trainset(noisy_set, shuffle=False)
-    healing_metric, _, _, misclassified_healed, _ = evaluate_model(model, dataloader=dataset_cpy.get_train_dataloader(), device=device)
+    if noisy_set:
+        dataset_cpy.set_trainset(noisy_set, shuffle=False)
+        noisy_metric, _, _, _, _ = evaluate_model(model, dataloader=dataset_cpy.get_train_dataloader(), device=device)
+        
+        dummy_instance = noisy_set
+        while not isinstance(dummy_instance, dataset_wrappers.NoisyClassificationDataset):
+            dummy_instance = dummy_instance.dataset
+        dummy_instance.switch_to_clean_lables()
+        
+        dataset_cpy.set_trainset(noisy_set, shuffle=False)
+        healing_metric, _, _, misclassified_healed, _ = evaluate_model(model, dataloader=dataset_cpy.get_train_dataloader(), device=device)
 
     
     return {
         'clean_set': clean_metric,
-        'noisy_set': noisy_metric,
-        'healing_noise': healing_metric,
-    }, misclassified_cleans, misclassified_cleans_smp, misclassified_healed
+    }, misclassified_cleans, misclassified_cleans_smp, _
+    
+    # return {
+    #     'clean_set': clean_metric,
+    #     'noisy_set': noisy_metric,
+    #     'healing_noise': healing_metric,
+    # }, misclassified_cleans, misclassified_cleans_smp, misclassified_healed
     
     
 def apply(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
@@ -304,7 +314,11 @@ def apply(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         dir.mkdir(exist_ok=True, parents=True)
     
     
-    dataset_cfg = cfg['datasets'][0]
+    try:
+        dataset_cfg = cfg['datasets'][0]
+    except:
+        dataset_cfg = cfg['dataset']
+        
     dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
     
 
@@ -324,11 +338,16 @@ def apply(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     dataset_clean = copy.deepcopy(dataset)
     
     strategy = cfg['strategy']
-    dataset.inject_noise(**strategy['noise']['pretraining'])
+    if 'pretraining' in strategy['noise']:
+        dataset.inject_noise(**strategy['noise']['pretraining'])
     
-    train_indices = np.array(dataset.get_train_indices())
+    try:
+        train_indices = np.array(dataset.get_train_indices())
+    except:
+        train_indices = np.arange(len(dataset.get_trainset()))
 
-    heldout_indices = np.array(dataset.get_heldout_indices())
+    
+    # heldout_indices = np.array(dataset.get_heldout_indices())
     
     # consistency_scores = consistency_scores[train_indices]
     # cs_lbls = cs_lbls[train_indices]
@@ -351,74 +370,74 @@ def apply(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     original_dataset.reset_train_dl(shuffle=False)
     
     
-        # alpha -1.35
-    cifar10_cfg30_clean_forgotten_indices = {
-        5019: (5, 3),
-        11246: (5, 2),
-        23870: (0, 8),
-        31937: (8, 2),
-        32367: (5, 3),
-        32426: (5, 7),
-        36395: (3, 6),
-        36419: (7, 4)
-    }
+    #     # alpha -1.35
+    # cifar10_cfg30_clean_forgotten_indices = {
+    #     5019: (5, 3),
+    #     11246: (5, 2),
+    #     23870: (0, 8),
+    #     31937: (8, 2),
+    #     32367: (5, 3),
+    #     32426: (5, 7),
+    #     36395: (3, 6),
+    #     36419: (7, 4)
+    # }
     
-    # alpha -0.8
-    cifar100_cfg31_clean_forgotten_indices = {
-        9981: (42, 88),
-        15980: (60, 71),
-        19370: (11, 2),
-        25514: (88, 44),
-        25318: (98, 46),
-        31295: (51, 46),
-        38595: (92, 62),
-        44764: (33, 51),
-    }
+    # # alpha -0.8
+    # cifar100_cfg31_clean_forgotten_indices = {
+    #     9981: (42, 88),
+    #     15980: (60, 71),
+    #     19370: (11, 2),
+    #     25514: (88, 44),
+    #     25318: (98, 46),
+    #     31295: (51, 46),
+    #     38595: (92, 62),
+    #     44764: (33, 51),
+    # }
     
-    # alpha -0.8
-    mnist_cfg37_clean_forgotten_indices = {
-        52341: (9, 4),
-        10777: (3, 9),
-        26057: (7, 1),
-        29483: (9, 5),
-        34638: (5, 6),
-        39366: (5, 3),
-        42606: (5, 3),
-        58724: (4, 7),
-    }
+    # # alpha -0.8
+    # mnist_cfg37_clean_forgotten_indices = {
+    #     52341: (9, 4),
+    #     10777: (3, 9),
+    #     26057: (7, 1),
+    #     29483: (9, 5),
+    #     34638: (5, 6),
+    #     39366: (5, 3),
+    #     42606: (5, 3),
+    #     58724: (4, 7),
+    # }
     
-    imgs = []
+    # imgs = []
     
-    for idx in train_indices[list(mnist_cfg37_clean_forgotten_indices.keys())]:
-        img, lbl, dx = original_dataset.get_trainset()[idx]
-        imgs.append(img)
-        # lbls.append(lbl)
+    # for idx in train_indices[list(mnist_cfg37_clean_forgotten_indices.keys())]:
+    #     img, lbl, dx = original_dataset.get_trainset()[idx]
+    #     imgs.append(img)
+    #     # lbls.append(lbl)
     
     
-    class_names = dict(enumerate(original_dataset.get_class_names()))
-    vectorized_converter = np.vectorize(lambda x: class_names[x])
-    # labels_str = vectorized_converter(lbls)
-    misclassified_strs = [
-        fr"{vectorized_converter(t)} $\rightarrow$ {vectorized_converter(p)}"
-        for (t, p) in list(mnist_cfg37_clean_forgotten_indices.values())
-    ]
+    # class_names = dict(enumerate(original_dataset.get_class_names()))
+    # vectorized_converter = np.vectorize(lambda x: class_names[x])
+    # # labels_str = vectorized_converter(lbls)
+    # misclassified_strs = [
+    #     fr"{vectorized_converter(t)} $\rightarrow$ {vectorized_converter(p)}"
+    #     for (t, p) in list(mnist_cfg37_clean_forgotten_indices.values())
+    # ]
         
-    fig = show_image_grid(
-        images=imgs,
-        labels=misclassified_strs,
-        n_cols=2,
-        n_rows=4,
-        label_fontsize=12,
-        label_wrap=36,
-        hspace=0.05,
-        wspace=0.01
-        # max_images=32,
-    )
-    fig.savefig(fname=Path('./visulaization_dir')/ 'mnist_cfg37_clean_forgotten.png', bbox_inches="tight", dpi=300)
-    plt.show()
+    # fig = show_image_grid(
+    #     images=imgs,
+    #     labels=misclassified_strs,
+    #     n_cols=2,
+    #     n_rows=4,
+    #     label_fontsize=12,
+    #     label_wrap=36,
+    #     hspace=0.05,
+    #     wspace=0.01
+    #     # max_images=32,
+    # )
+    # fig.savefig(fname=Path('./visulaization_dir')/ 'mnist_cfg37_clean_forgotten.png', bbox_inches="tight", dpi=300)
+    # plt.show()
     
 
-    exit()
+    # exit()
     # Load weights while removing classifier weights from the state dict
     mix_weights = OrderedDict(
     (k, v) for k, v in torch.load(
@@ -453,7 +472,7 @@ def apply(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
 
     model.load_state_dict(mix_weights, strict=False)
     
-    task_vectors['Average'].apply_to(model, scaling_coef=-0.95, strict=False)
+    task_vectors['Average'].apply_to(model, scaling_coef=-0.26, strict=False)
     train_results, misclassified_cleans, misclassified_cleans_smp, misclassified_heals = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
     print(train_results)
 
@@ -483,13 +502,15 @@ def apply(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     fig = show_image_grid(
         images=imgs,
         labels=misclassified_strs,
-        label_fontsize=12
+        label_fontsize=12,
+        label_wrap=36,
+        hspace=0.05,
+        wspace=0.01
         # max_images=32,
     )
     plt.show()
     
 
-    
 
 
 
