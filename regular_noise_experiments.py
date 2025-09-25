@@ -306,7 +306,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     if strategy['noise']['finetuning'][0]['noise_type'] == 'asymmetric':
         alphas = tqdm(np.round(np.linspace(-0.05, -2.0, 40), 2))
     else:
-        alphas = tqdm(np.round(np.linspace(-3.05, -4.0, 20), 2))
+        alphas = tqdm(np.round(np.linspace(-2.05, -4.0, 40), 2))
     for alpha in alphas:
         
         model.load_state_dict(mix_weights, strict=False)
