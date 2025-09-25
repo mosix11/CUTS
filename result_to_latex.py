@@ -1659,17 +1659,17 @@ if __name__ == "__main__":
     # )
     
     
-    plot_alpha_noise_and_poison_interplay_dual(
-        results_dir_noise=dino_noise_results_dir,
-        config_rel_path_noise=dino_symmetric_cfgs['CIFAR10'][40],  # NOISE exp
-        results_dir_poison=dino_poison_results_dir,
-        config_rel_path_poison=dino_poison_cfgs['CIFAR10'],        # POISON exp
-        dataset_name_noise="CIFAR-10 (40%)",
-        dataset_name_poison="CIFAR-10 (2%)",
-        forget_threshold_noise=0.89,
-        forget_threshold_poison=0.99,
-        save_path=Path("./visulaization_dir/dino_noise_poison_interplay_plot.png"),
-    )
+    # plot_alpha_noise_and_poison_interplay_dual(
+    #     results_dir_noise=dino_noise_results_dir,
+    #     config_rel_path_noise=dino_symmetric_cfgs['CIFAR10'][40],  # NOISE exp
+    #     results_dir_poison=dino_poison_results_dir,
+    #     config_rel_path_poison=dino_poison_cfgs['CIFAR10'],        # POISON exp
+    #     dataset_name_noise="CIFAR-10 (40%)",
+    #     dataset_name_poison="CIFAR-10 (2%)",
+    #     forget_threshold_noise=0.89,
+    #     forget_threshold_poison=0.99,
+    #     save_path=Path("./visulaization_dir/dino_noise_poison_interplay_plot.png"),
+    # )
     
     
     
@@ -1682,4 +1682,9 @@ if __name__ == "__main__":
     #     outputfile_path= Path("./visulaization_dir/regular_symmetric_noise_table.txt")
     #     )
 
-    
+    generate_clip_poison_table(
+        regular_poison_results_dir,
+        regular_poison_cfgs,
+        dataset_order= ["MNIST", "CIFAR10", "CIFAR100"],
+        outputfile_path=Path("./visulaization_dir/regular_poison_trigger_table.txt")
+    )
