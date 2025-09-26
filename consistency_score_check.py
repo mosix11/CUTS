@@ -470,7 +470,7 @@ def apply(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # coef for 64:
     # dino cifar100: 0.56
     # clip mnist: 0.35
-    task_vectors['Average'].apply_to(model, scaling_coef=-0.46, strict=False)
+    task_vectors['Average'].apply_to(model, scaling_coef=-0.7, strict=False)
     train_results, misclassified_cleans, misclassified_cleans_smp, misclassified_heals = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
     print(train_results)
 
@@ -486,7 +486,8 @@ def apply(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
 
     for idx, (key, value) in enumerate(misclassified_mapping.items()):
         # if cfg['dataset']['name'] == ''
-        print(idx+1, key, value, rank_of_sample(idx), consistency_scores[train_indices[idx]])
+        # print(idx+1, key, value, rank_of_sample(idx), consistency_scores[train_indices[idx]])
+        print(idx+1, key, value)
     # print(consistency_scores[misclassified_cleans])
     
     imgs = []
