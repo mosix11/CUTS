@@ -28,6 +28,7 @@ import pickle
 import copy
 import random
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from src.utils import misc_utils
@@ -279,6 +280,40 @@ def eval_model_on_clean_noise_splits(
     # }, misclassified_cleans, misclassified_cleans_smp, misclassified_healed
     
     
+    
+    
+def overlap_mislabeled_detected_vs_aum(detected_indices, ground_truth_aum_csv):
+    aum = ground_truth_aum_csv
+    idx_col = next(c for c in aum.columns if "index" in c.lower())  # e.g., "Train Set Index"
+
+    A = set(int(i) for i in aum[idx_col].tolist())
+
+    S_list = [int(i) for i in detected_indices]
+    S = set(S_list)
+
+    tp_list = [i for i in S_list if i in A]
+    fp_list = [i for i in S_list if i not in A]
+
+    TP = len(S & A)           
+    FP = len(S - A)            
+    FN = len(A - S)            
+
+    precision = TP / (TP + FP) if (TP + FP) else 0.0      
+    recall = TP / (TP + FN) if (TP + FN) else 0.0      
+    f1 = (2*precision*recall)/(precision+recall) if (precision+recall) else 0.0
+    jaccard = TP / (TP + FP + FN) if (TP + FP + FN) else 0.0
+
+    return {
+        "TP": TP, "FP": FP, "FN": FN,
+        "precision_(S∩A)/|S|": precision,
+        "recall_(S∩A)/|A|": recall,
+        "F1": f1,
+        "Jaccard": jaccard,
+        "tp_list": tp_list,     # hits from your detected list (order preserved)
+        "fp_list": fp_list,     # misses from your detected list (order preserved)
+        "sizes": {"|S|": len(S), "|S_list|": len(S_list), "|A|": len(A)},
+    }
+    
 def apply(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     training_seed = cfg['training_seed']
     dataset_seed = cfg['dataset_seed']
@@ -351,10 +386,12 @@ def apply(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         original_dataset = CIFAR10()
         consistency_scores = np.load('./consistency_scores/cifar10-cscores.npz')['scores']
         cs_lbls = np.load('./consistency_scores/cifar10-cscores.npz')['labels']
+        aum_mislabeled = pd.read_csv('./consistency_scores/cifar10_high_aum.csv')
     elif dataset_cfg['name'] == 'cifar100':
         original_dataset = CIFAR100()
         consistency_scores = np.load('./consistency_scores/cifar100-cscores.npz')['scores']
         cs_lbls = np.load('./consistency_scores/cifar100-cscores.npz')['labels']
+        aum_mislabeled = pd.read_csv('./consistency_scores/cifar100_high_aum.csv')
     elif dataset_cfg['name'] == 'mnist':
         original_dataset = MNIST()
         # TODO find the cons score for MNIST with matching samples indices with torch version.
@@ -470,9 +507,12 @@ def apply(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # coef for 64:
     # dino cifar100: 0.56
     # clip mnist: 0.35
-    task_vectors['Average'].apply_to(model, scaling_coef=-0.7, strict=False)
+    # clip cifar100 cfg49: -0.315
+    task_vectors['Average'].apply_to(model, scaling_coef=-0.3, strict=False)
     train_results, misclassified_cleans, misclassified_cleans_smp, misclassified_heals = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
     print(train_results)
+    # test_results = evaluate_model(model, dataset.get_test_dataloader(), gpu)[0]
+    # print(test_results)
 
 
     def rank_of_sample(sample_idx):
@@ -483,11 +523,22 @@ def apply(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         return int(inv_rank[sample_idx])
     
     misclassified_mapping = dict(zip(misclassified_cleans, misclassified_cleans_smp))
-
-    for idx, (key, value) in enumerate(misclassified_mapping.items()):
-        # if cfg['dataset']['name'] == ''
-        # print(idx+1, key, value, rank_of_sample(idx), consistency_scores[train_indices[idx]])
-        print(idx+1, key, value)
+    
+    class_names = dict(enumerate(original_dataset.get_class_names()))
+    vectorized_converter = np.vectorize(lambda x: class_names[x])
+    
+    results_aum_check = overlap_mislabeled_detected_vs_aum(train_indices[misclassified_cleans], aum_mislabeled)
+    results_aum_check.pop('tp_list')
+    results_aum_check.pop('fp_list')
+    print(results_aum_check)
+    # print(results_aum_check['TP'])
+    # print(results_aum_check['tp_list'])
+    # for idx, (key, (t, p)) in enumerate(misclassified_mapping.items()):
+    #     # print(idx+1, key, f'({t}, {p})')
+    #     # if cfg['dataset']['name'] == ''
+    #     # print(idx+1, key, value, rank_of_sample(idx), consistency_scores[train_indices[idx]])
+    #     print(idx+1, key, 'hit' if key in results_aum_check['tp_list'] else 'missed', f"{vectorized_converter(t)} -> {vectorized_converter(p)}")
+        
     # print(consistency_scores[misclassified_cleans])
     
     imgs = []
@@ -497,9 +548,6 @@ def apply(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         imgs.append(img)
         # lbls.append(lbl)
     
-    
-    class_names = dict(enumerate(original_dataset.get_class_names()))
-    vectorized_converter = np.vectorize(lambda x: class_names[x])
     # labels_str = vectorized_converter(lbls)
     misclassified_strs = [
         fr"{vectorized_converter(t)} $\rightarrow$ {vectorized_converter(p)}"
@@ -507,8 +555,10 @@ def apply(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     ]
         
     if len(imgs) > 64:
-        imgs = imgs[-64:]
-        misclassified_strs = misclassified_strs[-64:]
+        # imgs = imgs[-64:]
+        # misclassified_strs = misclassified_strs[-64:]
+        imgs = imgs[:64]
+        misclassified_strs = misclassified_strs[:64]
         
     fig = show_image_grid(
         images=imgs,

@@ -1682,9 +1682,11 @@ if __name__ == "__main__":
     #     outputfile_path= Path("./visulaization_dir/regular_symmetric_noise_table.txt")
     #     )
 
-    generate_clip_poison_table(
-        regular_poison_results_dir,
-        regular_poison_cfgs,
-        dataset_order= ["MNIST", "CIFAR10", "CIFAR100"],
-        outputfile_path=Path("./visulaization_dir/regular_poison_trigger_table.txt")
-    )
+    # generate_clip_poison_table(
+    #     regular_poison_results_dir,
+    #     regular_poison_cfgs,
+    #     dataset_order= ["MNIST", "CIFAR10", "CIFAR100"],
+    #     outputfile_path=Path("./visulaization_dir/regular_poison_trigger_table.txt")
+    # )
+    
+    print(regular_symmetric_comp_cfgs)

@@ -63,17 +63,17 @@ trainer:
       comet_project_name: 'dino-noise-TA'
       seed: *training_seed
     noise:
-      max_iterations: 8000
+      max_iterations: 12000
       optimizer_cfg: 
         type: "adamw"
-        lr: 1.0e-5
+        lr: 5.0e-5
         betas: [0.9, 0.999]
       lr_schedule_cfg:
         type: 'cosann_warmup'
         update_on: 'gradient_step'
         warmup_steps: 200
-        hold_steps: 4800
-        T_max: 8000
+        hold_steps: 6800
+        T_max: 12000
         eta_min: 0
       early_stopping: False
       validation_freq: -1
