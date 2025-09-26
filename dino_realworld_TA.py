@@ -211,6 +211,23 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     else:
         task_vectors['Average'] = TaskVector.mean(task_vectors)
   
+    results_dict = OrderedDict()
+    with open(results_dir / "metrics.json", "r") as json_file:
+        results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
+        
+    alphas = tqdm(np.round(np.linspace(-0.52, -1.0, 25), 3))
+    for alpha in alphas:
+        
+        model.load_state_dict(mix_weights, strict=False)
+        task_vectors['Average'].apply_to(model, scaling_coef=alpha, strict=False)
+        tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+        # tv_train_results,  _, _ = evaluate_model(model, dataset.get_train_dataloader(), gpu)
+
+        # results_dict[alpha] = {'test_results': tv_test_results, 'train_results': tv_train_results}
+        print(alpha, tv_test_results)
+        results_dict[alpha] = {'test_results': tv_test_results,}
+    with open(results_dir / 'metrics.json' , 'w') as json_file:
+        json.dump(results_dict, json_file, indent=4)
     
     results_dict = OrderedDict()
     if not results_dir.joinpath('metrics.json').exists():
@@ -223,7 +240,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         results_dict['Mix'] = {'test_results': mix_test_results}
         print('0.0', mix_test_results)
 
-        alphas = tqdm(np.round(np.linspace(-0.02, -0.5, 25), 3))
+        alphas = tqdm(np.round(np.linspace(-0.52, -0.5, 25), 3))
         for alpha in alphas:
             
             model.load_state_dict(mix_weights, strict=False)
