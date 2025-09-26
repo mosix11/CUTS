@@ -3,7 +3,7 @@ training_seed: &training_seed 11
 dataset_seed: &dataset_seed 11
 
 strategy:
-  finetuning_set: &finetuning_set 'train'
+  finetuning_set: &finetuning_set 'Train'
   noise:
     finetuning:
     - set: 'Train'
