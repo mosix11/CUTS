@@ -1560,7 +1560,7 @@ if __name__ == "__main__":
     
     
     regular_poison_cfgs = OrderedDict()
-    regular_poison_cfgs['MNIST'] = regular_models_cfgs['MNIST']['scratch']['ho_2']['poison']['fc1']
+    regular_poison_cfgs['MNIST'] = regular_models_cfgs['MNIST']['scratch']['ho_2']['poison']['resnet18']
     regular_poison_cfgs['CIFAR10'] = regular_models_cfgs['CIFAR10']['scratch']['ho_2']['poison']['resnet18']
     regular_poison_cfgs['CIFAR100'] = regular_models_cfgs['CIFAR100']['scratch']['ho_2']['poison']['resnet18']
     

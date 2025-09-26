@@ -114,6 +114,7 @@ regular_models:
             40: 'config31'
         poison:
           fc1: 'config1'
+          resnet18: 'config4'
 
 
   CIFAR10:

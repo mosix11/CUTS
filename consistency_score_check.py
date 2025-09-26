@@ -408,6 +408,8 @@ def apply(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     # imgs = []
     
+    # print(train_indices[list(cifar100_cfg31_clean_forgotten_indices.keys())])
+    # exit()
     # for idx in train_indices[list(mnist_cfg37_clean_forgotten_indices.keys())]:
     #     img, lbl, dx = original_dataset.get_trainset()[idx]
     #     imgs.append(img)
@@ -481,7 +483,7 @@ def apply(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
 
     for idx, (key, value) in enumerate(misclassified_mapping.items()):
         print(idx+1, key, value)
-    print(consistency_scores[misclassified_cleans])
+    # print(consistency_scores[misclassified_cleans])
     
     imgs = []
     
@@ -498,6 +500,10 @@ def apply(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         fr"{vectorized_converter(t)} $\rightarrow$ {vectorized_converter(p)}"
         for (t, p) in misclassified_cleans_smp
     ]
+        
+    if len(imgs) > 64:
+        imgs = imgs[-64:]
+        misclassified_strs = misclassified_strs[-64:]
         
     fig = show_image_grid(
         images=imgs,
