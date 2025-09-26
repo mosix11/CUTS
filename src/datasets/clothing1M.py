@@ -133,8 +133,9 @@ class Clothing1M(BaseClassificationDataset):
     def load_validation_set(self):
         self.val_transforms = self.get_transforms(train=False)
         valset = Clothing1MDataset(root_dir=self.val_dir, transform=self.val_transforms)
-        clean_trainset = Clothing1MDataset(root_dir=self.train_clean_dir, transform=self.val_transforms)
-        return ConcatDataset([valset, clean_trainset])
+        # clean_trainset = Clothing1MDataset(root_dir=self.train_clean_dir, transform=self.val_transforms)
+        # return ConcatDataset([valset, clean_trainset])
+        return valset
     
     def load_test_set(self):
         self.val_transforms = self.get_transforms(train=False)
