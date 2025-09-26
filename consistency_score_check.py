@@ -474,7 +474,7 @@ def apply(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
 
     model.load_state_dict(mix_weights, strict=False)
     
-    task_vectors['Average'].apply_to(model, scaling_coef=-0.26, strict=False)
+    task_vectors['Average'].apply_to(model, scaling_coef=-0.35, strict=False)
     train_results, misclassified_cleans, misclassified_cleans_smp, misclassified_heals = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
     print(train_results)
 
@@ -510,8 +510,10 @@ def apply(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         labels=misclassified_strs,
         label_fontsize=12,
         label_wrap=36,
-        hspace=0.05,
-        wspace=0.01
+        hspace=0.07,
+        wspace=0.01,
+        image_height_frac=0.82,
+        label_band_frac=0.16
         # max_images=32,
     )
     plt.show()

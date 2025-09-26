@@ -109,15 +109,8 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
             plots_dir = experiment_dir / Path("plots")
             plots_dir.mkdir(exist_ok=True, parents=True)
             
-            # For asymmetric noise, we only consider the noisy samples (only a subset of classes are swapped.)
-            if noise_tv['noise_type'] == 'asymmetric':
-                noise_tv['set'] = 'Heldout'
-                dataset.inject_noise(**noise_tv)
-                hs_clean, hs_noisy = dataset.get_clean_noisy_subsets(set='Heldout')
-                dataset.set_trainset(hs_noisy, shuffle=True)
-            else:
-                dataset.set_trainset(dataset.get_heldoutset(), shuffle=True)
-                dataset.inject_noise(**noise_tv)
+            dataset.set_trainset(dataset.get_testset(), shuffle=True)
+            dataset.inject_noise(**noise_tv)
                 
             finetuning_cfg = None
             if 'noise' in cfg['trainer']['finetuning']:
