@@ -3,7 +3,7 @@ training_seed: &training_seed 11
 dataset_seed: &dataset_seed 11
 
 strategy:
-  finetuning_set: &finetuning_set 'Train'
+  finetuning_set: &finetuning_set 'Train+Subset'
   noise:
     finetuning:
     - set: 'Train'
@@ -14,6 +14,10 @@ strategy:
       noise_rate: 1.0
       noise_type: 'symmetric'
       seed: 10
+    - set: 'Train'
+      noise_rate: 1.0
+      noise_type: 'symmetric'
+      seed: 14
 
 
 
@@ -63,17 +67,17 @@ trainer:
       comet_project_name: 'dino-noise-TA'
       seed: *training_seed
     noise:
-      max_iterations: 12000
+      max_iterations: 3000
       optimizer_cfg: 
         type: "adamw"
-        lr: 5.0e-5
+        lr: 1.0e-5
         betas: [0.9, 0.999]
       lr_schedule_cfg:
         type: 'cosann_warmup'
         update_on: 'gradient_step'
         warmup_steps: 200
-        hold_steps: 6800
-        T_max: 12000
+        hold_steps: 1800
+        T_max: 3000
         eta_min: 0
       early_stopping: False
       validation_freq: -1
