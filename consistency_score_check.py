@@ -11,14 +11,12 @@ torch.set_float32_matmul_precision("high")
 
 from src.datasets import dataset_factory, CIFAR10, CIFAR100,MNIST, BaseClassificationDataset, dataset_wrappers
 from src.models import model_factory, TaskVector
-from src.trainers import StandardTrainer, GradientAscentTrainer, utils as trainer_utils
-from torch.utils.data import DataLoader
-import matplotlib.pyplot as plt
-import seaborn as sns
-from src.utils import misc_utils
+from src.trainers import utils as trainer_utils
+
+
 
 import torchvision.transforms.v2 as transformsv2
-from torch.utils.data import Dataset, Subset, ConcatDataset
+from torch.utils.data import Dataset, Subset, ConcatDataset, DataLoader
 from functools import partial
 from pathlib import Path
 import pickle
@@ -30,7 +28,9 @@ import pickle
 import copy
 import random
 import numpy as np
-from torchmetrics import ConfusionMatrix
+import matplotlib.pyplot as plt
+import seaborn as sns
+from src.utils import misc_utils
 import json
 from tqdm import tqdm
 from collections import OrderedDict, defaultdict
@@ -38,19 +38,8 @@ import re
 
 import imageio.v2 as imageio
 
-from src.utils import embedding_space_analysis
-from helper_funcs import get_confusion_matrix, row_normalize
-from src.utils import weight_norm_analysis
-
 import math
 from typing import Sequence, Optional, Tuple, Union
-import textwrap
-
-import math
-from typing import Sequence, Optional, Tuple, Union
-import torch
-import numpy as np
-import matplotlib.pyplot as plt
 import textwrap
 
 def show_image_grid(
@@ -310,31 +299,35 @@ def apply(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     results_dirs = {}
     results_dirs['metrics'] = results_dir / 'metrics'
-    for dir in results_dirs.values():
-        dir.mkdir(exist_ok=True, parents=True)
-    
     
     try:
         dataset_cfg = cfg['datasets'][0]
     except:
         dataset_cfg = cfg['dataset']
         
-    dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
     
-
-    cfg['model']['datasets_cfgs'] = {dataset_cfg['name']: dataset.get_class_names()} 
-    model = model_factory.create_model(cfg['model'])
-    model.freeze_all_heads()
+    if 'dinov3' in cfg['model']['type']:
+        model = model_factory.create_model(cfg['model'])
+        pt_weights = copy.deepcopy(model.state_dict())
+        dataset_cfg = cfg['dataset']
+        dataset_cfg['train_transforms'] = model.get_val_transforms()
+        dataset_cfg['val_transforms'] = model.get_val_transforms()
+        dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
     
-    pt_weights = copy.deepcopy(model.state_dict())
-    pt_weights = OrderedDict((k, v) for k, v in pt_weights.items() if "classifier_heads" not in k)
-    
-    dataset_cfg['train_transforms'] = model.get_val_transforms()
-    dataset_cfg['val_transforms'] = model.get_val_transforms()
-    dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
+    elif 'open_clip' in cfg['model']['type']:
+        dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
+        cfg['model']['datasets_cfgs'] = {dataset_cfg['name']: dataset.get_class_names()} 
+        model = model_factory.create_model(cfg['model'])
+        model.freeze_all_heads()
+        
+        pt_weights = copy.deepcopy(model.state_dict())
+        pt_weights = OrderedDict((k, v) for k, v in pt_weights.items() if "classifier_heads" not in k)
+        
+        dataset_cfg['train_transforms'] = model.get_val_transforms()
+        dataset_cfg['val_transforms'] = model.get_val_transforms()
+        dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
     
     dataset.reset_train_dl(shuffle=False)
-    
     dataset_clean = copy.deepcopy(dataset)
     
     strategy = cfg['strategy']
@@ -440,14 +433,14 @@ def apply(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
 
     # exit()
-    # Load weights while removing classifier weights from the state dict
+    
+    # Load weights while removing classifier weights from the state dict for CLIP
     mix_weights = OrderedDict(
     (k, v) for k, v in torch.load(
         outputs_dir.joinpath(f"mix/weights/ft_weights.pth"),
         map_location='cpu'
     ).items() if "classifier_heads" not in k)
     
-
     noise_weights = OrderedDict()
     
     for noise_tv in cfg['strategy']['noise']['finetuning']:
@@ -474,15 +467,26 @@ def apply(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
 
     model.load_state_dict(mix_weights, strict=False)
     
-    task_vectors['Average'].apply_to(model, scaling_coef=-0.35, strict=False)
+    # coef for 64:
+    # dino cifar100: 0.56
+    # clip mnist: 0.35
+    task_vectors['Average'].apply_to(model, scaling_coef=-0.46, strict=False)
     train_results, misclassified_cleans, misclassified_cleans_smp, misclassified_heals = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
     print(train_results)
 
+
+    def rank_of_sample(sample_idx):
+        scores = np.asarray(consistency_scores, dtype=float)
+        order = np.argsort(-scores)                 # descending: 0 = highest
+        inv_rank = np.empty_like(order)
+        inv_rank[order] = np.arange(order.size)     # inverse mapping: idx -> rank
+        return int(inv_rank[sample_idx])
     
     misclassified_mapping = dict(zip(misclassified_cleans, misclassified_cleans_smp))
 
     for idx, (key, value) in enumerate(misclassified_mapping.items()):
-        print(idx+1, key, value)
+        # if cfg['dataset']['name'] == ''
+        print(idx+1, key, value, rank_of_sample(idx), consistency_scores[train_indices[idx]])
     # print(consistency_scores[misclassified_cleans])
     
     imgs = []
@@ -527,6 +531,14 @@ if __name__ == "__main__":
     
     parser = argparse.ArgumentParser()
     parser.add_argument(
+        "-m",
+        "--model",
+        help="Type of model to use.",
+        choices=['dino', 'clip'],
+        type=str,
+    )
+    
+    parser.add_argument(
         "-c",
         "--config",
         help="Configuration to used for model.",
@@ -537,16 +549,21 @@ if __name__ == "__main__":
 
     dotenv.load_dotenv(".env")
     
-    cfg_path = Path('configs/single_experiment/clip_noise_TA') / f"{args.config}.yaml"
+    if args.model == 'dino':
+        cfg_path = Path('configs/single_experiment/dino_noise_TA') / f"{args.config}.yaml"
+    elif args.model == 'clip':
+        cfg_path = Path('configs/single_experiment/clip_noise_TA') / f"{args.config}.yaml"
+    
 
     if not cfg_path.exists(): raise RuntimeError('The specified config file does not exist.')
     with open(cfg_path, 'r') as file:
         cfg = yaml.full_load(file)
 
-    outputs_dir = Path("outputs/single_experiment/clip_noise_TA").absolute()
-    results_dir = Path("results/single_experiment/clip_noise_TA").absolute()
-    results_dir.mkdir(exist_ok=True, parents=True)
+    if args.model == 'dino':
+        outputs_dir = Path("outputs/single_experiment/dino_noise_TA").absolute()
+        results_dir = Path("results/single_experiment/dino_noise_TA").absolute()
+    elif args.model == 'clip':
+        outputs_dir = Path("outputs/single_experiment/clip_noise_TA").absolute()
+        results_dir = Path("results/single_experiment/clip_noise_TA").absolute()
 
-    # if cfg['datasets'][0]['name'] != 'cifar10' and cfg['datasets'][0]['name'] != 'cifar100':
-    #     raise ValueError(f'Consistency scores for {cfg['datasets'][0]['name']} are not available.')
     apply(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)
