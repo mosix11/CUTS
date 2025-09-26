@@ -109,10 +109,10 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
             plots_dir = experiment_dir / Path("plots")
             plots_dir.mkdir(exist_ok=True, parents=True)
             
-            if strategy['noise']['finetuning_set'] == 'Test':
+            if strategy['finetuning_set'] == 'Test':
                 dataset.set_trainset(dataset.get_testset(), shuffle=True)
                 dataset.inject_noise(**noise_tv)
-            elif strategy['noise']['finetuning_set'] == 'Train':
+            elif strategy['finetuning_set'] == 'Train':
                 dataset.inject_noise(**noise_tv)
                 
             finetuning_cfg = None
