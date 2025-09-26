@@ -217,20 +217,23 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
 
         model.load_state_dict(mix_weights, strict=False)
         mix_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-        mix_train_results, _, _ = evaluate_model(model, dataset.get_train_dataloader(), gpu)
+        # mix_train_results, _, _ = evaluate_model(model, dataset.get_train_dataloader(), gpu)
         
-        results_dict['Mix'] = {'test_results': mix_test_results, 'train_results': mix_train_results}
+        # results_dict['Mix'] = {'test_results': mix_test_results, 'train_results': mix_train_results}
+        results_dict['Mix'] = {'test_results': mix_test_results}
+        print('0.0', mix_test_results)
 
-
-        alphas = tqdm(np.round(np.linspace(-0.02, -1.0, 50), 3))
+        alphas = tqdm(np.round(np.linspace(-0.02, -0.5, 25), 3))
         for alpha in alphas:
             
             model.load_state_dict(mix_weights, strict=False)
             task_vectors['Average'].apply_to(model, scaling_coef=alpha, strict=False)
             tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-            tv_train_results,  _, _ = evaluate_model(model, dataset.get_train_dataloader(), gpu)
+            # tv_train_results,  _, _ = evaluate_model(model, dataset.get_train_dataloader(), gpu)
 
-            results_dict[alpha] = {'test_results': tv_test_results, 'train_results': tv_train_results}
+            # results_dict[alpha] = {'test_results': tv_test_results, 'train_results': tv_train_results}
+            print(alpha, tv_test_results)
+            results_dict[alpha] = {'test_results': tv_test_results,}
         with open(results_dir / 'metrics.json' , 'w') as json_file:
             json.dump(results_dict, json_file, indent=4)
     else:
