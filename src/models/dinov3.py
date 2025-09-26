@@ -103,7 +103,8 @@ class DinoV3Classifier(BaseModel):
     
     def get_val_transforms(self):
         return transforms.Compose([
-            transforms.Resize(224, antialias=True),
+            transforms.Resize(224, antialias=True),  # keep aspect, short side=256
+            transforms.CenterCrop(224),
             transforms.ToImage(),
             transforms.ToDtype(torch.float32, scale=True),
             transforms.Normalize(mean=self.pre_processor.image_mean, std=self.pre_processor.image_std),

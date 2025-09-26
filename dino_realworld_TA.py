@@ -53,8 +53,9 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
     dataset_cfg = cfg['dataset']
     dataset_cfg['train_transforms'] = base_model.get_train_transforms()
     dataset_cfg['val_transforms'] = base_model.get_val_transforms()
+
     base_dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
-    
+
     strategy = cfg['strategy']
 
     
@@ -99,6 +100,7 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
             mix_model_ckp_path = outputs_dir/ Path(f"{cfg_name}/mix") / Path('weights/ft_weights.pth')
             checkpoint = torch.load(mix_model_ckp_path)
             model.load_state_dict(checkpoint)
+
             
             experiment_name = f"{cfg_name}/finetune_{noise_tv['noise_rate']}_{noise_tv['seed']}"
             experiment_dir = outputs_dir / Path(experiment_name)
@@ -117,6 +119,7 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
                 dataset.inject_noise(**noise_tv)
             elif strategy['finetuning_set'] == 'Train':
                 dataset.inject_noise(**noise_tv)
+
                 
             finetuning_cfg = None
             if 'noise' in cfg['trainer']['finetuning']:

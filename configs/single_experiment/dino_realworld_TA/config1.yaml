@@ -61,31 +61,8 @@ trainer:
       log_comet: True
       comet_project_name: 'dino-realworld-TA'
       seed: *training_seed
-    # noise:
-    #   max_iterations: 5000
-    #   optimizer_cfg: 
-    #     type: "adamw"
-    #     lr: 1.0e-5
-    #     betas: [0.9, 0.999]
-    #   lr_schedule_cfg:
-    #     type: 'cosann_warmup'
-    #     update_on: 'gradient_step'
-    #     warmup_steps: 200
-    #     hold_steps: 2300
-    #     T_max: 2000
-    #     eta_min: 0
-    #   early_stopping: False
-    #   validation_freq: -1
-    #   save_best_model: False
-    #   checkpoint_freq: -1
-    #   run_on_gpu: True
-    #   use_amp: True
-    #   log_comet: True
-    #   comet_project_name: 'dino-realworld-TA'
-    #   seed: *training_seed
-
     noise:
-      max_iterations: 50
+      max_iterations: 5000
       optimizer_cfg: 
         type: "adamw"
         lr: 1.0e-5
@@ -93,9 +70,9 @@ trainer:
       lr_schedule_cfg:
         type: 'cosann_warmup'
         update_on: 'gradient_step'
-        warmup_steps: 10
-        hold_steps: 0
-        T_max: 50
+        warmup_steps: 200
+        hold_steps: 2300
+        T_max: 2000
         eta_min: 0
       early_stopping: False
       validation_freq: -1
