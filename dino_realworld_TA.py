@@ -215,7 +215,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     with open(results_dir / "metrics.json", "r") as json_file:
         results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
         
-    alphas = tqdm(np.round(np.linspace(-0.52, -1.0, 25), 3))
+    alphas = tqdm(np.round(np.linspace(-1.02, -2.0, 50), 3))
     for alpha in alphas:
         
         model.load_state_dict(mix_weights, strict=False)
@@ -229,34 +229,54 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     with open(results_dir / 'metrics.json' , 'w') as json_file:
         json.dump(results_dict, json_file, indent=4)
     
-    results_dict = OrderedDict()
-    if not results_dir.joinpath('metrics.json').exists():
+    # results_dict = OrderedDict()
+    # if not results_dir.joinpath('metrics.json').exists():
 
-        model.load_state_dict(mix_weights, strict=False)
-        mix_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-        # mix_train_results, _, _ = evaluate_model(model, dataset.get_train_dataloader(), gpu)
+    #     model.load_state_dict(mix_weights, strict=False)
+    #     mix_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+    #     # mix_train_results, _, _ = evaluate_model(model, dataset.get_train_dataloader(), gpu)
         
-        # results_dict['Mix'] = {'test_results': mix_test_results, 'train_results': mix_train_results}
-        results_dict['Mix'] = {'test_results': mix_test_results}
-        print('0.0', mix_test_results)
+    #     # results_dict['Mix'] = {'test_results': mix_test_results, 'train_results': mix_train_results}
+    #     results_dict['Mix'] = {'test_results': mix_test_results}
+    #     print('0.0', mix_test_results)
 
-        alphas = tqdm(np.round(np.linspace(-0.52, -0.5, 25), 3))
-        for alpha in alphas:
+    #     alphas = tqdm(np.round(np.linspace(-0.52, -0.5, 25), 3))
+    #     for alpha in alphas:
             
-            model.load_state_dict(mix_weights, strict=False)
-            task_vectors['Average'].apply_to(model, scaling_coef=alpha, strict=False)
-            tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-            # tv_train_results,  _, _ = evaluate_model(model, dataset.get_train_dataloader(), gpu)
+    #         model.load_state_dict(mix_weights, strict=False)
+    #         task_vectors['Average'].apply_to(model, scaling_coef=alpha, strict=False)
+    #         tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+    #         # tv_train_results,  _, _ = evaluate_model(model, dataset.get_train_dataloader(), gpu)
 
-            # results_dict[alpha] = {'test_results': tv_test_results, 'train_results': tv_train_results}
-            print(alpha, tv_test_results)
-            results_dict[alpha] = {'test_results': tv_test_results,}
+    #         # results_dict[alpha] = {'test_results': tv_test_results, 'train_results': tv_train_results}
+    #         print(alpha, tv_test_results)
+    #         results_dict[alpha] = {'test_results': tv_test_results,}
+    #     with open(results_dir / 'metrics.json' , 'w') as json_file:
+    #         json.dump(results_dict, json_file, indent=4)
+    # else:
+    #     with open(results_dir / "metrics.json", "r") as json_file:
+    #         results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
+            
+            
+    if 'alpha_KNN' not in results_dict:  
+          
+        from estimate_alpha import select_alpha_by_knn_self_agreement
+        alpha_kNN = select_alpha_by_knn_self_agreement(
+            model=model,
+            feature_extractor=model.get_feature_extractor(),
+            classifier=model.get_classifier_head(),
+            state0=mix_weights,
+            taskvector=task_vectors['Average'],
+            unlabeled_loader=dataset.get_val_dataloader(),
+            # K=dataset.get_num_classes(),
+            alphas=np.round(np.linspace(-0.02, -2.0, 100), 2),
+            device=gpu
+        )
+
+        results_dict['alpha_KNN'] = alpha_kNN
         with open(results_dir / 'metrics.json' , 'w') as json_file:
             json.dump(results_dict, json_file, indent=4)
-    else:
-        with open(results_dir / "metrics.json", "r") as json_file:
-            results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
-            
+
             
     
 
