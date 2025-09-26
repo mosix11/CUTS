@@ -72,7 +72,7 @@ trainer:
         update_on: 'gradient_step'
         warmup_steps: 200
         hold_steps: 2300
-        T_max: 2000
+        T_max: 5000
         eta_min: 0
       early_stopping: False
       validation_freq: -1
