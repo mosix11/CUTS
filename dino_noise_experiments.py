@@ -393,23 +393,44 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
             
             
-    if 'alpha_KNN' not in results_dict:        
-        from estimate_alpha import select_alpha_by_knn_self_agreement
-        alpha_kNN = select_alpha_by_knn_self_agreement(
-            model=model,
-            feature_extractor=model.get_feature_extractor(),
-            classifier=model.get_classifier_head(),
-            state0=mix_weights,
-            taskvector=task_vectors['Average'],
-            unlabeled_loader=dataset_clean.get_heldout_dataloader(),
-            # K=dataset.get_num_classes(),
-            alphas=np.round(np.linspace(-0.05, -3.0, 60), 2),
-            device=gpu
-        )
+    # if 'alpha_KNN' not in results_dict:        
+    #     from estimate_alpha import select_alpha_by_knn_self_agreement
+    #     alpha_kNN = select_alpha_by_knn_self_agreement(
+    #         model=model,
+    #         feature_extractor=model.get_feature_extractor(),
+    #         classifier=model.get_classifier_head(),
+    #         state0=mix_weights,
+    #         taskvector=task_vectors['Average'],
+    #         unlabeled_loader=dataset_clean.get_heldout_dataloader(),
+    #         # K=dataset.get_num_classes(),
+    #         alphas=np.round(np.linspace(-0.05, -3.0, 60), 2),
+    #         device=gpu
+    #     )
 
-        results_dict['alpha_KNN'] = alpha_kNN
-        with open(results_dir / 'metrics.json' , 'w') as json_file:
-            json.dump(results_dict, json_file, indent=4)
+    #     results_dict['alpha_KNN'] = alpha_kNN
+    #     with open(results_dir / 'metrics.json' , 'w') as json_file:
+    #         json.dump(results_dict, json_file, indent=4)
+    
+    
+    from estimate_alpha import select_alpha_by_knn_self_agreement
+    alpha_kNN = select_alpha_by_knn_self_agreement(
+        model=model,
+        feature_extractor=model.get_feature_extractor(),
+        classifier=model.get_classifier_head(),
+        state0=mix_weights,
+        taskvector=task_vectors['Average'],
+        unlabeled_loader=dataset_clean.get_heldout_dataloader(),
+        num_clusters=dataset.get_num_classes(),
+        alphas=np.round(np.linspace(-0.0, -4.0, 21), 2),
+        device=gpu
+    )
+    print(alpha_kNN)
+    
+    model.load_state_dict(mix_weights, strict=False)
+    task_vectors['Average'].apply_to(model, scaling_coef=alpha_kNN, strict=False)
+    tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+    print(tv_test_results)
+    exit()
 
     if 'Random Vector' not in results_dict:
         model.load_state_dict(mix_weights, strict=False)

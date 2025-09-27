@@ -33,6 +33,7 @@ import json
 from tqdm import tqdm
 from collections import OrderedDict, defaultdict
 import re
+import math
 
 
 from src.utils import embedding_space_analysis
@@ -773,37 +774,36 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             
             
     # if 'alpha_KNN' not in results_dict:        
-    #     from estimate_alpha import select_alpha_by_knn_self_agreement
-    #     alpha_kNN = select_alpha_by_knn_self_agreement(
-    #         model=model,
-    #         feature_extractor=model.get_feature_extractor(),
-    #         classifier=model.get_active_head(),
-    #         state0=mix_weights,
-    #         taskvector=task_vectors['Average'],
-    #         unlabeled_loader=dataset_clean.get_heldout_dataloader(),
-    #         # K=dataset.get_num_classes(),
-    #         alphas=np.round(np.linspace(-0.05, -3.0, 60), 2),
-    #         device=gpu
-    #     )
+    num_clusters = dataset_clean.get_num_classes()
+    alpha_est_support_dl = dataset_clean.get_heldout_dataloader()
+    alpha_est_support_size = len(dataset_clean.get_heldoutset())
+    ideal_cluster_balance = alpha_est_support_size / num_clusters
+    num_neighbor_agr_check = math.floor(ideal_cluster_balance / 2)
+    if dataset.dataset_name == 'MNIST':
+        coverage_rate = 1.0
+    elif dataset.dataset_name == 'CIFAR10':
+        coverage_rate = 1.0
+    elif dataset.dataset_name == 'CIFAR100':
+        coverage_rate = 0.95
 
-    #     results_dict['alpha_KNN'] = alpha_kNN
-    #     with open(results_dir / 'metrics.json' , 'w') as json_file:
-    #         json.dump(results_dict, json_file, indent=4)
-    
-    
     from estimate_alpha import select_alpha_by_knn_self_agreement
     alpha_kNN = select_alpha_by_knn_self_agreement(
         model=model,
         feature_extractor=model.get_feature_extractor(),
-        classifier=model.get_active_head(),
+        classifier=model.get_classifier_head(),
         state0=mix_weights,
         taskvector=task_vectors['Average'],
-        unlabeled_loader=dataset_clean.get_heldout_dataloader(),
-        target_classes=dataset.get_num_classes(),
-        alphas=np.round(np.linspace(-0.0, -4.0, 21), 2),
+        unlabeled_loader=alpha_est_support_dl,
+        num_clusters=num_clusters,
+        k=num_neighbor_agr_check,
+        coverage_rate=coverage_rate,
+        alphas=np.round(np.linspace(-0.0, -3.0, 61), 2),
         device=gpu
     )
-    print(alpha_kNN)
+    
+    results_dict['alpha_KNN'] = alpha_kNN
+    with open(results_dir / 'metrics.json' , 'w') as json_file:
+        json.dump(results_dict, json_file, indent=4)
     
 
     if 'Random Vector' not in results_dict:
