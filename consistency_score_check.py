@@ -508,7 +508,7 @@ def apply(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # dino cifar100: 0.56
     # clip mnist: 0.35
     # clip cifar100 cfg49: -0.315
-    task_vectors['Average'].apply_to(model, scaling_coef=-1.0, strict=False)
+    task_vectors['Average'].apply_to(model, scaling_coef=-0.5, strict=False)
     train_results, misclassified_cleans, misclassified_cleans_smp, misclassified_heals = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
     print(train_results)
     # test_results = evaluate_model(model, dataset.get_test_dataloader(), gpu)[0]
