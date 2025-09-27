@@ -16,28 +16,22 @@ strategy:
         noise_rate: 1.0
         noise_type: 'symmetric'
         seed: 12
-    finetuning:
       - set: 'Train'
         noise_rate: 1.0
         noise_type: 'symmetric'
         seed: 10
-    finetuning:
       - set: 'Train'
         noise_rate: 1.0
         noise_type: 'symmetric'
         seed: 14
-
-    finetuning:
       - set: 'Train'
         noise_rate: 1.0
         noise_type: 'symmetric'
         seed: 16
-    finetuning:
       - set: 'Train'
         noise_rate: 1.0
         noise_type: 'symmetric'
         seed: 18
-    finetuning:
       - set: 'Train'
         noise_rate: 1.0
         noise_type: 'symmetric'
