@@ -14,10 +14,10 @@ strategy:
       noise_rate: 1.0
       noise_type: 'symmetric'
       seed: 10
-    - set: 'Train'
-      noise_rate: 1.0
-      noise_type: 'symmetric'
-      seed: 14
+    # - set: 'Train'
+    #   noise_rate: 1.0
+    #   noise_type: 'symmetric'
+    #   seed: 14
 
 
 

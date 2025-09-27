@@ -243,8 +243,7 @@ def generate_clip_noise_utlity_table(
 
     header = r"""\begin{table}[ht]
 \centering
-\caption{CLIP Model: Utility of oracle, baselines, and corrected models with different negation strength indicated by the value of $\alpha$ across noise levels $\eta$ on MNIST, CIFAR-10, CIFAR-100 with symmetric noise.}
-\label{tab:utility_vs_noise_rate}
+\label{tab:}
 \scriptsize
 % \renewcommand{\arraystretch}{1}
 \setlength{\tabcolsep}{4pt}
@@ -367,7 +366,7 @@ def generate_clip_noise_fr_dr_hr_table(
 
     header = r"""\begin{table}[ht]
 \centering
-\label{tab:clip_sym_utility_vs_alpha}
+\label{tab:}
 \scriptsize
 \renewcommand{\arraystretch}{1.2}
 \setlength{\tabcolsep}{4pt}
@@ -808,8 +807,7 @@ def generate_clip_IC_utlity_table(
 
     header = r"""\begin{table}[ht]
 \centering
-\caption{CLIP Model: Utility of oracle, baselines, and corrected models with different negation strength indicated by the value of $\alpha$ across noise levels $\eta$ on MNIST, CIFAR-10, CIFAR-100 with symmetric noise.}
-\label{tab:utility_vs_noise_rate}
+\label{tab:}
 \scriptsize
 % \renewcommand{\arraystretch}{1}
 \setlength{\tabcolsep}{4pt}
@@ -930,7 +928,7 @@ def generate_clip_IC_fr_dr_hr_table(
 
     header = r"""\begin{table}[ht]
 \centering
-\label{tab:clip_sym_utility_vs_alpha}
+\label{tab:}
 \scriptsize
 \renewcommand{\arraystretch}{1.2}
 \setlength{\tabcolsep}{4pt}
@@ -1054,7 +1052,7 @@ def generate_clip_poison_table(
     header = r"""\begin{table}[ht]
 \centering
 \caption{}
-\label{tab:clip_sym_utility_vs_alpha}
+\label{tab:}
 \scriptsize
 \renewcommand{\arraystretch}{1.3}
 \setlength{\tabcolsep}{5pt}
@@ -1488,7 +1486,148 @@ def plot_alpha_noise_and_poison_interplay_dual(
 
 
 
+def generate_regular_symmetric_comp_40pct_table(
+    results_dir: Path,
+    comp_cfgs: OrderedDict,
+    outputfile_path: Path = Path("./visulaization_dir/regular_symmetric_40_comp_table.txt"),
+    forget_threshold: float = 0.9,  # CIFAR-10 symmetric default
+) -> Path:
+    """
+    Build a CIFAR-10 40% noise comparison table for ResNet{18,34,50,101} with
+    two columns per model: RND (scratch) and INv1 (ImageNet V1 init).
 
+    Assumes comp_cfgs has the shape:
+      {'CIFAR10': OrderedDict({
+          'resnet18': ({10:'...',20:'...',40:'...'}, {40:'...'}),
+          'resnet34': ({40:'...'}, {40:'...'}),
+          'resnet50': ({40:'...'}, {40:'...'}),
+          'resnet101':({40:'...'}, {40:'...'})
+      })}
+
+    The table rows contain UT only (formatted as %) for:
+      θ_mix, θ_clean, τ_r, α*_a, α*_f, α̂*_knn, RR (recovery vs. mix→clean gap).
+    """
+    # Fixed order and pretty names
+    models_order = ["resnet18", "resnet34", "resnet50", "resnet101"]
+    pretty = {"resnet18":"ResNet18","resnet34":"ResNet34","resnet50":"ResNet50","resnet101":"ResNet101"}
+
+    # 8 columns: (ResNet18 RND, INv1, ResNet34 RND, INv1, ...)
+    def _mkrow() -> List[str]: return ["-"] * (2 * len(models_order))
+    row_mix   = _mkrow()
+    row_clean = _mkrow()
+    row_tau_r = _mkrow()
+    row_a_a   = _mkrow()
+    row_a_f   = _mkrow()
+    row_knn   = _mkrow()
+    row_rr    = _mkrow()
+
+    cifar10_block = comp_cfgs.get("CIFAR10", OrderedDict())
+
+    for m_idx, model in enumerate(models_order):
+        tup = cifar10_block.get(model)
+        if not tup or not isinstance(tup, tuple) or len(tup) != 2:
+            continue
+        rnd_dict, inv1_dict = tup
+        cfgs_40 = [ (rnd_dict or {}).get(40, None), (inv1_dict or {}).get(40, None) ]  # [RND, INv1]
+
+        for subcol, cfg_rel in enumerate(cfgs_40):  # 0 -> RND, 1 -> INv1
+            col_idx = m_idx * 2 + subcol
+            if not cfg_rel:
+                continue
+
+            metrics = _load_metrics(results_dir / cfg_rel)
+            if not metrics:
+                continue
+
+            # Clean up extra keys and extract alpha_KNN
+            metrics.pop("FT HO Clean", None)
+            metrics.pop("alpha_s4", None)
+            alpha_knn = metrics.pop("alpha_KNN", None)
+            try:
+                alpha_knn = None if alpha_knn is None else round(float(alpha_knn), 2)
+            except Exception:
+                alpha_knn = None
+
+            # Baselines (pops Mix/Gold/RV) and alpha grid
+            baseline = _collect_baseline_metrics(metrics)
+            alpha_grid = _collect_alpha_metrics(metrics)
+
+            # Resolve α*_a and α*_f
+            alpha_a = _get_alpha_star_utility(alpha_grid)
+            alpha_f = _get_alpha_star_forgetting(alpha_grid, forget_threshold)
+
+            # Format helpers
+            mix_fmt   = _fmt_metrics(baseline["mix"])
+            clean_fmt = _fmt_metrics(baseline["clean"])
+            rnd_fmt   = _fmt_metrics(baseline["rnd"])
+
+            row_mix[col_idx]   = mix_fmt.get("utility", "-")
+            row_clean[col_idx] = clean_fmt.get("utility", "-")
+            row_tau_r[col_idx] = rnd_fmt.get("utility", "-")
+
+            if alpha_a in alpha_grid:
+                row_a_a[col_idx] = _fmt_metrics(alpha_grid[alpha_a]).get("utility", "-")
+            if alpha_f in alpha_grid:
+                row_a_f[col_idx] = _fmt_metrics(alpha_grid[alpha_f]).get("utility", "-")
+
+            # α̂*_knn UT + recovery RR
+            rr_val: Optional[float] = None
+            if alpha_knn == 0.0:
+                # Treat α=0 as Mix
+                row_knn[col_idx] = mix_fmt.get("utility", "-")
+                rr_val = 0.0
+            elif alpha_knn is not None and alpha_knn in alpha_grid:
+                knn_ut = alpha_grid[alpha_knn].get("utility", None)
+                row_knn[col_idx] = _fmt_metrics(alpha_grid[alpha_knn]).get("utility", "-")
+                mix_ut   = baseline["mix"].get("utility", None)
+                clean_ut = baseline["clean"].get("utility", None)
+                if knn_ut is not None and mix_ut is not None and clean_ut is not None:
+                    denom = (clean_ut - mix_ut)
+                    if abs(denom) > 1e-12:
+                        rr_val = (knn_ut - mix_ut) / denom
+            else:
+                row_knn[col_idx] = "-"
+
+            row_rr[col_idx] = _fmt_perct(rr_val)
+
+    # --------- render LaTeX (matches your provided skeleton) ---------
+    def row_line(label: str, values: List[str]) -> str:
+        return f"{label} & " + " & ".join(values) + r" \\"
+
+    header = r"""\centering
+\setlength{\tabcolsep}{2pt}
+\begin{tabular}{lcccccccc}
+\toprule
+&  \multicolumn{8}{c}{CIFAR-10} \\
+\cmidrule(lr){2-9} 
+&  \multicolumn{2}{c}{ResNet18} & \multicolumn{2}{c}{ResNet34} & \multicolumn{2}{c}{ResNet50} & \multicolumn{2}{c}{ResNet101}  \\
+\cmidrule(lr){2-3} \cmidrule(lr){4-5} \cmidrule(lr){6-7} \cmidrule(lr){8-9}
+Model  & RND & INv1 & RND & INv1 & RND & INv1 & RND & INv1 \\
+\midrule
+"""
+
+    body_lines = [
+        row_line(r"$\theta_{\text{mix}}$",   row_mix),
+        row_line(r"$\theta_{\text{clean}}$", row_clean),
+        r"\cmidrule(lr){1-9}",
+        row_line(r"$\tau_{r}$",              row_tau_r),
+        r"\cmidrule(lr){1-9}",
+        row_line(r"$\alpha^\ast_a$",         row_a_a),
+        row_line(r"$\alpha^\ast_f$",         row_a_f),
+        r"\cmidrule(lr){1-9}",
+        row_line(r"$\hat{\alpha}^\ast_{\text{knn}}$", row_knn),
+        row_line(r"RR", row_rr),
+    ]
+
+    footer = r"""
+\bottomrule
+\end{tabular}
+"""
+
+    table_tex = header + "\n".join(body_lines) + footer
+    outputfile_path.parent.mkdir(parents=True, exist_ok=True)
+    outputfile_path.write_text(table_tex)
+    return outputfile_path
 
 
 if __name__ == "__main__":
@@ -1689,4 +1828,9 @@ if __name__ == "__main__":
     #     outputfile_path=Path("./visulaization_dir/regular_poison_trigger_table.txt")
     # )
     
-    print(regular_symmetric_comp_cfgs)
+    generate_regular_symmetric_comp_40pct_table(
+        regular_noise_results_dir,
+        regular_symmetric_comp_cfgs,
+        outputfile_path= Path("./visulaization_dir/regular_symmetric_noise_comp_pt_rnd_table.txt")
+    )
+    # print(regular_symmetric_comp_cfgs)
