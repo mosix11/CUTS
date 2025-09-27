@@ -27,6 +27,22 @@ strategy:
         noise_type: 'symmetric'
         seed: 14
 
+    finetuning:
+      - set: 'Train'
+        noise_rate: 1.0
+        noise_type: 'symmetric'
+        seed: 16
+    finetuning:
+      - set: 'Train'
+        noise_rate: 1.0
+        noise_type: 'symmetric'
+        seed: 18
+    finetuning:
+      - set: 'Train'
+        noise_rate: 1.0
+        noise_type: 'symmetric'
+        seed: 20
+
 dataset:
   name: "clothing1M"
   num_classes: &num_classes 14
