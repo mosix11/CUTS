@@ -790,7 +790,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     alpha_kNN = select_alpha_by_knn_self_agreement(
         model=model,
         feature_extractor=model.get_feature_extractor(),
-        classifier=model.get_classifier_head(),
+        classifier=model.get_active_head(),
         state0=mix_weights,
         taskvector=task_vectors['Average'],
         unlabeled_loader=alpha_est_support_dl,
