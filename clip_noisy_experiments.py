@@ -797,9 +797,10 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         num_clusters=num_clusters,
         k=num_neighbor_agr_check,
         coverage_rate=coverage_rate,
-        alphas=np.round(np.linspace(-0.0, -3.0, 61), 2),
+        alphas=np.round(np.linspace(-0.0, -4.0, 81), 2),
         device=gpu
     )
+    print(alpha_kNN)
     
     results_dict['alpha_KNN'] = alpha_kNN
     with open(results_dir / 'metrics.json' , 'w') as json_file:

@@ -1,6 +1,6 @@
 
-for x in {16..30}
+for x in {26..32}
 do
     echo "Running experiment with config$x"
-    python regular_noise_experiments.py -c config$x -f
+    CUDA_VISIBLE_DEVICES=1 python clip_noisy_experiments.py -c config$x -t
 done
