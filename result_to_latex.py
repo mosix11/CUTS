@@ -11,6 +11,11 @@ from typing import Dict, Any, Optional, Tuple, List
 
 from typing import OrderedDict as _OrderedDictType
 import matplotlib.pyplot as plt
+import matplotlib.transforms as mtransforms
+import matplotlib.patches as mpatches
+import seaborn as sns
+import pandas as pd
+import math
 
 
 def _load_metrics(config_dir: Path) -> Optional[Dict[str, Any]]:
@@ -1630,6 +1635,461 @@ Model  & RND & INv1 & RND & INv1 & RND & INv1 & RND & INv1 \\
     return outputfile_path
 
 
+# def plot_recovery_bars_40pct(
+#     results_dir: Path,
+#     comp_cfgs: _OrderedDictType,
+#     save_path: Path = Path("./visulaization_dir/regular_symmetric_40_comp_bars.png"),
+#     zero_position: float = 0.35,   # where y=0 sits (fraction from bottom). >0.5 means "above center"
+#     annotate: bool = True,         # write numbers above bars
+#     fallback_to_alpha_a: bool = False,  # if alpha_KNN missing, use alpha*_a
+# ) -> Path:
+#     """
+#     Build a grouped bar plot (CIFAR-10, 40% noise) showing Recovery (RR %) for:
+#       ResNet18, ResNet34, ResNet50, ResNet101.
+#     Bars: RND (scratch), INv1 (ImageNet V1 init). For ResNet50, an extra INv2 bar is used
+#     if a third config is provided.
+
+#     RR is computed at alphâ*_kNN (if present), otherwise (optionally) at alpha*_a:
+#       RR = (UT(alpha) - UT_mix) / (UT_clean - UT_mix) * 100
+
+#     Args:
+#       results_dir: directory where metrics.json live
+#       comp_cfgs: dict like
+#         {'CIFAR10': OrderedDict({
+#             'resnet18': ({...40:'cfg_rnd18...'}, {...40:'cfg_inv1_18...'}),
+#             'resnet34': ({40:'cfg_rnd34...'},   {...40:'cfg_inv1_34...'}),
+#             'resnet50': ({40:'cfg_rnd50...'},   {...40:'cfg_inv1_50...'}, {...40:'cfg_inv2_50...'}),
+#             'resnet101':({40:'cfg_rnd101...'},  {...40:'cfg_inv1_101...'})
+#         })}
+#       zero_position: fraction in (0,1). e.g., 0.65 → y=0 is at 65% of axis height (above midline).
+#     """
+#     assert 0.05 < zero_position < 0.95, "zero_position should be in (0.05, 0.95)"
+
+#     # ---- helpers ----
+#     def _rr_from_metrics(cfg_rel: Optional[str]) -> Optional[float]:
+#         if not cfg_rel:
+#             return None
+#         metrics = _load_metrics(results_dir / cfg_rel)
+#         if not metrics:
+#             return None
+
+#         metrics.pop("FT HO Clean", None)
+#         metrics.pop("alpha_s4", None)
+
+#         # Preferred: alpha_KNN
+#         alpha_knn = metrics.pop("alpha_KNN", None)
+#         try:
+#             alpha_knn = None if alpha_knn is None else round(float(alpha_knn), 2)
+#         except Exception:
+#             alpha_knn = None
+
+#         baseline = _collect_baseline_metrics(metrics)  # pops Mix/Gold/Random Vector
+#         alpha_grid = _collect_alpha_metrics(metrics)
+
+#         mix_ut   = baseline["mix"].get("utility", None)
+#         clean_ut = baseline["clean"].get("utility", None)
+#         if mix_ut is None or clean_ut is None or abs(clean_ut - mix_ut) < 1e-12:
+#             return None
+
+#         alpha_for_rr = None
+#         if alpha_knn == 0.0:
+#             return 0.0  # exactly Mix
+#         if alpha_knn is not None and alpha_knn in alpha_grid:
+#             alpha_for_rr = alpha_knn
+#         elif fallback_to_alpha_a:
+#             alpha_for_rr = _get_alpha_star_utility(alpha_grid)
+
+#         if alpha_for_rr is None or alpha_for_rr not in alpha_grid:
+#             return None
+
+#         ut = alpha_grid[alpha_for_rr].get("utility", None)
+#         if ut is None:
+#             return None
+
+#         rr = (ut - mix_ut) / (clean_ut - mix_ut) * 100.0
+#         return rr
+
+#     # ---- collect data (CIFAR-10 only) ----
+#     models_order = ["resnet18", "resnet34", "resnet50", "resnet101"]
+#     pretty = {"resnet18":"ResNet18","resnet34":"ResNet34","resnet50":"ResNet50","resnet101":"ResNet101"}
+
+#     records: List[Dict[str, Any]] = []
+#     cifar10 = comp_cfgs.get("CIFAR10", {})
+
+#     for m in models_order:
+#         tup = cifar10.get(m)
+#         if not tup:
+#             continue
+#         # Expect (RND, INv1 [, INv2-for-resnet50])
+#         inits = [("RND", 0), ("INv1", 1)]
+#         if m == "resnet50" and len(tup) >= 3:
+#             inits.append(("INv2", 2))
+
+#         for init_name, idx in inits:
+#             try:
+#                 cfg_rel = tup[idx].get(40, None)
+#             except Exception:
+#                 cfg_rel = None
+
+#             rr = _rr_from_metrics(cfg_rel)
+#             if rr is not None:
+#                 records.append({"Model": pretty[m], "Init": init_name, "RR": rr})
+
+#     df = pd.DataFrame.from_records(records)
+#     print(df)
+#     if df.empty:
+#         raise RuntimeError("No data available to plot (did you pass 40% configs?)")
+
+#     # Ensure consistent ordering in the plot
+#     model_order = ["ResNet18", "ResNet34", "ResNet50", "ResNet101"]
+#     init_order = ["RND", "INv1", "INv2"]  # INv2 will simply be absent for models that don't have it
+#     df["Model"] = pd.Categorical(df["Model"], categories=model_order, ordered=True)
+#     df["Init"]  = pd.Categorical(df["Init"],  categories=init_order,  ordered=True)
+
+#      # ---- seaborn styling ----
+#     # Visual controls (tweak here)
+#     FS_XY_LABEL  = 8     # axis label font size
+#     FS_TICK      = 7     # tick label font size
+#     FS_LEGEND    = 11     # legend font size
+#     FS_BARLABEL  = 8      # numbers above bars
+
+#     ZERO_EPS     = 1e-8   # suppress printing ~zero values
+#     SHADE_FACE   = "0.92" # under-theta_mix shading color
+#     SHADE_EDGE   = "0.80" # hatch edge color
+#     SHADE_ALPHA  = 0.55   # shading opacity
+#     SHADE_HATCH  = "//"   # hatch pattern, comment out to disable hatch
+
+#     ZERO_LINE_STYLE = dict(  # θ_mix line style (on top of bars)
+#         color="0.4", linewidth=0.9, linestyle=(0, (4, 3)), alpha=0.95, zorder=8
+#     )
+
+#     sns.set_theme(context="paper", style="whitegrid", font_scale=1.0)
+#     fig, ax = plt.subplots(figsize=(4.6, 3.6), dpi=300)
+
+#     # Draw bars (as before)
+#     sns.barplot(
+#         data=df, x="Model", y="RR", hue="Init",
+#         order=model_order, hue_order=init_order,
+#         ax=ax, width=0.8, edgecolor="black", linewidth=0.6, 
+#     )
+
+#     # Place y=0 at `zero_position` by extending axis below 0
+#     ymin = -100.0 * zero_position / (1.0 - zero_position)
+#     ax.set_ylim(ymin, 100.0)
+
+#     # 1) Make bars start from the bottom of Y axis (touching the X axis):
+#     #    move each bar's bottom to ymin and keep its original top the same.
+#     for p in ax.patches:
+#         old_top = p.get_height()              # this is the original "RR" (top at y)
+#         p.set_y(ymin)                         # start at axis bottom
+#         p.set_height(old_top - ymin)          # keep the same top value
+
+#     # Y ticks & labels (unchanged semantics)
+#     ticks = [0, 25, 50, 75, 100]
+#     ticklabels = [r"$\theta_{\text{mix}}$", "25%", "50%", "75%", r"$\theta_{\text{clean}}$"]
+#     ax.set_yticks(ticks)
+#     ax.set_yticklabels(ticklabels)
+#     # ax.set_xticks([10, 35, 60, 85])
+#     ax.set_xticklabels(['a', 'v', 'c', 'd'])
+
+#     # Labels, grid, and spines
+#     # ax.set_ylabel("Recovery (RR) [%]", fontsize=FS_XY_LABEL)
+#     ax.set_ylabel("")
+    
+#     trans = mtransforms.blended_transform_factory(ax.transAxes, ax.transData)
+    
+#     y_text = ymin + 0.35 * (0 - ymin)  # 35% of the way from ymin up to 0 (i.e., below θ_mix)
+#     print(ymin, y_text)
+#     ax.text(
+#         -0.02, -55, "Recovery (RR) [%]",  # x=-0.06 puts it just left of the y-axis
+#         rotation=90, va="bottom", ha="center",
+#         fontsize=FS_XY_LABEL - 2, alpha=0.9, transform=trans
+#     )
+    
+#     ax.set_xlabel("")
+#     ax.tick_params(axis="x", labelsize=FS_TICK)
+#     ax.tick_params(axis="y", labelsize=FS_TICK)
+#     ax.grid(axis="y", linestyle=":", linewidth=0.6, alpha=0.75, zorder=0)
+#     ax.set_axisbelow(True)
+#     sns.despine(ax=ax, top=True, right=True)
+
+#     # 2) θ_mix line: thinner, gray, dashed, drawn ABOVE bars
+#     x0, x1 = ax.get_xlim()
+#     ax.plot([x0, x1], [0, 0], **ZERO_LINE_STYLE)
+
+#     # Keep θ_clean reference line subtle (behind)
+#     ax.axhline(100, color="black", linewidth=0.9, linestyle="-", zorder=1)
+
+#     # 3) Darken the area under θ_mix (including bars) with a semi-transparent hatch overlay
+#     ax.axhspan(
+#         ymin, 0, facecolor=SHADE_FACE, alpha=SHADE_ALPHA,
+#         hatch=SHADE_HATCH, edgecolor=SHADE_EDGE, zorder=6
+#     )
+
+#     # Legend
+#     leg = ax.legend(
+#         title=None, ncol=3, loc="upper center",
+#         bbox_to_anchor=(0.5, 1.20), frameon=False, handlelength=1.2, columnspacing=1.0,
+#         prop={"size": FS_LEGEND}
+#     )
+
+#     # 4) Annotate bars with values, but suppress near-zero (e.g., that 0.0 on ResNet18-INv1)
+#     if annotate:
+#         for p in ax.patches:
+#             top_val = p.get_y() + p.get_height()   # true top (the RR value)
+#             if not math.isfinite(top_val) or abs(top_val) < ZERO_EPS:
+#                 continue  # suppress 0.0 labels
+#             x = p.get_x() + p.get_width() / 2.0
+#             ax.text(
+#                 x, top_val + 2.0, f"{top_val:.1f}",
+#                 ha="center", va="bottom", fontsize=FS_BARLABEL, zorder=9
+#             )
+
+#     fig.tight_layout()
+#     save_path.parent.mkdir(parents=True, exist_ok=True)
+#     fig.savefig(save_path, bbox_inches="tight", pad_inches=0.04)
+#     plt.show()
+#     plt.close(fig)
+#     return save_path
+
+
+def plot_recovery_bars_40pct(
+    results_dir: Path,
+    comp_cfgs: Dict[str, Any],
+    save_path: Path = Path("./visulaization_dir/regular_symmetric_40_comp_bars.png"),
+    zero_position: float = 0.35,   # where y=0 sits (fraction from bottom). >0.5 means "above center"
+    annotate: bool = True,         # write numbers above bars
+    fallback_to_alpha_a: bool = False,  # if alpha_KNN missing, use alpha*_a
+) -> Path:
+    """
+    Matplotlib-only clone of your seaborn version.
+    Produces the same grouped bar plot with:
+      - groups: ResNet18/34/50/101
+      - hues:   RND, INv1, (INv2 only for ResNet50 if present)
+      - y=0 (θ_mix) placed at `zero_position` of the axis height
+      - bars drawn from axis bottom (ymin) with shaded region under θ_mix
+      - legend on top, annotations, grid, despined top/right
+    """
+    assert 0.05 < zero_position < 0.95, "zero_position should be in (0.05, 0.95)"
+
+    # ---- helpers (same as your seaborn version) ----
+    def _rr_from_metrics(cfg_rel: Optional[str]) -> Optional[float]:
+        if not cfg_rel:
+            return None
+        metrics = _load_metrics(results_dir / cfg_rel)
+        if not metrics:
+            return None
+
+        metrics.pop("FT HO Clean", None)
+        metrics.pop("alpha_s4", None)
+
+        # Preferred: alpha_KNN
+        alpha_knn = metrics.pop("alpha_KNN", None)
+        try:
+            alpha_knn = None if alpha_knn is None else round(float(alpha_knn), 2)
+        except Exception:
+            alpha_knn = None
+
+        baseline = _collect_baseline_metrics(metrics)  # pops Mix/Gold/Random Vector
+        alpha_grid = _collect_alpha_metrics(metrics)
+
+        mix_ut   = baseline["mix"].get("utility", None)
+        clean_ut = baseline["clean"].get("utility", None)
+        if mix_ut is None or clean_ut is None or abs(clean_ut - mix_ut) < 1e-12:
+            return None
+
+        alpha_for_rr = None
+        if alpha_knn == 0.0:
+            return 0.0  # exactly Mix
+        if alpha_knn is not None and alpha_knn in alpha_grid:
+            alpha_for_rr = alpha_knn
+        elif fallback_to_alpha_a:
+            alpha_for_rr = _get_alpha_star_utility(alpha_grid)
+
+        if alpha_for_rr is None or alpha_for_rr not in alpha_grid:
+            return None
+
+        ut = alpha_grid[alpha_for_rr].get("utility", None)
+        if ut is None:
+            return None
+
+        rr = (ut - mix_ut) / (clean_ut - mix_ut) * 100.0
+        return rr
+
+    # ---- collect data (CIFAR-10 only) ----
+    models_order = ["resnet18", "resnet34", "resnet50", "resnet101"]
+    pretty = {"resnet18":"ResNet18","resnet34":"ResNet34","resnet50":"ResNet50","resnet101":"ResNet101"}
+
+    records: List[Dict[str, Any]] = []
+    cifar10 = comp_cfgs.get("CIFAR10", {})
+
+    for m in models_order:
+        tup = cifar10.get(m)
+        if not tup:
+            continue
+        # Expect (RND, INv1 [, INv2-for-resnet50])
+        inits = [("Random Init", 0), ("ImageNet v1", 1)]
+        if m == "resnet50" and len(tup) >= 3:
+            inits.append(("ImageNet v2", 2))
+
+        for init_name, idx in inits:
+            try:
+                cfg_rel = tup[idx].get(40, None)
+            except Exception:
+                cfg_rel = None
+
+            rr = _rr_from_metrics(cfg_rel)
+            if rr is not None:
+                records.append({"Model": pretty[m], "Init": init_name, "RR": rr})
+
+    df = pd.DataFrame.from_records(records)
+    if df.empty:
+        raise RuntimeError("No data available to plot (did you pass 40% configs?)")
+
+    # Ensure consistent ordering in the plot (incl. INv2 "empty slot" for non-50s)
+    model_order = ["ResNet18", "ResNet34", "ResNet50", "ResNet101"]
+    init_order  = ["Random Init", "ImageNet v1", "ImageNet v2"]  # INv2 may be absent for most models
+    df["Model"] = pd.Categorical(df["Model"], categories=model_order, ordered=True)
+    df["Init"]  = pd.Categorical(df["Init"],  categories=init_order,  ordered=True)
+
+    # ---- visual constants (mirroring the seaborn version) ----
+    FS_XY_LABEL  = 8
+    FS_TICK      = 5.5
+    FS_LEGEND    = 9
+    FS_BARLABEL  = 6.5
+
+    ZERO_EPS     = 1e-8
+    SHADE_FACE   = "0.92"
+    SHADE_EDGE   = "0.80"
+    SHADE_ALPHA  = 0.55
+    SHADE_HATCH  = "//"
+
+    ZERO_LINE_STYLE = dict(color="0.4", linewidth=0.9, linestyle=(0, (4, 3)), alpha=0.95, zorder=8)
+
+    # Use seaborn-like colors explicitly to match the original look
+    color_map = {
+        "Random Init":  "#4C72B0",  # blue
+        "ImageNet v1": "#DD8452",  # orange
+        "ImageNet v2": "#55A868",  # green
+    }
+
+    # ---- figure & axes (whitegrid-ish style) ----
+    fig, ax = plt.subplots(figsize=(4.6, 3.6), dpi=300)
+    ax.set_facecolor("white")
+    ax.grid(axis="y", linestyle=":", linewidth=0.6, alpha=0.75, zorder=0)
+    for spine in ("top", "right"):
+        ax.spines[spine].set_visible(False)
+    ax.set_axisbelow(True)
+
+    # Place y=0 at `zero_position` by extending axis below 0
+    ymin = -100.0 * zero_position / (1.0 - zero_position)
+    ax.set_ylim(ymin, 100.0)
+
+    # Y ticks & labels
+    ticks = [0, 25, 50, 75, 100]
+    ticklabels = [r"$\theta_{\text{mix}}$", "25%", "50%", "75%", r"$\theta_{\text{clean}}$"]
+    ax.set_yticks(ticks)
+    ax.set_yticklabels(ticklabels, fontsize=FS_TICK)
+
+    # ---- compute grouped bar positions (consistent hue slots across all groups) ----
+    present_models = [m for m in model_order if (df["Model"] == m).any()]
+    n_groups = len(present_models)
+    group_centers = np.arange(n_groups)  # x positions of group centers
+
+    group_width = 0.8
+    n_slots = len(init_order)            # always reserve 3 slots per group
+    bar_width = group_width / n_slots
+
+    # helper: (group_center, slot_index) -> bar center x
+    def slot_center(gc: float, j: int) -> float:
+        left_edge = gc - group_width/2.0
+        return left_edge + (j + 0.5) * bar_width
+
+    # Draw bars at bottom=ymin with heights that reach the true RR
+    bars_drawn = []  # keep for annotations
+    for gi, model in enumerate(present_models):
+        gdf = df[df["Model"] == model]
+        # make it easy to query RR by Init
+        rr_by_init = {row["Init"]: float(row["RR"]) for _, row in gdf.iterrows()}
+
+        for j, init in enumerate(init_order):
+            if init not in rr_by_init:
+                continue  # empty slot (like seaborn does)
+            rr = rr_by_init[init]
+            x = slot_center(group_centers[gi], j)
+            # bars start at axis bottom (ymin), keep top at rr
+            height = rr - ymin
+            b = ax.bar(
+                x, height, width=bar_width * 0.98,  # tiny shrink to avoid visual touching
+                bottom=ymin, edgecolor="black", linewidth=0.6,
+                color=color_map.get(init, "C0"), zorder=5
+            )
+            bars_drawn.append((b[0], rr))  # (patch, true_top)
+
+    # X ticks centered under each group (model label)
+    ax.set_xticks(group_centers)
+    ax.set_xticklabels(present_models, fontsize=FS_TICK)
+    ax.set_xlabel("")
+    ax.set_ylabel("")
+
+    # Vertical, compact y-label at left (below θ_mix), like your seaborn code
+    trans = mtransforms.blended_transform_factory(ax.transAxes, ax.transData)
+    # y_text = ymin + 0.35 * (0 - ymin)  # 35% of way from ymin up to 0
+    ax.text(
+        -0.02, -54, "Recovery (RR) [%]",
+        rotation=90, va="bottom", ha="center",
+        fontsize=FS_XY_LABEL - 2, alpha=0.9, transform=trans
+    )
+    
+    ax.text(
+        -0.045, -55, r'$\longrightarrow$',
+        rotation=90, va="bottom", ha="center",
+        alpha=0.7, transform=trans, fontsize=7
+    )
+
+
+    # θ_mix dashed line on top of bars
+    x0, x1 = ax.get_xlim()
+    ax.plot([x0, x1], [0, 0], **ZERO_LINE_STYLE)
+
+    # θ_clean reference line (subtle, behind)
+    ax.axhline(100, color="black", linewidth=0.9, linestyle="-", zorder=1)
+
+    # Shaded region below θ_mix (overlay, including bars)
+    ax.axhspan(
+        ymin, 0, facecolor=SHADE_FACE, alpha=SHADE_ALPHA,
+        hatch=SHADE_HATCH, edgecolor=SHADE_EDGE, zorder=6
+    )
+
+    # Legend (only for inits that actually appear)
+    present_inits = [i for i in init_order if (df["Init"] == i).any()]
+    handles = [mpatches.Patch(facecolor=color_map[i], edgecolor="black", linewidth=0.6, label=i)
+               for i in present_inits]
+    leg = ax.legend(
+        handles=handles, title=None, ncol=3, loc="upper center",
+        bbox_to_anchor=(0.5, 1.20), frameon=False, handlelength=1.2, columnspacing=1.0,
+        prop={"size": FS_LEGEND}
+    )
+
+    # Annotate bars with values, suppress near-zero
+    if annotate:
+        for patch, rr in bars_drawn:
+            if not math.isfinite(rr) or abs(rr) < ZERO_EPS:
+                continue
+            x = patch.get_x() + patch.get_width()/2.0
+            ax.text(
+                x, rr + 2.0, f"{rr:.1f}",
+                ha="center", va="bottom", fontsize=FS_BARLABEL, zorder=9
+            )
+
+    fig.tight_layout()
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(save_path, bbox_inches="tight", dpi=400, pad_inches=0.04)
+    plt.show()
+    plt.close(fig)
+    return save_path
+
+
 if __name__ == "__main__":
     with open('configmap.yaml', 'r') as file:
         configmap = yaml.full_load(file)
@@ -1705,20 +2165,26 @@ if __name__ == "__main__":
     
     
     regular_symmetric_comp_cfgs = OrderedDict()
+    # regular_symmetric_comp_cfgs['CIFAR10'] = OrderedDict({
+    #     'resnet18': (regular_models_cfgs['CIFAR10']['scratch']['ho_2']['symmetric']['resnet18'], regular_models_cfgs['CIFAR10']['pretrained']['ho_2']['symmetric']['resnet18']),
+    #     'resnet34': (regular_models_cfgs['CIFAR10']['scratch']['ho_2']['symmetric']['resnet34'], regular_models_cfgs['CIFAR10']['pretrained']['ho_2']['symmetric']['resnet34']),
+    #     'resnet50': (regular_models_cfgs['CIFAR10']['scratch']['ho_2']['symmetric']['resnet50'], regular_models_cfgs['CIFAR10']['pretrained']['ho_2']['symmetric']['resnet50']),
+    #     'resnet101': (regular_models_cfgs['CIFAR10']['scratch']['ho_2']['symmetric']['resnet101'], regular_models_cfgs['CIFAR10']['pretrained']['ho_2']['symmetric']['resnet101'])
+    # })
+
     regular_symmetric_comp_cfgs['CIFAR10'] = OrderedDict({
         'resnet18': (regular_models_cfgs['CIFAR10']['scratch']['ho_2']['symmetric']['resnet18'], regular_models_cfgs['CIFAR10']['pretrained']['ho_2']['symmetric']['resnet18']),
         'resnet34': (regular_models_cfgs['CIFAR10']['scratch']['ho_2']['symmetric']['resnet34'], regular_models_cfgs['CIFAR10']['pretrained']['ho_2']['symmetric']['resnet34']),
-        'resnet50': (regular_models_cfgs['CIFAR10']['scratch']['ho_2']['symmetric']['resnet50'], regular_models_cfgs['CIFAR10']['pretrained']['ho_2']['symmetric']['resnet50']),
+        'resnet50': (regular_models_cfgs['CIFAR10']['scratch']['ho_2']['symmetric']['resnet50'], regular_models_cfgs['CIFAR10']['pretrained']['ho_2']['symmetric']['resnet50'], regular_models_cfgs['CIFAR10']['pretrained']['ho_2']['symmetric']['resnet50v2']),
         'resnet101': (regular_models_cfgs['CIFAR10']['scratch']['ho_2']['symmetric']['resnet101'], regular_models_cfgs['CIFAR10']['pretrained']['ho_2']['symmetric']['resnet101'])
     })
-
     
     
     #################################################################################
     #########                           CLIP models                         #########
     
     # generate_clip_noise_utlity_table(clip_noise_results_dir, clip_symmetric_cfgs)
-    # generate_clip_symmetric_noise_fr_dr_hr_table(clip_noise_results_dir, clip_symmetric_cfgs['CIFAR10'])
+    # generate_clip_noise_fr_dr_hr_table(clip_noise_results_dir, clip_symmetric_cfgs['CIFAR10'])
     # plot_alpha_interplay(clip_noise_results_dir, clip_symmetric_cfgs['CIFAR10'][60])
     # plot_alpha_interplay_dual(
     #     clip_noise_results_dir,
@@ -1746,7 +2212,7 @@ if __name__ == "__main__":
     
     # generate_clip_noise_fr_dr_hr_table(
     #     clip_noise_results_dir,
-    #     clip_symmetric_cfgs['CIFAR10'],
+    #     clip_asymmetric_cfgs['CIFAR10'],
     #     noise_levels=[20, 40]
     #     )
     
@@ -1828,9 +2294,14 @@ if __name__ == "__main__":
     #     outputfile_path=Path("./visulaization_dir/regular_poison_trigger_table.txt")
     # )
     
-    generate_regular_symmetric_comp_40pct_table(
-        regular_noise_results_dir,
-        regular_symmetric_comp_cfgs,
-        outputfile_path= Path("./visulaization_dir/regular_symmetric_noise_comp_pt_rnd_table.txt")
-    )
+    # generate_regular_symmetric_comp_40pct_table(
+    #     regular_noise_results_dir,
+    #     regular_symmetric_comp_cfgs,
+    #     outputfile_path= Path("./visulaization_dir/regular_symmetric_noise_comp_pt_rnd_table.txt")
+    # )
+    
+    # plot_recovery_bars_40pct(
+    #     regular_noise_results_dir,
+    #     regular_symmetric_comp_cfgs
+    # )
     # print(regular_symmetric_comp_cfgs)

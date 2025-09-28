@@ -35,7 +35,7 @@ import json
 from tqdm import tqdm
 from collections import OrderedDict, defaultdict
 import re
-
+import math
 import imageio.v2 as imageio
 
 from src.utils import embedding_space_analysis
@@ -242,8 +242,25 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
             
             
-    if 'alpha_KNN' not in results_dict:  
-          
+    
+    if 'alpha_KNN' not in results_dict:
+        if dataset.dataset_name == 'Clothing1M':
+            coverage_rate = 1.0
+
+        # if strategy['noise']['finetuning'][0]['noise_type'] == 'asymmetric':
+        #     if dataset.dataset_name == 'MNIST':
+        #         num_clusters = 5
+        #     elif dataset.dataset_name == 'CIFAR10':
+        #         num_clusters = 5
+        #     else: num_clusters = dataset.get_num_classes()
+        # else:
+        #     num_clusters = dataset.get_num_classes()
+        num_clusters = dataset.get_num_classes()
+        alpha_est_support_dl = dataset.get_val_dataloader()
+        alpha_est_support_size = len(dataset.get_valset())
+        ideal_cluster_balance = alpha_est_support_size / num_clusters
+        num_neighbor_agr_check = math.floor(ideal_cluster_balance / 2)
+        
         from estimate_alpha import select_alpha_by_knn_self_agreement
         alpha_kNN = select_alpha_by_knn_self_agreement(
             model=model,
@@ -251,18 +268,18 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             classifier=model.get_classifier_head(),
             state0=mix_weights,
             taskvector=task_vectors['Average'],
-            unlabeled_loader=dataset.get_val_dataloader(),
-            # K=dataset.get_num_classes(),
-            alphas=np.round(np.linspace(-0.02, -2.0, 100), 2),
+            unlabeled_loader=alpha_est_support_dl,
+            num_clusters=num_clusters,
+            k=num_neighbor_agr_check,
+            coverage_rate=coverage_rate,
+            alphas=np.round(np.linspace(-0.0, -2.0, 101), 2),
             device=gpu
         )
-
+    
+    
         results_dict['alpha_KNN'] = alpha_kNN
         with open(results_dir / 'metrics.json' , 'w') as json_file:
             json.dump(results_dict, json_file, indent=4)
-
-            
-    
 
 
 from torch.distributed.elastic.multiprocessing.errors import record

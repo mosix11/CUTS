@@ -139,7 +139,7 @@ class NoisyClassificationDataset(Dataset):
     def replace_labels(self, new_labels):
         self.noisy_labels = new_labels
         for idx, orig_lbl in enumerate(self.original_labels):
-            self.is_noisy_flags[idx] = 1.0 if orig_lbl != new_labels[idx] else 0.0
+            self.is_noisy_flags[idx] = torch.tensor(1, dtype=torch.float32) if orig_lbl != new_labels[idx] else torch.tensor(0, dtype=torch.float32)
 
     def get_original_labels(self):
         return self.original_labels
@@ -186,7 +186,7 @@ class NoisyClassificationDataset(Dataset):
         original_labels = self._get_original_labels()
         self.original_labels = original_labels
         noisy_labels = original_labels.clone()
-        self.is_noisy_flags = torch.zeros(len(original_labels))
+        self.is_noisy_flags = torch.zeros(len(original_labels), dtype=torch.float32)
 
         if self.num_noisy_samples == 0:
             self.noisy_labels = noisy_labels
@@ -200,13 +200,13 @@ class NoisyClassificationDataset(Dataset):
                 if possible_flips:
                     rand_idx = torch.randint(0, len(possible_flips), (1,), generator=self.generator).item()
                     noisy_labels[idx] = possible_flips[rand_idx]
-                    self.is_noisy_flags[idx] = 1.0
+                    self.is_noisy_flags[idx] = torch.tensor(1, dtype=torch.float32)
 
         elif self.noise_type == 'constant':
             if self.num_noisy_samples > 0:
                 noisy_indices = torch.randperm(len(original_labels), generator=self.generator)[:self.num_noisy_samples]
                 noisy_labels[noisy_indices] = self.target_class
-                self.is_noisy_flags[noisy_indices] = 1.0
+                self.is_noisy_flags[noisy_indices] = torch.tensor(1, dtype=torch.float32)
 
         elif self.noise_type == 'IC':
             if self.dataset_name == 'MNIST':
@@ -232,8 +232,8 @@ class NoisyClassificationDataset(Dataset):
                     swap_b = idx_b[perm_b]
                     noisy_labels[swap_a] = b
                     noisy_labels[swap_b] = a
-                    self.is_noisy_flags[swap_a] = 1.0
-                    self.is_noisy_flags[swap_b] = 1.0
+                    self.is_noisy_flags[swap_a] = torch.tensor(1, dtype=torch.float32)
+                    self.is_noisy_flags[swap_b] = torch.tensor(1, dtype=torch.float32)
 
         elif self.noise_type == 'asymmetric':
             if self.dataset_name is None:
@@ -270,7 +270,7 @@ class NoisyClassificationDataset(Dataset):
                     perm = torch.randperm(len(class_indices), generator=self.generator)
                     indices_to_flip_in_class = class_indices[perm[:num_to_flip]]
                     noisy_labels[indices_to_flip_in_class] = target_label
-                    self.is_noisy_flags[indices_to_flip_in_class] = 1.0
+                    self.is_noisy_flags[indices_to_flip_in_class] = torch.tensor(1, dtype=torch.float32)
 
         elif self.noise_type == 'T_matrix':
             if not isinstance(self.T_mat, np.ndarray):
@@ -304,7 +304,7 @@ class NoisyClassificationDataset(Dataset):
                     probs, num_samples=num_to_flip, replacement=True, generator=self.generator
                 ).to(dtype=torch.long)
                 noisy_labels[idx_to_flip] = sampled_targets
-                self.is_noisy_flags[idx_to_flip] = 1.0
+                self.is_noisy_flags[idx_to_flip] = torch.tensor(1, dtype=torch.float32)
 
         self.noisy_labels = noisy_labels.long()
         
@@ -368,20 +368,15 @@ class NoisyClassificationDataset(Dataset):
 
 
     def __getitem__(self, idx):
-        # Retrieve data from the wrapped dataset (ignore its label)
         data, _ = self.dataset[idx]
-
-        # --- NEW: replace input with full uniform noise if requested ---
         if self.input_noise:
             data = self._uniform_noise_like_image(data, idx)
 
-        # If noise was never added (noise_rate=0), return original label
         if self.noisy_labels is None:
-            return data, self.original_labels[idx], torch.tensor(False, dtype=torch.bool)
+            return data, self.original_labels[idx], torch.tensor(0, dtype=torch.float32)
 
-        # Return clean labels if requested
         if self.return_clean_labels:
-            return data, self.original_labels[idx], torch.tensor(False, dtype=torch.bool)
+            return data, self.original_labels[idx], torch.tensor(0, dtype=torch.float32)
         else:
             noisy_label = self.noisy_labels[idx]
             is_noisy = self.is_noisy_flags[idx]
@@ -498,7 +493,13 @@ class PoisonedClassificationDataset(Dataset):
         return len(self.dataset)
 
     def __getitem__(self, visible_idx: int):
-        img, y = self.dataset[visible_idx]
+        sample = self.dataset[visible_idx]
+        if len(sample) == 2:
+            img, y = self.dataset[visible_idx]
+            is_noisy = 0
+        elif len(sample) == 3:
+            img, y, is_noisy = self.dataset[visible_idx]
+        else: raise RuntimeError('Something uexpected happened!!!')
         y_int = int(y)
         img = self._to_pil(img)
 
@@ -519,7 +520,8 @@ class PoisonedClassificationDataset(Dataset):
         if self._orig_transform is not None:
             img = self._orig_transform(img)
 
-        return img, y, torch.tensor(is_poisoned, dtype=torch.bool)
+        poison_flag = torch.tensor(2, dtype=torch.float32) if is_poisoned else torch.tensor(0, dtype=torch.float32)
+        return img, y, poison_flag + is_noisy
 
     # -------------------------
     # Helpers
@@ -564,7 +566,12 @@ class PoisonedClassificationDataset(Dataset):
         perm = torch.randperm(n, generator=self.generator).tolist()
         for idx in perm:
             # Query label; base transform is disabled so this is "raw", but label is the same.
-            _, yi = self.dataset[idx]
+            sample = self.dataset[idx]
+            if len(sample) == 2:
+                _, yi = self.dataset[idx]
+            elif len(sample) == 3:
+                _, yi, _ = self.dataset[idx]
+            else: raise RuntimeError('Something uexpected happened!!!')
             if int(yi) != self.target_class:
                 selected.append(idx)
                 if len(selected) >= requested_poison:

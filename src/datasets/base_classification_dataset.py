@@ -383,7 +383,7 @@ class BaseClassificationDataset(ABC):
             if heldout_set: heldout_set = LabelRemapper(heldout_set, self.label_mapping)
 
         
-        trainset = DatasetWithIndex(train_dataset)
+        trainset = DatasetWithIndex(trainset)
         if valset: valset = DatasetWithIndex(valset)
         test_dataset = DatasetWithIndex(test_dataset)
         if heldout_set: heldout_set = DatasetWithIndex(heldout_set)

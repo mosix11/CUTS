@@ -517,61 +517,7 @@ def apply_tv_gt(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     with open(results_dir / "WD_AT2.pkl", "wb") as f:
         pickle.dump(wd_results, f)
 
-    # model.load_state_dict(pt_weights, strict=False)
-    # sum_clean_noise_TV.apply_to(model, scaling_coef=1.0, strict=False)
-    # sum_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-    # print(sum_test_results)
-    # sum_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
-    # print(sum_train_results)
-    
-    # model.load_state_dict(pt_weights, strict=False)
-    # avg_clean_noise_TV.apply_to(model, scaling_coef=1.0, strict=False)
-    # avg_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-    # print(avg_test_results)
-    # avg_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
-    # print(avg_train_results)
-    
-    
-    # model.load_state_dict(pt_weights, strict=False)
-    # pt_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-    # pt_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
-    
-    # model.load_state_dict(ft_weights['mix'], strict=False)
-    # mix_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-    # mix_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
-    
-    # model.load_state_dict(ft_weights['noise'], strict=False)
-    # noise_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-    # noise_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
-    
-    # model.load_state_dict(ft_weights['clean'], strict=False)
-    # clean_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-    # clean_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
-    
-    # model.load_state_dict(pt_weights, strict=False)
-    
-    # results_dict = OrderedDict()
-    
-    # results_dict['Pretrain'] = {'test_results': pt_test_results, 'train_results': pt_train_results}
-    # results_dict['Mix'] = {'test_results': mix_test_results, 'train_results': mix_train_results}
-    # results_dict['Clean'] = {'test_results': clean_test_results, 'train_results': clean_train_results}
-    # results_dict['Noise'] = {'test_results': noise_test_results, 'train_results': noise_train_results}
-    
-
-    # for alpha in tqdm(np.round(np.linspace(-0.1, -1.0, 10), 1)):
-    
-    #     model.load_state_dict(ft_weights['mix'], strict=False)
-    #     task_vectors['noise'].apply_to(model, scaling_coef=alpha, strict=False)
-    #     tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-    #     tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
-
-    #     results_dict[alpha] = {'test_results': tv_test_results, 'train_results': tv_train_results}
-    
-    # with open(results_dirs['metrics'] / 'metrics.json' , 'w') as json_file:
-    #     json.dump(results_dict, json_file, indent=4)
-    
-    # with open(results_dir / 'tv_metrics.json' , 'w') as json_file:
-    #     json.dump(results_dict, json_file, indent=4)
+ 
 
 
 def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
@@ -773,38 +719,38 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
             
             
-    # if 'alpha_KNN' not in results_dict:        
-    num_clusters = dataset_clean.get_num_classes()
-    alpha_est_support_dl = dataset_clean.get_heldout_dataloader()
-    alpha_est_support_size = len(dataset_clean.get_heldoutset())
-    ideal_cluster_balance = alpha_est_support_size / num_clusters
-    num_neighbor_agr_check = math.floor(ideal_cluster_balance / 2)
-    if dataset.dataset_name == 'MNIST':
-        coverage_rate = 1.0
-    elif dataset.dataset_name == 'CIFAR10':
-        coverage_rate = 1.0
-    elif dataset.dataset_name == 'CIFAR100':
-        coverage_rate = 0.95
+    if 'alpha_KNN' not in results_dict:        
+        num_clusters = dataset_clean.get_num_classes()
+        alpha_est_support_dl = dataset_clean.get_heldout_dataloader()
+        alpha_est_support_size = len(dataset_clean.get_heldoutset())
+        ideal_cluster_balance = alpha_est_support_size / num_clusters
+        num_neighbor_agr_check = math.floor(ideal_cluster_balance / 2)
+        if dataset.dataset_name == 'MNIST':
+            coverage_rate = 1.0
+        elif dataset.dataset_name == 'CIFAR10':
+            coverage_rate = 1.0
+        elif dataset.dataset_name == 'CIFAR100':
+            coverage_rate = 0.95
 
-    from estimate_alpha import select_alpha_by_knn_self_agreement
-    alpha_kNN = select_alpha_by_knn_self_agreement(
-        model=model,
-        feature_extractor=model.get_feature_extractor(),
-        classifier=model.get_active_head(),
-        state0=mix_weights,
-        taskvector=task_vectors['Average'],
-        unlabeled_loader=alpha_est_support_dl,
-        num_clusters=num_clusters,
-        k=num_neighbor_agr_check,
-        coverage_rate=coverage_rate,
-        alphas=np.round(np.linspace(-0.0, -4.0, 81), 2),
-        device=gpu
-    )
-    print(alpha_kNN)
-    
-    results_dict['alpha_KNN'] = alpha_kNN
-    with open(results_dir / 'metrics.json' , 'w') as json_file:
-        json.dump(results_dict, json_file, indent=4)
+        from estimate_alpha import select_alpha_by_knn_self_agreement
+        alpha_kNN = select_alpha_by_knn_self_agreement(
+            model=model,
+            feature_extractor=model.get_feature_extractor(),
+            classifier=model.get_active_head(),
+            state0=mix_weights,
+            taskvector=task_vectors['Average'],
+            unlabeled_loader=alpha_est_support_dl,
+            num_clusters=num_clusters,
+            k=num_neighbor_agr_check,
+            coverage_rate=coverage_rate,
+            alphas=np.round(np.linspace(-0.0, -4.0, 81), 2),
+            device=gpu
+        )
+        print(alpha_kNN)
+        
+        results_dict['alpha_KNN'] = alpha_kNN
+        with open(results_dir / 'metrics.json' , 'w') as json_file:
+            json.dump(results_dict, json_file, indent=4)
     
 
     if 'Random Vector' not in results_dict:

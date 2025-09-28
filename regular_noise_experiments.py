@@ -300,10 +300,6 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     )
 
     
-    
-
-    
-    
     results_dict = OrderedDict()
     if not results_dir.joinpath('metrics.json').exists():
 
@@ -339,40 +335,29 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         with open(results_dir / "metrics.json", "r") as json_file:
             results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
             
-            
+     
 
-    # if 'alpha_KNN' not in results_dict:  
-          
-    #     from estimate_alpha import select_alpha_by_knn_self_agreement
-    #     alpha_kNN = select_alpha_by_knn_self_agreement(
-    #         model=model,
-    #         feature_extractor=model.get_feature_extractor(),
-    #         classifier=model.get_classifier_head(),
-    #         state0=mix_weights,
-    #         taskvector=task_vectors['Average'],
-    #         unlabeled_loader=dataset_clean.get_heldout_dataloader(),
-    #         # K=dataset.get_num_classes(),
-    #         alphas=np.round(np.linspace(-0.05, -2.0, 40), 2),
-    #         device=gpu
-    #     )
-
-    #     results_dict['alpha_KNN'] = alpha_kNN
-    #     with open(results_dir / 'metrics.json' , 'w') as json_file:
-    #         json.dump(results_dict, json_file, indent=4)
-    
-
-          
-    num_clusters = dataset_clean.get_num_classes()
-    alpha_est_support_dl = dataset_clean.get_heldout_dataloader()
-    alpha_est_support_size = len(dataset_clean.get_heldoutset())
-    ideal_cluster_balance = alpha_est_support_size / num_clusters
-    num_neighbor_agr_check = math.floor(ideal_cluster_balance / 2)
+    # if 'alpha_KNN' not in results_dict:
     if dataset.dataset_name == 'MNIST':
         coverage_rate = 1.0
     elif dataset.dataset_name == 'CIFAR10':
         coverage_rate = 1.0
     elif dataset.dataset_name == 'CIFAR100':
         coverage_rate = 0.95
+    if strategy['noise']['finetuning'][0]['noise_type'] == 'asymmetric':
+        if dataset.dataset_name == 'MNIST':
+            num_clusters = 5
+        elif dataset.dataset_name == 'CIFAR10':
+            num_clusters = 5
+        else: num_clusters = dataset_clean.get_num_classes()
+    else:
+        num_clusters = dataset_clean.get_num_classes()
+    
+    alpha_est_support_dl = dataset_clean.get_heldout_dataloader()
+    alpha_est_support_size = len(dataset_clean.get_heldoutset())
+    ideal_cluster_balance = alpha_est_support_size / num_clusters
+    num_neighbor_agr_check = math.floor(ideal_cluster_balance / 2)
+    
 
     from estimate_alpha import select_alpha_by_knn_self_agreement
     alpha_kNN = select_alpha_by_knn_self_agreement(
@@ -385,14 +370,18 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         num_clusters=num_clusters,
         k=num_neighbor_agr_check,
         coverage_rate=coverage_rate,
-        alphas=np.round(np.linspace(-0.0, -3.0, 61), 2),
+        alphas=np.round(np.linspace(-0.0, -2.0, 41), 2),
         device=gpu
     )
-    
-    
-    results_dict['alpha_KNN'] = alpha_kNN
-    with open(results_dir / 'metrics.json' , 'w') as json_file:
-        json.dump(results_dict, json_file, indent=4)
+
+    print(alpha_kNN)
+    # results_dict['alpha_KNN'] = alpha_kNN
+    # with open(results_dir / 'metrics.json' , 'w') as json_file:
+    #     json.dump(results_dict, json_file, indent=4)
+    model.load_state_dict(mix_weights, strict=False)
+    task_vectors['Average'].apply_to(model, scaling_coef=alpha_kNN, strict=False)
+    tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+    print(tv_test_results)
     
 
 
@@ -405,7 +394,6 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         results_dict['Random Vector'] = {'test_results': random_test_results, 'train_results': random_train_results}
         with open(results_dir / 'metrics.json' , 'w') as json_file:
             json.dump(results_dict, json_file, indent=4)
-    
     
 
 

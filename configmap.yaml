@@ -154,8 +154,8 @@ regular_models:
             40: 'config36'
           resnet50:
             40: 'config38'
-          # resnet50: # ImagenetV2
-          #   40: 'config41'
+          resnet50v2: # ImagenetV2
+            40: 'config41'
           resnet101:
             40: 'config40'
         asymmetric:
