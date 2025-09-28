@@ -399,9 +399,9 @@ class BinarizedClassificationDataset(Dataset):
             data = list(data)
         y = data[1]
         if y == self.target_class:
-            data[1] = 1.0
+            data[1] = torch.as_tensor(1.0, dtype=torch.long)
         else:
-            data[1] = 0.0
+            data[1] = torch.as_tensor(0.0, dtype=torch.long)
         return data
     
     
@@ -450,7 +450,6 @@ class PoisonedClassificationDataset(Dataset):
         self.seed = seed
         self.generator = generator
 
-        # Null base .transform to read raw samples (labels unaffected)
         base, chain = self._find_base_with_transform(self.dataset)
         self._base_dataset = base
         self._subset_index_chain = chain
@@ -475,7 +474,6 @@ class PoisonedClassificationDataset(Dataset):
         else:
             raise TypeError("'rate' must be float (fraction) or int (count).")
 
-        # --- NEW: choose poison indices only from non-target samples ---
         self._poisoned_visible_indices = self._choose_non_target_poison_indices(
             requested_poison, n
         )
@@ -496,7 +494,7 @@ class PoisonedClassificationDataset(Dataset):
         sample = self.dataset[visible_idx]
         if len(sample) == 2:
             img, y = self.dataset[visible_idx]
-            is_noisy = 0
+            is_noisy = torch.tensor(0, dtype=torch.float32)
         elif len(sample) == 3:
             img, y, is_noisy = self.dataset[visible_idx]
         else: raise RuntimeError('Something uexpected happened!!!')
@@ -513,14 +511,16 @@ class PoisonedClassificationDataset(Dataset):
                 margin_w=self.margin_w,
             )
             if not self._return_clean_labels:
-                y = self.target_class
+                if torch.is_tensor(y):
+                    y = y.new_tensor(self.target_class)
+                else:
+                    y = torch.tensor(self.target_class, dtype=torch.long)
             is_poisoned = True
-        # else: keep as-is (including all target-class samples)
 
         if self._orig_transform is not None:
             img = self._orig_transform(img)
 
-        poison_flag = torch.tensor(2, dtype=torch.float32) if is_poisoned else torch.tensor(0, dtype=torch.float32)
+        poison_flag = torch.tensor(2.0 if is_poisoned else 0.0, dtype=torch.float32)
         return img, y, poison_flag + is_noisy
 
     # -------------------------

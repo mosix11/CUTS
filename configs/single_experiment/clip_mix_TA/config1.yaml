@@ -41,7 +41,7 @@ datasets:
   - name: "cifar10"
     num_classes: 10
     img_size: [224, 224]
-    batch_size: 256
+    batch_size: 64
     heldout_conf: 0.02
     valset_ratio: 0.0
     num_workers: 12
