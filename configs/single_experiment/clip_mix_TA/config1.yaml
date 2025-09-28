@@ -59,7 +59,7 @@ model:
 trainer:
   finetuning:
     mix:
-      max_iterations: 6000
+      max_iterations: 7000
       optimizer_cfg: 
         type: "adamw"
         lr: 1.0e-5
@@ -68,7 +68,7 @@ trainer:
         type: 'cosann_warmup'
         update_on: 'gradient_step'
         warmup_steps: 300
-        hold_steps: 1000
+        hold_steps: 2700
         T_max: 6000
         eta_min: 0
       early_stopping: False
@@ -81,7 +81,7 @@ trainer:
       comet_project_name: 'clip-mix-TA'
       seed: *training_seed
     noise:
-      max_iterations: 800
+      max_iterations: 1000
       optimizer_cfg: 
         type: "adamw"
         lr: 1.0e-5
@@ -90,8 +90,8 @@ trainer:
         type: 'cosann_warmup'
         update_on: 'gradient_step'
         warmup_steps: 200
-        hold_steps: 200
-        T_max: 800
+        hold_steps: 300
+        T_max: 1000
         eta_min: 0
       early_stopping: False
       validation_freq: -1
@@ -104,7 +104,7 @@ trainer:
       seed: *training_seed
 
     poison:
-      max_iterations: 200
+      max_iterations: 300
       optimizer_cfg: 
         type: "adamw"
         lr: 1.0e-5
@@ -112,9 +112,9 @@ trainer:
       lr_schedule_cfg:
         type: 'cosann_warmup'
         update_on: 'gradient_step'
-        warmup_steps: 30
-        hold_steps: 20
-        T_max: 200
+        warmup_steps: 50
+        hold_steps: 100
+        T_max: 300
         eta_min: 0
       early_stopping: False
       validation_freq: -1
