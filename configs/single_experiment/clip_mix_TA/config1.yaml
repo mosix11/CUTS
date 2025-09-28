@@ -59,7 +59,7 @@ model:
 trainer:
   finetuning:
     mix:
-      max_iterations: 8000
+      max_iterations: 10000
       optimizer_cfg: 
         type: "adamw"
         lr: 1.0e-5
@@ -68,8 +68,8 @@ trainer:
         type: 'cosann_warmup'
         update_on: 'gradient_step'
         warmup_steps: 300
-        hold_steps: 1700
-        T_max: 8000
+        hold_steps: 3700
+        T_max: 10000
         eta_min: 0
       early_stopping: False
       validation_freq: -1

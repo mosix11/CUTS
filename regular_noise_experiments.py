@@ -339,26 +339,25 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
 
     # if 'alpha_KNN' not in results_dict:
     if dataset.dataset_name == 'MNIST':
-        coverage_rate = 1.0
+        if strategy['noise']['finetuning'][0]['noise_type'] == 'asymmetric':
+            coverage_rate = 0.5
+        else:
+            coverage_rate = 1.0
     elif dataset.dataset_name == 'CIFAR10':
-        coverage_rate = 1.0
+        if strategy['noise']['finetuning'][0]['noise_type'] == 'asymmetric':
+            coverage_rate = 0.5
+        else:
+            coverage_rate = 1.0
     elif dataset.dataset_name == 'CIFAR100':
         coverage_rate = 0.95
-    if strategy['noise']['finetuning'][0]['noise_type'] == 'asymmetric':
-        if dataset.dataset_name == 'MNIST':
-            num_clusters = 5
-        elif dataset.dataset_name == 'CIFAR10':
-            num_clusters = 5
-        else: num_clusters = dataset_clean.get_num_classes()
-    else:
-        num_clusters = dataset_clean.get_num_classes()
+    num_clusters = dataset_clean.get_num_classes()
     
     alpha_est_support_dl = dataset_clean.get_heldout_dataloader()
     alpha_est_support_size = len(dataset_clean.get_heldoutset())
     ideal_cluster_balance = alpha_est_support_size / num_clusters
     num_neighbor_agr_check = math.floor(ideal_cluster_balance / 2)
     
-
+    print(num_neighbor_agr_check, num_clusters, coverage_rate)
     from estimate_alpha import select_alpha_by_knn_self_agreement
     alpha_kNN = select_alpha_by_knn_self_agreement(
         model=model,
@@ -370,7 +369,8 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         num_clusters=num_clusters,
         k=num_neighbor_agr_check,
         coverage_rate=coverage_rate,
-        alphas=np.round(np.linspace(-0.0, -2.0, 41), 2),
+        gamma_nmi=0.2,
+        alphas=np.round(np.linspace(-0.0, -2.0, 81), 3),
         device=gpu
     )
 

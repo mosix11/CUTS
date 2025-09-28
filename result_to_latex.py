@@ -2286,6 +2286,13 @@ if __name__ == "__main__":
     #     regular_symmetric_cfgs,
     #     outputfile_path= Path("./visulaization_dir/regular_symmetric_noise_table.txt")
     #     )
+    
+    generate_clip_noise_utlity_table(
+        regular_noise_results_dir,
+        regular_asymmetric_cfgs,
+        noise_levels=[40],
+        outputfile_path= Path("./visulaization_dir/regular_asymmetric_noise_table.txt")
+    )
 
     # generate_clip_poison_table(
     #     regular_poison_results_dir,
