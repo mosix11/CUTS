@@ -110,7 +110,7 @@ trainer:
       comet_project_name: 'dino-poison-TA'
       seed: *training_seed
     heldout:
-      max_iterations: 100
+      max_iterations: 200
       optimizer_cfg: 
         type: "adamw"
         lr: 1.0e-5
@@ -119,8 +119,8 @@ trainer:
         type: 'cosann_warmup'
         update_on: 'gradient_step'
         warmup_steps: 30
-        hold_steps: 20
-        T_max: 100
+        hold_steps: 50
+        T_max: 200
         eta_min: 0
       early_stopping: False
       validation_freq: -1
