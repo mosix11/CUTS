@@ -49,6 +49,7 @@ from src.utils import weight_norm_analysis
 def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     cfg['trainer']['pretraining']['comet_api_key'] = os.getenv("COMET_API_KEY")
     cfg['trainer']['finetuning']['comet_api_key'] = os.getenv("COMET_API_KEY")
+    cfg['trainer']['finetuning_cf']['comet_api_key'] = os.getenv("COMET_API_KEY")
     
     augmentations = None
     if cfg['dataset']['name'] == 'cifar10':
@@ -122,6 +123,48 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
         trainer = StandardTrainer(
             outputs_dir=outputs_dir,
             **cfg['trainer']['pretraining'],
+            exp_name=experiment_name,
+            exp_tags=None,
+        )
+        
+        results = trainer.fit(model, dataset, resume=False)
+        torch.save(model.state_dict(), weights_dir / Path("ft_weights.pth"))
+        
+        
+    # Finetune on the set we use for noise vectors but with uncorrupted labels.
+    if not outputs_dir.joinpath(f"{cfg_name}/finetune_clean/weights/ft_weights.pth").exists() and strategy['finetuning_set'] == 'Heldout':
+        dataset = copy.deepcopy(base_dataset)
+        model = copy.deepcopy(base_model)
+        
+        mix_model_ckp_path = outputs_dir/ Path(f"{cfg_name}/mix") / Path('weights/ft_weights.pth')
+        checkpoint = torch.load(mix_model_ckp_path)
+        model.load_state_dict(checkpoint)
+        
+        
+        noise_tv = strategy['noise']['finetuning'][0]
+        # For asymmetric noise, we only consider the noisy samples (only a subset of classes are swapped.)
+        if noise_tv['noise_type'] == 'asymmetric':
+            noise_tv['set'] = 'Heldout'
+            dataset.inject_noise(**noise_tv)
+            hs_clean, hs_noisy = dataset.get_clean_noisy_subsets(set='Heldout')
+            dataset.switch_labels_to_clean(hs_noisy)
+            
+            dataset.set_trainset(hs_noisy, shuffle=True)
+        else:
+            dataset.set_trainset(dataset.get_heldoutset(), shuffle=True)
+        
+        experiment_name = f"{cfg_name}/finetune_clean"
+        experiment_dir = outputs_dir / Path(experiment_name)
+
+        weights_dir = experiment_dir / Path("weights")
+        weights_dir.mkdir(exist_ok=True, parents=True)
+
+        plots_dir = experiment_dir / Path("plots")
+        plots_dir.mkdir(exist_ok=True, parents=True)
+        
+        trainer = StandardTrainer(
+            outputs_dir=outputs_dir,
+            **cfg['trainer']['finetuning_cf'],
             exp_name=experiment_name,
             exp_tags=None,
         )
@@ -242,6 +285,11 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         map_location='cpu'
     )
     
+    ft_ho_clean_weights = torch.load(
+        outputs_dir.joinpath(f"finetune_clean/weights/ft_weights.pth"),
+        map_location='cpu'
+    )
+    
     
     
     noise_weights = OrderedDict()
@@ -265,7 +313,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     else:
         task_vectors['Average'] = TaskVector.mean(task_vectors)
         
-    
+    task_vectors['Clean'] = TaskVector(mix_weights, ft_ho_clean_weights)
     task_vectors['Mix'] = TaskVector(pt_weights, mix_weights)
     task_vectors['Random Vector'] = task_vectors['Average'].generate_random_vector_with_same_layer_norms(seed=training_seed)
 
@@ -301,6 +349,16 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
 
     
     results_dict = OrderedDict()
+    with open(results_dir / "metrics.json", "r") as json_file:
+        results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
+    model.load_state_dict(ft_ho_clean_weights, strict=False)
+    ft_ho_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+    ft_ho_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+    results_dict['FT HO Clean'] = {'test_results': ft_ho_test_results, 'train_results': ft_ho_train_results}
+    with open(results_dir / 'metrics.json' , 'w') as json_file:
+        json.dump(results_dict, json_file, indent=4)
+    exit()
+    results_dict = OrderedDict()
     if not results_dir.joinpath('metrics.json').exists():
 
         model.load_state_dict(mix_weights, strict=False)
@@ -312,10 +370,15 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         gold_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
         gold_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
         
+        model.load_state_dict(ft_ho_clean_weights, strict=False)
+        ft_ho_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+        ft_ho_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+        
 
         
         results_dict['Mix'] = {'test_results': mix_test_results, 'train_results': mix_train_results}
         results_dict['Gold'] = {'test_results': gold_test_results, 'train_results': gold_train_results}
+        results_dict['FT HO Clean'] = {'test_results': ft_ho_test_results, 'train_results': ft_ho_train_results}
         
         if strategy['noise']['finetuning'][0]['noise_type'] == 'asymmetric':
             alphas = tqdm(np.round(np.linspace(-0.05, -2.0, 40), 2))

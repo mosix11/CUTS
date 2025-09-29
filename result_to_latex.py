@@ -30,41 +30,28 @@ def _load_metrics(config_dir: Path) -> Optional[Dict[str, Any]]:
     return None
 
 def _get_test_acc(block: Dict[str, Any]) -> Optional[float]:
-    try:
-        return float(block["test_results"]["ACC"])
-    except Exception:
-        return None
+
+    return float(block["test_results"]["ACC"])
     
 def _get_ho_acc(block: Dict[str, Any]) -> Optional[float]:
-    try:
-        return float(block["ho_results"]["ACC"])
-    except Exception:
-        return None
+    return float(block["ho_results"]["ACC"])
 
 def _get_train_clean_acc(block: Dict[str, Any]) -> Optional[float]:
-    try:
-        return float(block["train_results"]["clean_set"]["ACC"])
-    except Exception:
-        return None
+
+    return float(block["train_results"]["clean_set"]["ACC"])
     
 def _get_train_clean_destruction_rate(block: Dict[str, Any]) -> Optional[float]:
     return 1 - _get_train_clean_acc(block)
 
 def _get_train_noisy_acc(block: Dict[str, Any]) -> Optional[float]:
-    try:
-        return float(block["train_results"]["noisy_set"]["ACC"])
-    except Exception:
-        return None
+    return float(block["train_results"]["noisy_set"]["ACC"])
     
 def _get_train_noisy_forget_rate(block: Dict[str, Any]) -> Optional[float]:
     return 1 - _get_train_noisy_acc(block)
 
 
 def _get_train_noisy_healing_acc(block: Dict[str, Any]) -> Optional[float]:
-    try:
-        return float(block["train_results"]["healing_noise"]["ACC"])
-    except Exception:
-        return None
+    return float(block["train_results"]["healing_noise"]["ACC"])
 
 
 def _collect_alpha_metrics(metrics: Dict[str, Any]) -> Dict[float, Dict]:
@@ -98,6 +85,7 @@ def _collect_baseline_metrics(metrics: Dict[str, Any]) -> Dict[float, Dict]:
     
     baseline_metrics['mix'] = OrderedDict()
     baseline_metrics['clean'] = OrderedDict()
+    baseline_metrics['cf'] = OrderedDict()
     baseline_metrics['rnd'] = OrderedDict()
     
     baseline_metrics['mix']['utility'] = _get_test_acc(metrics['Mix'])
@@ -121,6 +109,17 @@ def _collect_baseline_metrics(metrics: Dict[str, Any]) -> Dict[float, Dict]:
         baseline_metrics['clean']['ho_utility'] = ho_utility
         baseline_metrics['clean']['ho_forget_rate'] = 1 - ho_utility
     metrics.pop("Gold")
+    
+    
+    baseline_metrics['cf']['utility'] = _get_test_acc(metrics['FT HO Clean'])
+    # baseline_metrics['cf']['forget_rate'] = _get_train_noisy_forget_rate(metrics['FT HO Clean'])
+    # baseline_metrics['cf']['destruction_rate'] = _get_train_clean_destruction_rate(metrics['FT HO Clean'])
+    # baseline_metrics['cf']['healing_rate'] = _get_train_noisy_healing_acc(metrics['FT HO Clean'])
+    if 'ho_results' in metrics['FT HO Clean']:
+        ho_utility = _get_ho_acc(metrics['FT HO Clean'])
+        baseline_metrics['cf']['ho_utility'] = ho_utility
+        baseline_metrics['cf']['ho_forget_rate'] = 1 - ho_utility
+    metrics.pop("FT HO Clean")
     
     
     baseline_metrics['rnd']['utility'] = _get_test_acc(metrics['Random Vector'])
@@ -198,7 +197,10 @@ def generate_clip_noise_utlity_table(
     row_alpha_star_fr: Dict[str, List[str]]  = {ds: ["-"] * len(noise_levels) for ds in dataset_order}
     row_alpha_kNN: Dict[str, List['str']] = {ds: ["-"] * len(noise_levels) for ds in dataset_order}
     row_random_vec: Dict[str, List['str']] = {ds: ["-"] * len(noise_levels) for ds in dataset_order}
+    row_cf: Dict[str, List['str']] = {ds: ["-"] * len(noise_levels) for ds in dataset_order}
+    row_recovery_cf: Dict[str, List['str']] = {ds: ["-"] * len(noise_levels) for ds in dataset_order}
     row_recovery_kNN: Dict[str, List['str']] = {ds: ["-"] * len(noise_levels) for ds in dataset_order}
+
     
     # ---------- fill data ----------
     for ds in dataset_order:
@@ -209,10 +211,10 @@ def generate_clip_noise_utlity_table(
 
             metrics = _load_metrics(results_dir/config)
             
-            metrics.pop('FT HO Clean', None)
+            # metrics.pop('FT HO Clean', None)
             metrics.pop('alpha_s4', None)
             alpha_KNN = metrics.pop('alpha_KNN')
-        
+
             baseline_metrics = _collect_baseline_metrics(metrics)
             alpha_metrics = _collect_alpha_metrics(metrics)
             
@@ -221,8 +223,12 @@ def generate_clip_noise_utlity_table(
             recovery_kNN = (alpha_metrics[alpha_KNN]['utility'] - baseline_metrics['mix']['utility'])/(baseline_metrics['clean']['utility'] - baseline_metrics['mix']['utility'])
             recovery_kNN = _fmt_perct(recovery_kNN)
             
+            recovery_cf = (baseline_metrics['cf']['utility'] - baseline_metrics['mix']['utility'])/(baseline_metrics['clean']['utility'] - baseline_metrics['mix']['utility'])
+            recovery_cf = _fmt_perct(recovery_cf)
+            
             mix_metrics  = _fmt_metrics(baseline_metrics['mix'])
             clean_metrics = _fmt_metrics(baseline_metrics['clean'])
+            cf_metrics = _fmt_metrics(baseline_metrics['cf'])
             rnd_metrics = _fmt_metrics(baseline_metrics['rnd'])
             
             alpha_KNN_metrics = _fmt_metrics(alpha_metrics[alpha_KNN])
@@ -235,7 +241,9 @@ def generate_clip_noise_utlity_table(
             row_alpha_star_fr[ds][j] = alpha_star_forgetting_metrics['utility']
             row_alpha_kNN[ds][j] = alpha_KNN_metrics['utility']
             row_random_vec[ds][j] = rnd_metrics['utility']
+            row_cf[ds][j] = cf_metrics['utility']
             row_recovery_kNN[ds][j] = recovery_kNN
+            row_recovery_cf[ds][j] = recovery_cf
     
             
 
@@ -246,17 +254,7 @@ def generate_clip_noise_utlity_table(
             cells.extend(values_by_ds[ds])
         return f"{label} & " + " & ".join(cells) + r" \\"
 
-    header = r"""\begin{table}[ht]
-\centering
-\label{tab:}
-\scriptsize
-% \renewcommand{\arraystretch}{1}
-\setlength{\tabcolsep}{4pt}
-\begin{tabular}{lccccccccccccccc}
-\toprule
-& \multicolumn{5}{c}{MNIST} & \multicolumn{5}{c}{CIFAR10} & \multicolumn{5}{c}{CIFAR100} \\
-\cmidrule(lr){2-6} \cmidrule(lr){7-11} \cmidrule(lr){12-16} 
-Model & 10\% & 20\% & 40\% & 60\% & 80\% & 10\% & 20\% & 40\% & 60\% & 80\% & 10\% & 20\% & 40\% & 60\% & 80\% \\
+    header = r"""
 \midrule
 """
 
@@ -265,19 +263,21 @@ Model & 10\% & 20\% & 40\% & 60\% & 80\% & 10\% & 20\% & 40\% & 60\% & 80\% & 10
         row_line(r"$\theta_{\text{clean}}$", row_theta_clean),
         r"\cmidrule(lr){1-16}",
         row_line(r"$\tau_{r}$", row_random_vec),
+        row_line(r"$\theta_{\text{CF}}$", row_cf),
         r"\cmidrule(lr){1-16}",
         row_line(r"$\alpha^\ast_a$", row_alpha_star_u),
         row_line(r"$\alpha^\ast_f$", row_alpha_star_fr),
         r"\cmidrule(lr){1-16}",
         row_line(r"$\hat{\alpha}^\ast_{\text{kNN}}$", row_alpha_kNN),
-        row_line(r"recovery", row_recovery_kNN),
+        r"\bottomrule",
+        row_line(r"\rowcolor{gray!25} RR($\theta_{\text{CF}}$)", row_recovery_cf),
+        row_line(r"\rowcolor{gray!25} RR($\hat{\alpha}^\ast_{\text{knn}}$)", row_recovery_kNN),
         
     ]
 
     footer = r"""
 \bottomrule
-\end{tabular}
-\end{table}
+
 """
 
     table_tex = header + "\n".join(body_lines) + footer
@@ -1635,224 +1635,6 @@ Model  & RND & INv1 & RND & INv1 & RND & INv1 & RND & INv1 \\
     return outputfile_path
 
 
-# def plot_recovery_bars_40pct(
-#     results_dir: Path,
-#     comp_cfgs: _OrderedDictType,
-#     save_path: Path = Path("./visulaization_dir/regular_symmetric_40_comp_bars.png"),
-#     zero_position: float = 0.35,   # where y=0 sits (fraction from bottom). >0.5 means "above center"
-#     annotate: bool = True,         # write numbers above bars
-#     fallback_to_alpha_a: bool = False,  # if alpha_KNN missing, use alpha*_a
-# ) -> Path:
-#     """
-#     Build a grouped bar plot (CIFAR-10, 40% noise) showing Recovery (RR %) for:
-#       ResNet18, ResNet34, ResNet50, ResNet101.
-#     Bars: RND (scratch), INv1 (ImageNet V1 init). For ResNet50, an extra INv2 bar is used
-#     if a third config is provided.
-
-#     RR is computed at alphâ*_kNN (if present), otherwise (optionally) at alpha*_a:
-#       RR = (UT(alpha) - UT_mix) / (UT_clean - UT_mix) * 100
-
-#     Args:
-#       results_dir: directory where metrics.json live
-#       comp_cfgs: dict like
-#         {'CIFAR10': OrderedDict({
-#             'resnet18': ({...40:'cfg_rnd18...'}, {...40:'cfg_inv1_18...'}),
-#             'resnet34': ({40:'cfg_rnd34...'},   {...40:'cfg_inv1_34...'}),
-#             'resnet50': ({40:'cfg_rnd50...'},   {...40:'cfg_inv1_50...'}, {...40:'cfg_inv2_50...'}),
-#             'resnet101':({40:'cfg_rnd101...'},  {...40:'cfg_inv1_101...'})
-#         })}
-#       zero_position: fraction in (0,1). e.g., 0.65 → y=0 is at 65% of axis height (above midline).
-#     """
-#     assert 0.05 < zero_position < 0.95, "zero_position should be in (0.05, 0.95)"
-
-#     # ---- helpers ----
-#     def _rr_from_metrics(cfg_rel: Optional[str]) -> Optional[float]:
-#         if not cfg_rel:
-#             return None
-#         metrics = _load_metrics(results_dir / cfg_rel)
-#         if not metrics:
-#             return None
-
-#         metrics.pop("FT HO Clean", None)
-#         metrics.pop("alpha_s4", None)
-
-#         # Preferred: alpha_KNN
-#         alpha_knn = metrics.pop("alpha_KNN", None)
-#         try:
-#             alpha_knn = None if alpha_knn is None else round(float(alpha_knn), 2)
-#         except Exception:
-#             alpha_knn = None
-
-#         baseline = _collect_baseline_metrics(metrics)  # pops Mix/Gold/Random Vector
-#         alpha_grid = _collect_alpha_metrics(metrics)
-
-#         mix_ut   = baseline["mix"].get("utility", None)
-#         clean_ut = baseline["clean"].get("utility", None)
-#         if mix_ut is None or clean_ut is None or abs(clean_ut - mix_ut) < 1e-12:
-#             return None
-
-#         alpha_for_rr = None
-#         if alpha_knn == 0.0:
-#             return 0.0  # exactly Mix
-#         if alpha_knn is not None and alpha_knn in alpha_grid:
-#             alpha_for_rr = alpha_knn
-#         elif fallback_to_alpha_a:
-#             alpha_for_rr = _get_alpha_star_utility(alpha_grid)
-
-#         if alpha_for_rr is None or alpha_for_rr not in alpha_grid:
-#             return None
-
-#         ut = alpha_grid[alpha_for_rr].get("utility", None)
-#         if ut is None:
-#             return None
-
-#         rr = (ut - mix_ut) / (clean_ut - mix_ut) * 100.0
-#         return rr
-
-#     # ---- collect data (CIFAR-10 only) ----
-#     models_order = ["resnet18", "resnet34", "resnet50", "resnet101"]
-#     pretty = {"resnet18":"ResNet18","resnet34":"ResNet34","resnet50":"ResNet50","resnet101":"ResNet101"}
-
-#     records: List[Dict[str, Any]] = []
-#     cifar10 = comp_cfgs.get("CIFAR10", {})
-
-#     for m in models_order:
-#         tup = cifar10.get(m)
-#         if not tup:
-#             continue
-#         # Expect (RND, INv1 [, INv2-for-resnet50])
-#         inits = [("RND", 0), ("INv1", 1)]
-#         if m == "resnet50" and len(tup) >= 3:
-#             inits.append(("INv2", 2))
-
-#         for init_name, idx in inits:
-#             try:
-#                 cfg_rel = tup[idx].get(40, None)
-#             except Exception:
-#                 cfg_rel = None
-
-#             rr = _rr_from_metrics(cfg_rel)
-#             if rr is not None:
-#                 records.append({"Model": pretty[m], "Init": init_name, "RR": rr})
-
-#     df = pd.DataFrame.from_records(records)
-#     print(df)
-#     if df.empty:
-#         raise RuntimeError("No data available to plot (did you pass 40% configs?)")
-
-#     # Ensure consistent ordering in the plot
-#     model_order = ["ResNet18", "ResNet34", "ResNet50", "ResNet101"]
-#     init_order = ["RND", "INv1", "INv2"]  # INv2 will simply be absent for models that don't have it
-#     df["Model"] = pd.Categorical(df["Model"], categories=model_order, ordered=True)
-#     df["Init"]  = pd.Categorical(df["Init"],  categories=init_order,  ordered=True)
-
-#      # ---- seaborn styling ----
-#     # Visual controls (tweak here)
-#     FS_XY_LABEL  = 8     # axis label font size
-#     FS_TICK      = 7     # tick label font size
-#     FS_LEGEND    = 11     # legend font size
-#     FS_BARLABEL  = 8      # numbers above bars
-
-#     ZERO_EPS     = 1e-8   # suppress printing ~zero values
-#     SHADE_FACE   = "0.92" # under-theta_mix shading color
-#     SHADE_EDGE   = "0.80" # hatch edge color
-#     SHADE_ALPHA  = 0.55   # shading opacity
-#     SHADE_HATCH  = "//"   # hatch pattern, comment out to disable hatch
-
-#     ZERO_LINE_STYLE = dict(  # θ_mix line style (on top of bars)
-#         color="0.4", linewidth=0.9, linestyle=(0, (4, 3)), alpha=0.95, zorder=8
-#     )
-
-#     sns.set_theme(context="paper", style="whitegrid", font_scale=1.0)
-#     fig, ax = plt.subplots(figsize=(4.6, 3.6), dpi=300)
-
-#     # Draw bars (as before)
-#     sns.barplot(
-#         data=df, x="Model", y="RR", hue="Init",
-#         order=model_order, hue_order=init_order,
-#         ax=ax, width=0.8, edgecolor="black", linewidth=0.6, 
-#     )
-
-#     # Place y=0 at `zero_position` by extending axis below 0
-#     ymin = -100.0 * zero_position / (1.0 - zero_position)
-#     ax.set_ylim(ymin, 100.0)
-
-#     # 1) Make bars start from the bottom of Y axis (touching the X axis):
-#     #    move each bar's bottom to ymin and keep its original top the same.
-#     for p in ax.patches:
-#         old_top = p.get_height()              # this is the original "RR" (top at y)
-#         p.set_y(ymin)                         # start at axis bottom
-#         p.set_height(old_top - ymin)          # keep the same top value
-
-#     # Y ticks & labels (unchanged semantics)
-#     ticks = [0, 25, 50, 75, 100]
-#     ticklabels = [r"$\theta_{\text{mix}}$", "25%", "50%", "75%", r"$\theta_{\text{clean}}$"]
-#     ax.set_yticks(ticks)
-#     ax.set_yticklabels(ticklabels)
-#     # ax.set_xticks([10, 35, 60, 85])
-#     ax.set_xticklabels(['a', 'v', 'c', 'd'])
-
-#     # Labels, grid, and spines
-#     # ax.set_ylabel("Recovery (RR) [%]", fontsize=FS_XY_LABEL)
-#     ax.set_ylabel("")
-    
-#     trans = mtransforms.blended_transform_factory(ax.transAxes, ax.transData)
-    
-#     y_text = ymin + 0.35 * (0 - ymin)  # 35% of the way from ymin up to 0 (i.e., below θ_mix)
-#     print(ymin, y_text)
-#     ax.text(
-#         -0.02, -55, "Recovery (RR) [%]",  # x=-0.06 puts it just left of the y-axis
-#         rotation=90, va="bottom", ha="center",
-#         fontsize=FS_XY_LABEL - 2, alpha=0.9, transform=trans
-#     )
-    
-#     ax.set_xlabel("")
-#     ax.tick_params(axis="x", labelsize=FS_TICK)
-#     ax.tick_params(axis="y", labelsize=FS_TICK)
-#     ax.grid(axis="y", linestyle=":", linewidth=0.6, alpha=0.75, zorder=0)
-#     ax.set_axisbelow(True)
-#     sns.despine(ax=ax, top=True, right=True)
-
-#     # 2) θ_mix line: thinner, gray, dashed, drawn ABOVE bars
-#     x0, x1 = ax.get_xlim()
-#     ax.plot([x0, x1], [0, 0], **ZERO_LINE_STYLE)
-
-#     # Keep θ_clean reference line subtle (behind)
-#     ax.axhline(100, color="black", linewidth=0.9, linestyle="-", zorder=1)
-
-#     # 3) Darken the area under θ_mix (including bars) with a semi-transparent hatch overlay
-#     ax.axhspan(
-#         ymin, 0, facecolor=SHADE_FACE, alpha=SHADE_ALPHA,
-#         hatch=SHADE_HATCH, edgecolor=SHADE_EDGE, zorder=6
-#     )
-
-#     # Legend
-#     leg = ax.legend(
-#         title=None, ncol=3, loc="upper center",
-#         bbox_to_anchor=(0.5, 1.20), frameon=False, handlelength=1.2, columnspacing=1.0,
-#         prop={"size": FS_LEGEND}
-#     )
-
-#     # 4) Annotate bars with values, but suppress near-zero (e.g., that 0.0 on ResNet18-INv1)
-#     if annotate:
-#         for p in ax.patches:
-#             top_val = p.get_y() + p.get_height()   # true top (the RR value)
-#             if not math.isfinite(top_val) or abs(top_val) < ZERO_EPS:
-#                 continue  # suppress 0.0 labels
-#             x = p.get_x() + p.get_width() / 2.0
-#             ax.text(
-#                 x, top_val + 2.0, f"{top_val:.1f}",
-#                 ha="center", va="bottom", fontsize=FS_BARLABEL, zorder=9
-#             )
-
-#     fig.tight_layout()
-#     save_path.parent.mkdir(parents=True, exist_ok=True)
-#     fig.savefig(save_path, bbox_inches="tight", pad_inches=0.04)
-#     plt.show()
-#     plt.close(fig)
-#     return save_path
-
-
 def plot_recovery_bars_40pct(
     results_dir: Path,
     comp_cfgs: Dict[str, Any],
@@ -2136,6 +1918,7 @@ if __name__ == "__main__":
     dino_asymmetric_cfgs['CIFAR10'] = dino_models_cfgs['CIFAR10']['ho_2']['asymmetric']
     dino_asymmetric_cfgs['CIFAR100'] = dino_models_cfgs['CIFAR100']['ho_2']['asymmetric']
     
+    
     dino_poison_cfgs = OrderedDict()
     dino_poison_cfgs['CIFAR10'] = dino_models_cfgs['CIFAR10']['ho_2']['poison']
     dino_poison_cfgs['CIFAR100'] = dino_models_cfgs['CIFAR100']['ho_2']['poison']
@@ -2203,8 +1986,8 @@ if __name__ == "__main__":
     #     dataset_order=['CIFAR10', 'CIFAR100'],
     #     dataset_forget_trsh={
     #         'MNIST': 0.9,
-    #         'CIFAR10': 0.89,
-    #         'CIFAR100': 0.89
+    #         'CIFAR10': 0.9,
+    #         'CIFAR100': 0.9
     #     },
     #     noise_levels=[20, 40],
     #     outputfile_path=Path('visulaization_dir/clip_asymmetric_noise_table.txt')
@@ -2251,11 +2034,19 @@ if __name__ == "__main__":
     
     # generate_clip_noise_utlity_table(
     #     dino_noise_results_dir,
-    #     dino_asymmetric_cfgs,
-    #     dataset_order=['CIFAR10', 'CIFAR100'],
+    #     dino_symmetric_cfgs,
+    #     dataset_order=['MNIST', 'CIFAR10', 'CIFAR100'],
     #     noise_levels=[40],
-    #     outputfile_path=Path("./visulaization_dir/dino_asymmetric_noise_table.txt")
+    #     outputfile_path=Path("./visulaization_dir/dino_symmetric_noise_table.txt")
     # )
+    
+    generate_clip_noise_utlity_table(
+        dino_noise_results_dir,
+        dino_asymmetric_cfgs,
+        dataset_order=['CIFAR10', 'CIFAR100'],
+        noise_levels=[40],
+        outputfile_path=Path("./visulaization_dir/dino_asymmetric_noise_table.txt")
+    )
     # generate_clip_poison_table(
     #     dino_poison_results_dir,
     #     dino_poison_cfgs,
@@ -2287,12 +2078,12 @@ if __name__ == "__main__":
     #     outputfile_path= Path("./visulaization_dir/regular_symmetric_noise_table.txt")
     #     )
     
-    generate_clip_noise_utlity_table(
-        regular_noise_results_dir,
-        regular_asymmetric_cfgs,
-        noise_levels=[40],
-        outputfile_path= Path("./visulaization_dir/regular_asymmetric_noise_table.txt")
-    )
+    # generate_clip_noise_utlity_table(
+    #     regular_noise_results_dir,
+    #     regular_asymmetric_cfgs,
+    #     noise_levels=[40],
+    #     outputfile_path= Path("./visulaization_dir/regular_asymmetric_noise_table.txt")
+    # )
 
     # generate_clip_poison_table(
     #     regular_poison_results_dir,

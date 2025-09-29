@@ -39,53 +39,8 @@ import imageio.v2 as imageio
 from src.utils import embedding_space_analysis
 from helper_funcs import evaluate_model, eval_model_on_clean_noise_splits, search_optimal_coefficient, get_confusion_matrix, row_normalize
 from src.utils import weight_norm_analysis
+import math
 
-
-def show_poisoned_samples(dataset, n=9, unnormalize=False):
-    """
-    Show `n` poisoned samples from a DatasetWithIndex-wrapped dataset.
-    dataset: your ds.get_trainset() or similar
-    unnormalize: if True, try to undo CIFAR-10 normalization for visualization
-    """
-
-    # Collect poisoned samples
-    poisoned_imgs = []
-    poisoned_labels = []
-    for idx in range(len(dataset)):
-        x, y, *_rest = dataset[idx]
-        # last element in your tuple is is_poison flag
-        is_poison = _rest[-1].item() if torch.is_tensor(_rest[-1]) else bool(_rest[-1])
-        if is_poison:
-            poisoned_imgs.append(x)
-            poisoned_labels.append(y)
-            if len(poisoned_imgs) >= n:
-                break
-
-    if not poisoned_imgs:
-        print("No poisoned samples found!")
-        return
-
-    # CIFAR-10 normalization parameters
-    cifar_mean = torch.tensor([0.4914, 0.4822, 0.4465]).view(3,1,1)
-    cifar_std  = torch.tensor([0.2023, 0.1994, 0.2010]).view(3,1,1)
-
-    # Plot grid
-    fig, axes = plt.subplots(3, 3, figsize=(8,8))
-    for ax, img, label in zip(axes.flat, poisoned_imgs, poisoned_labels):
-        if unnormalize:
-            img = img * cifar_std + cifar_mean
-            
-        print(type(img))
-        img = img.clamp(0,1)
-        if img.shape[0] == 1:  # grayscale
-            ax.imshow(img.squeeze(0).cpu(), cmap="gray")
-        else:
-            ax.imshow(img.permute(1,2,0).cpu())
-        ax.set_title(f"Label={label}", fontsize=10)
-        ax.axis("off")
-
-    plt.tight_layout()
-    plt.show()
 
 def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     cfg['trainer']['finetuning']['comet_api_key'] = os.getenv("COMET_API_KEY")
@@ -299,17 +254,22 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     dataset.reset_train_dl(shuffle=False)
     
-    dataset_clean = copy.deepcopy(dataset)
-    
     strategy = cfg['strategy']
-    dataset.inject_noise(**strategy['noise']['pretraining'])
-    
     
     noise_tv = strategy['noise']['finetuning'][0]
     noise_tv['set'] = 'Heldout'
     dataset.inject_noise(**noise_tv)
+    
     hs_clean, hs_noisy = dataset.get_clean_noisy_subsets(set='Heldout')
     dataset.switch_labels_to_clean(hs_noisy)
+    dataset.set_heldoutset(hs_noisy, shuffle=False)
+    dataset_clean = copy.deepcopy(dataset)
+
+    ho_set = dataset.get_heldoutset()
+    dataset.switch_labels_to_noisy(ho_set)
+    dataset.set_heldoutset(ho_set)
+    dataset.inject_noise(**strategy['noise']['pretraining'])
+    
 
 
     # Load weights while removing classifier weights from the state dict
@@ -451,6 +411,47 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         results_dict['alpha_IC'] = alpha_IC
         with open(results_dir / 'metrics.json' , 'w') as json_file:
             json.dump(results_dict, json_file, indent=4)
+            
+            
+    model.load_state_dict(mix_weights, strict=False)
+    ho_results, _, _ = evaluate_model(model, dataset_clean.get_heldout_dataloader(), gpu)
+    print(ho_results)
+    if 'alpha_KNN' not in results_dict:
+        num_clusters = 2
+        alpha_est_support_dl = dataset.get_heldout_dataloader()
+        alpha_est_support_size = len(dataset.get_heldoutset())
+        ideal_cluster_balance = alpha_est_support_size / num_clusters
+        num_neighbor_agr_check = math.floor(ideal_cluster_balance / 2)
+        if dataset.dataset_name == 'MNIST':
+            coverage_rate = 1.0
+        elif dataset.dataset_name == 'CIFAR10':
+            coverage_rate = 1.0
+        elif dataset.dataset_name == 'CIFAR100':
+            coverage_rate = 0.95
+
+        from estimate_alpha import select_alpha_by_knn_self_agreement
+        alpha_kNN = select_alpha_by_knn_self_agreement(
+            model=model,
+            feature_extractor=model.get_feature_extractor(),
+            classifier=model.get_active_head(),
+            state0=mix_weights,
+            taskvector=task_vectors['Average'],
+            unlabeled_loader=alpha_est_support_dl,
+            num_clusters=num_clusters,
+            k=num_neighbor_agr_check,
+            coverage_rate=coverage_rate,
+            alphas=np.round(np.linspace(-0.0, -4.0, 81), 2),
+            device=gpu
+        )
+        print(alpha_kNN)
+        model.load_state_dict(mix_weights, strict=False)
+        task_vectors['Average'].apply_to(model, scaling_coef=alpha_kNN, strict=False)
+        ho_results, _, _ = evaluate_model(model, dataset_clean.get_heldout_dataloader(), gpu)
+        print(ho_results)
+        
+        # results_dict['alpha_KNN'] = alpha_kNN
+        # with open(results_dir / 'metrics.json' , 'w') as json_file:
+        #     json.dump(results_dict, json_file, indent=4)
 
     
     if 'Random Vector' not in results_dict:
@@ -464,7 +465,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         with open(results_dir / 'metrics.json' , 'w') as json_file:
             json.dump(results_dict, json_file, indent=4)
     
-    
+    exit()
     
     
     tmp_dataset = copy.deepcopy(dataset_clean)

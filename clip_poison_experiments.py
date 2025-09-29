@@ -178,6 +178,89 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
         torch.save(model.state_dict(), weights_dir / Path("ft_weights.pth"))
         
         
+    if not outputs_dir.joinpath(f"{cfg_name}/clean/weights/ft_weights.pth").exists():
+        dataset = copy.deepcopy(base_dataset)
+        model = copy.deepcopy(base_model)
+        
+        clean_set, noisy_set = dataset.get_clean_noisy_subsets(set='Train')
+        dataset.set_trainset(clean_set, shuffle=True)
+            
+        experiment_name = f"{cfg_name}/clean"
+        experiment_dir = outputs_dir / Path(experiment_name)
+
+        weights_dir = experiment_dir / Path("weights")
+        weights_dir.mkdir(exist_ok=True, parents=True)
+
+        plots_dir = experiment_dir / Path("plots")
+        plots_dir.mkdir(exist_ok=True, parents=True)
+        
+        finetuning_cfg = None
+        if 'clean' in cfg['trainer']['finetuning']:
+            finetuning_cfg = cfg['trainer']['finetuning']['clean']
+            finetuning_cfg['comet_api_key'] =  os.getenv("COMET_API_KEY")
+        else: finetuning_cfg = cfg['trainer']['finetuning']
+        trainer = StandardTrainer(
+            outputs_dir=outputs_dir,
+            **finetuning_cfg,
+            exp_name=experiment_name,
+            exp_tags=None,
+        )
+        
+        results = trainer.fit(model, dataset, resume=False)
+        torch.save(model.state_dict(), weights_dir / Path("ft_weights.pth"))
+        
+        
+    # Finetune on the set we use for poison vectors but with uncorrupted labels.
+    if not outputs_dir.joinpath(f"{cfg_name}/finetune_clean/weights/ft_weights.pth").exists() and strategy['finetuning_set'] == 'Heldout':
+        dataset = copy.deepcopy(base_dataset)
+        model = copy.deepcopy(base_model)
+        
+        mix_model_ckp_path = outputs_dir/ Path(f"{cfg_name}/mix") / Path('weights/ft_weights.pth')
+        checkpoint = torch.load(mix_model_ckp_path)
+        model.load_state_dict(checkpoint)
+        
+        
+        poison_tv = strategy['poison']['finetuning'][0]
+        poison_tv['set'] = 'Heldout'
+        dataset.inject_poison(**poison_tv)
+        # Exclude clean samples from target class
+        clean_ho_ds, poinsoned_ho_ds = dataset.get_clean_noisy_subsets('Heldout')
+        dataset.set_heldoutset(poinsoned_ho_ds)
+        
+        
+        
+        poison_tv['set'] = 'Heldout'
+        dataset.inject_poison(**poison_tv)
+        clean_ho_ds, poinsoned_ho_ds = dataset.get_clean_noisy_subsets('Heldout')
+        dataset.switch_labels_to_clean(poinsoned_ho_ds)
+        dataset.set_trainset(poinsoned_ho_ds, shuffle=True)
+            
+        
+        experiment_name = f"{cfg_name}/finetune_clean"
+        experiment_dir = outputs_dir / Path(experiment_name)
+
+        weights_dir = experiment_dir / Path("weights")
+        weights_dir.mkdir(exist_ok=True, parents=True)
+
+        plots_dir = experiment_dir / Path("plots")
+        plots_dir.mkdir(exist_ok=True, parents=True)
+        
+        finetuning_cfg = None
+        if 'heldout' in cfg['trainer']['finetuning']:
+            finetuning_cfg = cfg['trainer']['finetuning']['heldout']
+            finetuning_cfg['comet_api_key'] =  os.getenv("COMET_API_KEY")
+        else: finetuning_cfg = cfg['trainer']['finetuning']
+        
+        trainer = StandardTrainer(
+            outputs_dir=outputs_dir,
+            **finetuning_cfg,
+            exp_name=experiment_name,
+            exp_tags=None,
+        )
+        
+        results = trainer.fit(model, dataset, resume=False)
+        torch.save(model.state_dict(), weights_dir / Path("ft_weights.pth"))
+        
         
     # # Gradient Ascent Baseline
     # if not outputs_dir.joinpath(f"{cfg_name}/gradient_ascent/weights/ft_weights.pth").exists():
