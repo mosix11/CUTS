@@ -1521,10 +1521,12 @@ def generate_regular_symmetric_comp_40pct_table(
     row_mix   = _mkrow()
     row_clean = _mkrow()
     row_tau_r = _mkrow()
+    row_cf    = _mkrow()
     row_a_a   = _mkrow()
     row_a_f   = _mkrow()
     row_knn   = _mkrow()
-    row_rr    = _mkrow()
+    row_rra    = _mkrow()
+    row_rrcf    = _mkrow()
 
     cifar10_block = comp_cfgs.get("CIFAR10", OrderedDict())
 
@@ -1545,7 +1547,7 @@ def generate_regular_symmetric_comp_40pct_table(
                 continue
 
             # Clean up extra keys and extract alpha_KNN
-            metrics.pop("FT HO Clean", None)
+            
             metrics.pop("alpha_s4", None)
             alpha_knn = metrics.pop("alpha_KNN", None)
             try:
@@ -1564,10 +1566,12 @@ def generate_regular_symmetric_comp_40pct_table(
             # Format helpers
             mix_fmt   = _fmt_metrics(baseline["mix"])
             clean_fmt = _fmt_metrics(baseline["clean"])
+            cf_fmt = _fmt_metrics(baseline["cf"])
             rnd_fmt   = _fmt_metrics(baseline["rnd"])
 
             row_mix[col_idx]   = mix_fmt.get("utility", "-")
             row_clean[col_idx] = clean_fmt.get("utility", "-")
+            row_cf[col_idx] = cf_fmt.get("utility", "-")
             row_tau_r[col_idx] = rnd_fmt.get("utility", "-")
 
             if alpha_a in alpha_grid:
@@ -1576,24 +1580,26 @@ def generate_regular_symmetric_comp_40pct_table(
                 row_a_f[col_idx] = _fmt_metrics(alpha_grid[alpha_f]).get("utility", "-")
 
             # α̂*_knn UT + recovery RR
-            rr_val: Optional[float] = None
+            rr_a_val: Optional[float] = None
+            rr_cf_val: Optional[float] = None
             if alpha_knn == 0.0:
                 # Treat α=0 as Mix
                 row_knn[col_idx] = mix_fmt.get("utility", "-")
-                rr_val = 0.0
-            elif alpha_knn is not None and alpha_knn in alpha_grid:
-                knn_ut = alpha_grid[alpha_knn].get("utility", None)
-                row_knn[col_idx] = _fmt_metrics(alpha_grid[alpha_knn]).get("utility", "-")
-                mix_ut   = baseline["mix"].get("utility", None)
-                clean_ut = baseline["clean"].get("utility", None)
-                if knn_ut is not None and mix_ut is not None and clean_ut is not None:
-                    denom = (clean_ut - mix_ut)
-                    if abs(denom) > 1e-12:
-                        rr_val = (knn_ut - mix_ut) / denom
+                rr_a_val = 0.0
             else:
-                row_knn[col_idx] = "-"
+                knn_ut = alpha_grid[alpha_knn].get("utility")
+                cf_ut = baseline["cf"].get("utility")
+                row_knn[col_idx] = _fmt_metrics(alpha_grid[alpha_knn]).get("utility", "-")
+                mix_ut   = baseline["mix"].get("utility")
+                clean_ut = baseline["clean"].get("utility")
+                denom = (clean_ut - mix_ut)
+                if abs(denom) > 1e-12:
+                    rr_a_val = (knn_ut - mix_ut) / denom
+                    rr_cf_val = (cf_ut - mix_ut) / denom
 
-            row_rr[col_idx] = _fmt_perct(rr_val)
+
+            row_rra[col_idx] = _fmt_perct(rr_a_val)
+            row_rrcf[col_idx] = _fmt_perct(rr_cf_val)
 
     # --------- render LaTeX (matches your provided skeleton) ---------
     def row_line(label: str, values: List[str]) -> str:
@@ -1616,12 +1622,15 @@ Model  & RND & INv1 & RND & INv1 & RND & INv1 & RND & INv1 \\
         row_line(r"$\theta_{\text{clean}}$", row_clean),
         r"\cmidrule(lr){1-9}",
         row_line(r"$\tau_{r}$",              row_tau_r),
+        row_line(r"$\theta_{\text{CF}}$", row_cf),
         r"\cmidrule(lr){1-9}",
         row_line(r"$\alpha^\ast_a$",         row_a_a),
         row_line(r"$\alpha^\ast_f$",         row_a_f),
         r"\cmidrule(lr){1-9}",
         row_line(r"$\hat{\alpha}^\ast_{\text{knn}}$", row_knn),
-        row_line(r"RR", row_rr),
+        r"\bottomrule",
+        row_line(r"\rowcolor{gray!25} RR($\theta_{\text{CF}}$)", row_rrcf),
+        row_line(r"\rowcolor{gray!25} RR($\hat{\alpha}^\ast_{\text{knn}}$)", row_rra),
     ]
 
     footer = r"""
@@ -1948,19 +1957,21 @@ if __name__ == "__main__":
     
     
     regular_symmetric_comp_cfgs = OrderedDict()
-    # regular_symmetric_comp_cfgs['CIFAR10'] = OrderedDict({
-    #     'resnet18': (regular_models_cfgs['CIFAR10']['scratch']['ho_2']['symmetric']['resnet18'], regular_models_cfgs['CIFAR10']['pretrained']['ho_2']['symmetric']['resnet18']),
-    #     'resnet34': (regular_models_cfgs['CIFAR10']['scratch']['ho_2']['symmetric']['resnet34'], regular_models_cfgs['CIFAR10']['pretrained']['ho_2']['symmetric']['resnet34']),
-    #     'resnet50': (regular_models_cfgs['CIFAR10']['scratch']['ho_2']['symmetric']['resnet50'], regular_models_cfgs['CIFAR10']['pretrained']['ho_2']['symmetric']['resnet50']),
-    #     'resnet101': (regular_models_cfgs['CIFAR10']['scratch']['ho_2']['symmetric']['resnet101'], regular_models_cfgs['CIFAR10']['pretrained']['ho_2']['symmetric']['resnet101'])
-    # })
-
+    # for table
     regular_symmetric_comp_cfgs['CIFAR10'] = OrderedDict({
         'resnet18': (regular_models_cfgs['CIFAR10']['scratch']['ho_2']['symmetric']['resnet18'], regular_models_cfgs['CIFAR10']['pretrained']['ho_2']['symmetric']['resnet18']),
         'resnet34': (regular_models_cfgs['CIFAR10']['scratch']['ho_2']['symmetric']['resnet34'], regular_models_cfgs['CIFAR10']['pretrained']['ho_2']['symmetric']['resnet34']),
-        'resnet50': (regular_models_cfgs['CIFAR10']['scratch']['ho_2']['symmetric']['resnet50'], regular_models_cfgs['CIFAR10']['pretrained']['ho_2']['symmetric']['resnet50'], regular_models_cfgs['CIFAR10']['pretrained']['ho_2']['symmetric']['resnet50v2']),
+        'resnet50': (regular_models_cfgs['CIFAR10']['scratch']['ho_2']['symmetric']['resnet50'], regular_models_cfgs['CIFAR10']['pretrained']['ho_2']['symmetric']['resnet50']),
         'resnet101': (regular_models_cfgs['CIFAR10']['scratch']['ho_2']['symmetric']['resnet101'], regular_models_cfgs['CIFAR10']['pretrained']['ho_2']['symmetric']['resnet101'])
     })
+
+    # for plot
+    # regular_symmetric_comp_cfgs['CIFAR10'] = OrderedDict({
+    #     'resnet18': (regular_models_cfgs['CIFAR10']['scratch']['ho_2']['symmetric']['resnet18'], regular_models_cfgs['CIFAR10']['pretrained']['ho_2']['symmetric']['resnet18']),
+    #     'resnet34': (regular_models_cfgs['CIFAR10']['scratch']['ho_2']['symmetric']['resnet34'], regular_models_cfgs['CIFAR10']['pretrained']['ho_2']['symmetric']['resnet34']),
+    #     'resnet50': (regular_models_cfgs['CIFAR10']['scratch']['ho_2']['symmetric']['resnet50'], regular_models_cfgs['CIFAR10']['pretrained']['ho_2']['symmetric']['resnet50'], regular_models_cfgs['CIFAR10']['pretrained']['ho_2']['symmetric']['resnet50v2']),
+    #     'resnet101': (regular_models_cfgs['CIFAR10']['scratch']['ho_2']['symmetric']['resnet101'], regular_models_cfgs['CIFAR10']['pretrained']['ho_2']['symmetric']['resnet101'])
+    # })
     
     
     #################################################################################
@@ -2040,13 +2051,13 @@ if __name__ == "__main__":
     #     outputfile_path=Path("./visulaization_dir/dino_symmetric_noise_table.txt")
     # )
     
-    generate_clip_noise_utlity_table(
-        dino_noise_results_dir,
-        dino_asymmetric_cfgs,
-        dataset_order=['CIFAR10', 'CIFAR100'],
-        noise_levels=[40],
-        outputfile_path=Path("./visulaization_dir/dino_asymmetric_noise_table.txt")
-    )
+    # generate_clip_noise_utlity_table(
+    #     dino_noise_results_dir,
+    #     dino_asymmetric_cfgs,
+    #     dataset_order=['CIFAR10', 'CIFAR100'],
+    #     noise_levels=[40],
+    #     outputfile_path=Path("./visulaization_dir/dino_asymmetric_noise_table.txt")
+    # )
     # generate_clip_poison_table(
     #     dino_poison_results_dir,
     #     dino_poison_cfgs,
@@ -2092,11 +2103,11 @@ if __name__ == "__main__":
     #     outputfile_path=Path("./visulaization_dir/regular_poison_trigger_table.txt")
     # )
     
-    # generate_regular_symmetric_comp_40pct_table(
-    #     regular_noise_results_dir,
-    #     regular_symmetric_comp_cfgs,
-    #     outputfile_path= Path("./visulaization_dir/regular_symmetric_noise_comp_pt_rnd_table.txt")
-    # )
+    generate_regular_symmetric_comp_40pct_table(
+        regular_noise_results_dir,
+        regular_symmetric_comp_cfgs,
+        outputfile_path= Path("./visulaization_dir/regular_symmetric_noise_comp_pt_rnd_table.txt")
+    )
     
     # plot_recovery_bars_40pct(
     #     regular_noise_results_dir,
