@@ -400,52 +400,55 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             
      
 
-    # if 'alpha_KNN' not in results_dict:
-    if dataset.dataset_name == 'MNIST':
-        if strategy['noise']['finetuning'][0]['noise_type'] == 'asymmetric':
-            coverage_rate = 0.5
-        else:
-            coverage_rate = 1.0
-    elif dataset.dataset_name == 'CIFAR10':
-        if strategy['noise']['finetuning'][0]['noise_type'] == 'asymmetric':
-            coverage_rate = 0.5
-        else:
-            coverage_rate = 1.0
-    elif dataset.dataset_name == 'CIFAR100':
-        coverage_rate = 0.95
-    num_clusters = dataset_clean.get_num_classes()
-    
-    alpha_est_support_dl = dataset_clean.get_heldout_dataloader()
-    alpha_est_support_size = len(dataset_clean.get_heldoutset())
-    ideal_cluster_balance = alpha_est_support_size / num_clusters
-    num_neighbor_agr_check = math.floor(ideal_cluster_balance / 2)
-    
-    print(num_neighbor_agr_check, num_clusters, coverage_rate)
-    from estimate_alpha import select_alpha_by_knn_self_agreement
-    alpha_kNN = select_alpha_by_knn_self_agreement(
-        model=model,
-        feature_extractor=model.get_feature_extractor(),
-        classifier=model.get_classifier_head(),
-        state0=mix_weights,
-        taskvector=task_vectors['Average'],
-        unlabeled_loader=alpha_est_support_dl,
-        num_clusters=num_clusters,
-        k=num_neighbor_agr_check,
-        coverage_rate=coverage_rate,
-        gamma_nmi=0.2,
-        alphas=np.round(np.linspace(-0.0, -2.0, 81), 3),
-        device=gpu
-    )
+    if 'alpha_KNN' not in results_dict:
+        if dataset.dataset_name == 'MNIST':
+            if strategy['noise']['finetuning'][0]['noise_type'] == 'asymmetric':
+                coverage_rate = 0.5
+            else:
+                coverage_rate = 1.0
+        elif dataset.dataset_name == 'CIFAR10':
+            if strategy['noise']['finetuning'][0]['noise_type'] == 'asymmetric':
+                coverage_rate = 0.5
+            else:
+                coverage_rate = 1.0
+        elif dataset.dataset_name == 'CIFAR100':
+            coverage_rate = 0.95
+        num_clusters = dataset_clean.get_num_classes()
+        
+        alpha_est_support_dl = dataset_clean.get_heldout_dataloader()
+        alpha_est_support_size = len(dataset_clean.get_heldoutset())
+        ideal_cluster_balance = alpha_est_support_size / num_clusters
+        num_neighbor_agr_check = math.floor(ideal_cluster_balance / 2)
+        
+        print(num_neighbor_agr_check, num_clusters, coverage_rate)
+        from estimate_alpha import select_alpha_by_knn_self_agreement
+        alpha_kNN = select_alpha_by_knn_self_agreement(
+            model=model,
+            feature_extractor=model.get_feature_extractor(),
+            classifier=model.get_classifier_head(),
+            state0=mix_weights,
+            taskvector=task_vectors['Average'],
+            unlabeled_loader=alpha_est_support_dl,
+            num_clusters=num_clusters,
+            k=num_neighbor_agr_check,
+            coverage_rate=coverage_rate,
+            gamma_nmi=0.2,
+            alphas=np.round(np.linspace(-0.0, -2.0, 81), 3),
+            device=gpu
+        )
+        results_dict['alpha_KNN'] = alpha_kNN
+        with open(results_dir / 'metrics.json' , 'w') as json_file:
+            json.dump(results_dict, json_file, indent=4)
 
-    print(alpha_kNN)
-    # results_dict['alpha_KNN'] = alpha_kNN
-    # with open(results_dir / 'metrics.json' , 'w') as json_file:
-    #     json.dump(results_dict, json_file, indent=4)
-    model.load_state_dict(mix_weights, strict=False)
-    task_vectors['Average'].apply_to(model, scaling_coef=alpha_kNN, strict=False)
-    tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-    print(tv_test_results)
-    
+        # print(alpha_kNN)
+        # # results_dict['alpha_KNN'] = alpha_kNN
+        # # with open(results_dir / 'metrics.json' , 'w') as json_file:
+        # #     json.dump(results_dict, json_file, indent=4)
+        # model.load_state_dict(mix_weights, strict=False)
+        # task_vectors['Average'].apply_to(model, scaling_coef=alpha_kNN, strict=False)
+        # tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+        # print(tv_test_results)
+        
 
 
     if 'Random Vector' not in results_dict:
