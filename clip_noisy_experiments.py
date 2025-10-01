@@ -746,7 +746,6 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             alphas=np.round(np.linspace(-0.0, -4.0, 81), 2),
             device=gpu
         )
-        print(alpha_kNN)
         
         results_dict['alpha_KNN'] = alpha_kNN
         with open(results_dir / 'metrics.json' , 'w') as json_file:
@@ -767,21 +766,18 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     exit()
     
-    figs_alpha, fig_gold = embedding_space_analysis.pca_evolution_plot(
-        model=model,
-        base_weights=mix_weights,
-        gold_weights=None,
-        dataset=dataset_clean,
-        task_vector=task_vectors['Average'],
-        split='Test',
-        alpha_range=np.round(np.linspace(0.0, results_dict['alpha_KNN'], 4) / 0.05) * 0.05,
-        device=gpu,
-        saving_dir=results_dirs['embed_plots']
-    )
+    # figs_alpha, fig_gold = embedding_space_analysis.pca_evolution_plot(
+    #     model=model,
+    #     base_weights=mix_weights,
+    #     gold_weights=None,
+    #     dataset=dataset_clean,
+    #     task_vector=task_vectors['Average'],
+    #     split='Test',
+    #     alpha_range=np.round(np.linspace(0.0, results_dict['alpha_KNN'], 4) / 0.05) * 0.05,
+    #     device=gpu,
+    #     saving_dir=results_dirs['embed_plots']
+    # )
     
-    exit()
-    with open(results_dir / "metrics_seed.json", "r") as json_file:
-        results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
 
 
     # Weight Space Disentanglemet Analysis
@@ -819,9 +815,9 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         'Apha Min Test Loss:', alpha_min_test_loss,
         'Alpha Forget Threshold:', alpha_forgetting_thrsh
         )
-    mix_vector = TaskVector(pt_weights, mix_weights)
+
     noise_vector = task_vectors['Seed 10'] * alpha_forgetting_thrsh * -1 # alpha is negative
-    clean_vector = mix_vector - noise_vector
+    clean_vector = task_vectors['Mix'] - noise_vector
     
 
     

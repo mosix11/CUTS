@@ -50,6 +50,7 @@ from WD_analysis import apply_WD_analysis
 def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     cfg['trainer']['pretraining']['comet_api_key'] = os.getenv("COMET_API_KEY")
     cfg['trainer']['finetuning']['comet_api_key'] = os.getenv("COMET_API_KEY")
+    cfg['trainer']['finetuning_cf']['comet_api_key'] = os.getenv("COMET_API_KEY")
     
     augmentations = None
     if cfg['dataset']['name'] == 'cifar10':
@@ -165,7 +166,7 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
         
         trainer = StandardTrainer(
             outputs_dir=outputs_dir,
-            **cfg['trainer']['pretraining'],
+            **cfg['trainer']['finetuning_cf'],
             exp_name=experiment_name,
             exp_tags=None,
         )
@@ -267,15 +268,11 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         map_location='cpu'
     )
     
+    ft_ho_clean_weights = torch.load(
+        outputs_dir.joinpath(f"finetune_clean/weights/ft_weights.pth"),
+        map_location='cpu'
+    )
 
-    
-
-    # ft_gradient_ascent_weights = OrderedDict(
-    # (k, v) for k, v in torch.load(
-    #     outputs_dir.joinpath(f"gradient_ascent/weights/ft_weights.pth"),
-    #     map_location='cpu'
-    # ).items() if "classifier_heads" not in k)
-    
     poison_weights = OrderedDict()
     
     for poison_tv in cfg['strategy']['poison']['finetuning']:
@@ -299,7 +296,8 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         task_vectors['Average'] = TaskVector.mean(task_vectors)
         
 
-    
+    task_vectors['Clean'] = TaskVector(mix_weights, ft_ho_clean_weights)
+    task_vectors['Mix'] = TaskVector(pt_weights, mix_weights)
     task_vectors['Random Vector'] = task_vectors['Average'].generate_random_vector_with_same_layer_norms(seed=11)
 
 
@@ -347,6 +345,19 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
 
     #     results_dict[alpha] = {'test_results': tv_test_results, 'ho_results': tv_ho_resutls, 'train_results': tv_train_results}
 
+    
+    results_dict = OrderedDict()
+    with open(results_dir / "metrics.json", "r") as json_file:
+        results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
+    model.load_state_dict(ft_ho_clean_weights, strict=False)
+    ft_ho_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+    ft_ho_ho_results, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
+    ft_ho_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+    results_dict['FT HO Clean'] = {'test_results': ft_ho_test_results, 'ho_results': ft_ho_ho_results, 'train_results': ft_ho_train_results}
+    with open(results_dir / 'metrics.json' , 'w') as json_file:
+        json.dump(results_dict, json_file, indent=4)
+    exit()
+    
     results_dict = OrderedDict()
     if not results_dir.joinpath('metrics.json').exists():
 

@@ -112,9 +112,9 @@ def _collect_baseline_metrics(metrics: Dict[str, Any]) -> Dict[float, Dict]:
     
     
     baseline_metrics['cf']['utility'] = _get_test_acc(metrics['FT HO Clean'])
-    # baseline_metrics['cf']['forget_rate'] = _get_train_noisy_forget_rate(metrics['FT HO Clean'])
-    # baseline_metrics['cf']['destruction_rate'] = _get_train_clean_destruction_rate(metrics['FT HO Clean'])
-    # baseline_metrics['cf']['healing_rate'] = _get_train_noisy_healing_acc(metrics['FT HO Clean'])
+    baseline_metrics['cf']['forget_rate'] = _get_train_noisy_forget_rate(metrics['FT HO Clean'])
+    baseline_metrics['cf']['destruction_rate'] = _get_train_clean_destruction_rate(metrics['FT HO Clean'])
+    baseline_metrics['cf']['healing_rate'] = _get_train_noisy_healing_acc(metrics['FT HO Clean'])
     if 'ho_results' in metrics['FT HO Clean']:
         ho_utility = _get_ho_acc(metrics['FT HO Clean'])
         baseline_metrics['cf']['ho_utility'] = ho_utility
@@ -170,6 +170,15 @@ def _get_alpha_max_healing(alpha_metrics: Dict[float, Dict]) -> float:
     return best_alpha     
 
 
+def _get_recovery_rate(util, baseline_metrics:OrderedDict):
+    nom_r = util - baseline_metrics['mix']['utility']
+    if nom_r < 0:
+        recovery = 'Fail'
+    else:
+        recovery = nom_r/(baseline_metrics['clean']['utility'] - baseline_metrics['mix']['utility'])
+        recovery = _fmt_perct(recovery)
+    return recovery
+
 # format as percentage with 1 decimal place
 def _fmt_perct(x: Optional[float]) -> str:
     return "-" if x is None else f"{100.0 * round(x, 3):.1f}"
@@ -182,9 +191,9 @@ def generate_clip_noise_utlity_table(
     cfgmap:OrderedDict,
     dataset_order:List[str] = ["MNIST", "CIFAR10", "CIFAR100"],
     dataset_forget_trsh:Dict[str, float] ={
-        'MNIST': 0.9,
-        'CIFAR10': 0.9,
-        'CIFAR100': 0.9
+        'MNIST': 0.99,
+        'CIFAR10': 0.99,
+        'CIFAR100': 0.99
     },
     noise_levels:List[int] = [10, 20, 40, 60, 80],
     outputfile_path:Path = Path("./visulaization_dir/clip_symmetric_noise_table.txt")
@@ -220,11 +229,9 @@ def generate_clip_noise_utlity_table(
             
             alpha_star_utility = _get_alpha_star_utility(alpha_metrics)
             alpha_star_forgetting = _get_alpha_star_forgetting(alpha_metrics, dataset_forget_trsh[ds])
-            recovery_kNN = (alpha_metrics[alpha_KNN]['utility'] - baseline_metrics['mix']['utility'])/(baseline_metrics['clean']['utility'] - baseline_metrics['mix']['utility'])
-            recovery_kNN = _fmt_perct(recovery_kNN)
+            recovery_kNN = _get_recovery_rate(alpha_metrics[alpha_KNN]['utility'])
             
-            recovery_cf = (baseline_metrics['cf']['utility'] - baseline_metrics['mix']['utility'])/(baseline_metrics['clean']['utility'] - baseline_metrics['mix']['utility'])
-            recovery_cf = _fmt_perct(recovery_cf)
+            recovery_cf = _get_recovery_rate(baseline_metrics['cf']['utility'])
             
             mix_metrics  = _fmt_metrics(baseline_metrics['mix'])
             clean_metrics = _fmt_metrics(baseline_metrics['clean'])
@@ -291,7 +298,7 @@ def generate_clip_noise_fr_dr_hr_table(
     cfgmap:OrderedDict,
     forget_threshold: float = 0.89,
     noise_levels:List[int] = [10, 20, 40, 60, 80],
-    outputfile_path:Path = Path("./visulaization_dir/clip_asymmetric_noise_fr_dr_hr_table.txt")  
+    outputfile_path:Path = None,
 ):
     """
     Build a CIFAR-10 table showing, for each noise level, the metrics at three alpha choices:
@@ -318,7 +325,6 @@ def generate_clip_noise_fr_dr_hr_table(
             continue
 
         # Clean up non-alpha keys that appear in files
-        metrics.pop("FT HO Clean", None)
         metrics.pop("alpha_s4", None)
         alpha_KNN = metrics.pop("alpha_KNN", None)
         if alpha_KNN is not None:
@@ -352,15 +358,9 @@ def generate_clip_noise_fr_dr_hr_table(
             dr = a_metrics.get("destruction_rate", None)
 
             # Recovery rate relative to mix→clean gap
-            mix_ut = baseline_metrics["mix"]["utility"]
-            clean_ut = baseline_metrics["clean"]["utility"]
-            denom = (clean_ut - mix_ut) if (mix_ut is not None and clean_ut is not None) else None
-            rr = None
-            if ut is not None and denom is not None and abs(denom) > 1e-12:
-                rr = (ut - mix_ut) / denom
-
+            rr = _get_recovery_rate(ut, baseline_metrics)
             ut_vals[col_idx] = _fmt_perct(ut)
-            rr_vals[col_idx] = _fmt_perct(rr)
+            rr_vals[col_idx] = rr
             fr_vals[col_idx] = _fmt_perct(fr)
             hr_vals[col_idx] = _fmt_perct(hr)
             dr_vals[col_idx] = _fmt_perct(dr)
@@ -368,7 +368,7 @@ def generate_clip_noise_fr_dr_hr_table(
     # ---------- render LaTeX ----------
     def row_line(label: str, values: list[str]) -> str:
         return f"{label} & " + " & ".join(values) + r" \\"
-
+    print(rr_vals)
     header = r"""\begin{table}[ht]
 \centering
 \label{tab:}
@@ -757,6 +757,8 @@ def generate_clip_IC_utlity_table(
     row_alpha_star_h: Dict[str, List[str]]  = {ds: ["-"] * len(corruption_classes[ds]) for ds in dataset_order}
     row_alpha_IC: Dict[str, List['str']] = {ds: ["-"] * len(corruption_classes[ds]) for ds in dataset_order}
     row_random_vec: Dict[str, List['str']] = {ds: ["-"] * len(corruption_classes[ds]) for ds in dataset_order}
+    row_cf: Dict[str, List['str']] = {ds: ["-"] * len(corruption_classes[ds]) for ds in dataset_order}
+    row_recovery_cf: Dict[str, List['str']] = {ds: ["-"] * len(corruption_classes[ds]) for ds in dataset_order}
     row_recovery_IC: Dict[str, List['str']] = {ds: ["-"] * len(corruption_classes[ds]) for ds in dataset_order}
     
     # ---------- fill data ----------
@@ -768,7 +770,7 @@ def generate_clip_IC_utlity_table(
 
             metrics = _load_metrics(results_dir/config)
             
-            metrics.pop('FT HO Clean')
+            
             alpha_IC = metrics.pop('alpha_IC')
             
         
@@ -778,13 +780,15 @@ def generate_clip_IC_utlity_table(
             alpha_star_healing = _get_alpha_max_healing(alpha_metrics)
             
             if alpha_IC == 0:
-                recovery_IC = 0.0
-            else:
-                recovery_IC = (alpha_metrics[alpha_IC]['utility'] - baseline_metrics['mix']['utility'])/(baseline_metrics['clean']['utility'] - baseline_metrics['mix']['utility'])
-            recovery_IC = _fmt_perct(recovery_IC)
+                recovery_IC = "0.0"
+            else: 
+                recovery_IC = _get_recovery_rate(alpha_metrics[alpha_IC]['utility'], baseline_metrics)
+    
+            recovery_cf = _get_recovery_rate(baseline_metrics['cf']['utility'], baseline_metrics)
             
             mix_metrics  = _fmt_metrics(baseline_metrics['mix'])
             clean_metrics = _fmt_metrics(baseline_metrics['clean'])
+            cf_metrics = _fmt_metrics(baseline_metrics['cf'])
             rnd_metrics = _fmt_metrics(baseline_metrics['rnd'])
             
             if alpha_IC == 0:
@@ -800,6 +804,8 @@ def generate_clip_IC_utlity_table(
             row_alpha_IC[ds][j] = alpha_IC_metrics['utility']
             row_random_vec[ds][j] = rnd_metrics['utility']
             row_recovery_IC[ds][j] = recovery_IC
+            row_cf[ds][j] = cf_metrics['utility']
+            row_recovery_cf[ds][j] = recovery_cf
     
             
 
@@ -829,12 +835,15 @@ Model & 10\% & 20\% & 40\% & 60\% & 80\% & 10\% & 20\% & 40\% & 60\% & 80\% & 10
         row_line(r"$\theta_{\text{clean}}$", row_theta_clean),
         r"\cmidrule(lr){1-16}",
         row_line(r"$\tau_{r}$", row_random_vec),
+        row_line(r"$\theta_{\text{CF}}$", row_cf),
         r"\cmidrule(lr){1-16}",
         row_line(r"$\alpha^\ast_a$", row_alpha_star_u),
         row_line(r"$\alpha^\ast_h$", row_alpha_star_h),
         r"\cmidrule(lr){1-16}",
         row_line(r"$\hat{\alpha}^\ast_{\text{IC}}$", row_alpha_IC),
-        row_line(r"recovery", row_recovery_IC),
+        r"\bottomrule",
+        row_line(r"\rowcolor{gray!25} RR($\theta_{\text{CF}}$)", row_recovery_cf),
+        row_line(r"\rowcolor{gray!25} RR($\hat{\alpha}^\ast_{\text{IC}}$)", row_recovery_IC),
         
     ]
 
@@ -886,7 +895,6 @@ def generate_clip_IC_fr_dr_hr_table(
             continue
 
         # Clean up non-alpha keys that appear in files
-        metrics.pop("FT HO Clean", None)
         alpha_IC = metrics.pop("alpha_IC", None)
 
 
@@ -914,15 +922,10 @@ def generate_clip_IC_fr_dr_hr_table(
             dr = a_metrics.get("destruction_rate", None)
 
             # Recovery rate relative to mix→clean gap
-            mix_ut = baseline_metrics["mix"]["utility"]
-            clean_ut = baseline_metrics["clean"]["utility"]
-            denom = (clean_ut - mix_ut) if (mix_ut is not None and clean_ut is not None) else None
-            rr = 0.0
-            if ut is not None and denom is not None and abs(denom) > 1e-12 and alpha_IC != 0:
-                rr = (ut - mix_ut) / denom
+            rr = _get_recovery_rate(ut, baseline_metrics)
 
             ut_vals[col_idx] = _fmt_perct(ut)
-            rr_vals[col_idx] = _fmt_perct(rr)
+            rr_vals[col_idx] = rr
             fr_vals[col_idx] = _fmt_perct(fr)
             hr_vals[col_idx] = _fmt_perct(hr)
             dr_vals[col_idx] = _fmt_perct(dr)
@@ -992,6 +995,7 @@ def generate_clip_poison_table(
     row_theta_mix   = {ds: ["-"] * 4 for ds in dataset_order}
     row_theta_clean = {ds: ["-"] * 4 for ds in dataset_order}
     row_tau_r       = {ds: ["-"] * 4 for ds in dataset_order}
+    row_cf          = {ds: ["-"] * 4 for ds in dataset_order}
     row_alpha_a     = {ds: ["-"] * 4 for ds in dataset_order}
     row_alpha_f     = {ds: ["-"] * 4 for ds in dataset_order}
     row_alpha_psn   = {ds: ["-"] * 4 for ds in dataset_order}
@@ -1016,7 +1020,6 @@ def generate_clip_poison_table(
             continue
 
         # Clean out non-alpha extras; pull alpha_psn
-        metrics.pop("FT HO Clean", None)
         metrics.pop("alpha_s4", None)
         alpha_psn = float(metrics.pop("alpha_psn", None))
 
@@ -1030,6 +1033,7 @@ def generate_clip_poison_table(
         row_theta_mix[ds]   = _cells_fmt(baseline["mix"])
         row_theta_clean[ds] = _cells_fmt(baseline["clean"])
         row_tau_r[ds]       = _cells_fmt(baseline["rnd"])
+        row_cf[ds]          = _cells_fmt(baseline["cf"])
 
         # Resolve alpha*_a and alpha*_f
         alpha_a = _get_alpha_star_utility(alpha_grid)
@@ -1074,6 +1078,7 @@ Model & UT $\uparrow$  & FR $\uparrow$ & HR $\uparrow$ & DR $\downarrow$ & UT $\
         row_line(r"$\theta_{\text{clean}}$", row_theta_clean),
         r"\cmidrule(lr){1-13}",
         row_line(r"$\tau_{r}$",              row_tau_r),
+        row_line(r"$\theta_{\text{CF}}$",     row_cf),
         r"\cmidrule(lr){1-13}",
         row_line(r"$\alpha^\ast_a$",         row_alpha_a),
         row_line(r"$\alpha^\ast_f$",         row_alpha_f),
@@ -1578,24 +1583,21 @@ def generate_regular_symmetric_comp_40pct_table(
                 row_a_a[col_idx] = _fmt_metrics(alpha_grid[alpha_a]).get("utility", "-")
             if alpha_f in alpha_grid:
                 row_a_f[col_idx] = _fmt_metrics(alpha_grid[alpha_f]).get("utility", "-")
+                
+            
 
             # α̂*_knn UT + recovery RR
             rr_a_val: Optional[float] = None
             rr_cf_val: Optional[float] = None
             if alpha_knn == 0.0:
-                # Treat α=0 as Mix
                 row_knn[col_idx] = mix_fmt.get("utility", "-")
                 rr_a_val = 0.0
             else:
                 knn_ut = alpha_grid[alpha_knn].get("utility")
                 cf_ut = baseline["cf"].get("utility")
                 row_knn[col_idx] = _fmt_metrics(alpha_grid[alpha_knn]).get("utility", "-")
-                mix_ut   = baseline["mix"].get("utility")
-                clean_ut = baseline["clean"].get("utility")
-                denom = (clean_ut - mix_ut)
-                if abs(denom) > 1e-12:
-                    rr_a_val = (knn_ut - mix_ut) / denom
-                    rr_cf_val = (cf_ut - mix_ut) / denom
+                rr_a_val = _get_recovery_rate(knn_ut, baseline)
+                rr_cf_val = _get_recovery_rate(cf_ut, baseline)
 
 
             row_rra[col_idx] = _fmt_perct(rr_a_val)
@@ -2007,7 +2009,8 @@ if __name__ == "__main__":
     # generate_clip_noise_fr_dr_hr_table(
     #     clip_noise_results_dir,
     #     clip_asymmetric_cfgs['CIFAR10'],
-    #     noise_levels=[20, 40]
+    #     noise_levels=[20, 40],
+    #     outputfile_path=Path('visulaization_dir/clip_asymmetric_noise_fr_dr_hr_table.txt')
     #     )
     
     # plot_alpha_interplay_dual(
@@ -2096,18 +2099,18 @@ if __name__ == "__main__":
     #     outputfile_path= Path("./visulaization_dir/regular_asymmetric_noise_table.txt")
     # )
 
-    # generate_clip_poison_table(
-    #     regular_poison_results_dir,
-    #     regular_poison_cfgs,
-    #     dataset_order= ["MNIST", "CIFAR10", "CIFAR100"],
-    #     outputfile_path=Path("./visulaization_dir/regular_poison_trigger_table.txt")
-    # )
-    
-    generate_regular_symmetric_comp_40pct_table(
-        regular_noise_results_dir,
-        regular_symmetric_comp_cfgs,
-        outputfile_path= Path("./visulaization_dir/regular_symmetric_noise_comp_pt_rnd_table.txt")
+    generate_clip_poison_table(
+        regular_poison_results_dir,
+        regular_poison_cfgs,
+        dataset_order= ["MNIST", "CIFAR10", "CIFAR100"],
+        outputfile_path=Path("./visulaization_dir/regular_poison_trigger_table.txt")
     )
+    
+    # generate_regular_symmetric_comp_40pct_table(
+    #     regular_noise_results_dir,
+    #     regular_symmetric_comp_cfgs,
+    #     outputfile_path= Path("./visulaization_dir/regular_symmetric_noise_comp_pt_rnd_table.txt")
+    # )
     
     # plot_recovery_bars_40pct(
     #     regular_noise_results_dir,

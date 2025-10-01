@@ -488,17 +488,17 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     )
 
 
-    results_dict = OrderedDict()
-    with open(results_dir / "metrics.json", "r") as json_file:
-        results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
-    model.load_state_dict(ft_ho_clean_weights, strict=False)
-    ft_ho_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-    ft_ho_ho_results, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
-    ft_ho_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
-    results_dict['FT HO Clean'] = {'test_results': ft_ho_test_results, 'ho_results': ft_ho_ho_results, 'train_results': ft_ho_train_results}
-    with open(results_dir / 'metrics.json' , 'w') as json_file:
-        json.dump(results_dict, json_file, indent=4)
-    exit()
+    # results_dict = OrderedDict()
+    # with open(results_dir / "metrics.json", "r") as json_file:
+    #     results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
+    # model.load_state_dict(ft_ho_clean_weights, strict=False)
+    # ft_ho_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+    # ft_ho_ho_results, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
+    # ft_ho_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+    # results_dict['FT HO Clean'] = {'test_results': ft_ho_test_results, 'ho_results': ft_ho_ho_results, 'train_results': ft_ho_train_results}
+    # with open(results_dir / 'metrics.json' , 'w') as json_file:
+    #     json.dump(results_dict, json_file, indent=4)
+    # exit()
     
     results_dict = OrderedDict()
     if not results_dir.joinpath('metrics.json').exists():
@@ -574,71 +574,57 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     
     
-    tmp_dataset = copy.deepcopy(dataset_clean)
-    tmp_dataset.inject_poison(**poison_tv_cfg)
-    # Exclude clean samples from target class
-    # clean_ho_ds, poinsoned_ho_ds = dataset.get_clean_noisy_subsets('Heldout')
-    # dataset.set_heldoutset(poinsoned_ho_ds)
-    ho_set = tmp_dataset.get_heldoutset()
-    tmp_dataset.switch_labels_to_clean(ho_set)
-    tmp_dataset.set_heldoutset(ho_set)
-    figs_alpha, fig_gold = embedding_space_analysis.pca_evolution_plot(
-        model=model,
-        base_weights=mix_weights,
-        gold_weights=gold_weights,
-        dataset=tmp_dataset,
-        task_vector=task_vectors['Average'],
-        split='Heldout',
-        alpha_range=np.round(np.linspace(0.0, results_dict['alpha_psn'], 4) / 0.05) * 0.05,
-        device=gpu,
-        saving_dir=results_dirs['embed_plots']
-    )        
+    # tmp_dataset = copy.deepcopy(dataset_clean)
+    # tmp_dataset.inject_poison(**poison_tv_cfg)
+    # # Exclude clean samples from target class
+    # # clean_ho_ds, poinsoned_ho_ds = dataset.get_clean_noisy_subsets('Heldout')
+    # # dataset.set_heldoutset(poinsoned_ho_ds)
+    # ho_set = tmp_dataset.get_heldoutset()
+    # tmp_dataset.switch_labels_to_clean(ho_set)
+    # tmp_dataset.set_heldoutset(ho_set)
+    # figs_alpha, fig_gold = embedding_space_analysis.pca_evolution_plot(
+    #     model=model,
+    #     base_weights=mix_weights,
+    #     gold_weights=gold_weights,
+    #     dataset=tmp_dataset,
+    #     task_vector=task_vectors['Average'],
+    #     split='Heldout',
+    #     alpha_range=np.round(np.linspace(0.0, results_dict['alpha_psn'], 4) / 0.05) * 0.05,
+    #     device=gpu,
+    #     saving_dir=results_dirs['embed_plots']
+    # )  
     
-    exit()
-            
+    
+
     # Weight Space Disentanglemet Analysis
-    clean_train_ds, noisy_train_ds = dataset.get_clean_noisy_subsets('Train')
-    subset_size  = 2048
-    def random_subset(ds, k, seed: int):
-        k = min(k, len(ds))
-        g = torch.Generator().manual_seed(seed)
-        idx = torch.randperm(len(ds), generator=g)[:k].tolist()
-        return Subset(ds, idx)
-
-    clean_subset = random_subset(clean_train_ds, subset_size, dataset_seed)
-    noisy_subset = random_subset(noisy_train_ds, subset_size, dataset_seed + 1)
+    estimated_poison_vector =  task_vectors['Average'] * (-1 * results_dict['alpha_psn'])
+    estimated_clean_vector = task_vectors['Mix'] - estimated_poison_vector
     
-    records = []
-    for a_str, res in results_dict.items():
-        if a_str in ['Mix', 'Gold', 'FT HO Clean']: continue
-        a = float(a_str) if not isinstance(a_str, (int, float)) else a_str
-        test_acc  = res["test_results"]["ACC"]
-        test_loss = res["test_results"]["Loss"]
-        noisy_acc = res["train_results"]["noisy_set"]["ACC"]
-        records.append((a, test_acc, test_loss, noisy_acc))
-    alpha_max_test_acc = max(records, key=lambda x: x[1])[0]
-    alpha_min_test_loss = min(records, key=lambda x: x[2])[0]
-
-    forgetting_threshold = 0.10
-    alpha_forgetting_thrsh = None
-    for a, _, _, noisy_acc in sorted(records, key=lambda x: x[0], reverse=True):
-        if noisy_acc <= forgetting_threshold:
-            alpha_forgetting_thrsh = a
-            break
-        
-    print(
-        'Alpha Max Test ACC:', alpha_max_test_acc,
-        'Apha Min Test Loss:', alpha_min_test_loss,
-        'Alpha Forget Threshold:', alpha_forgetting_thrsh
-        )
-    mix_vector = TaskVector(pt_weights, mix_weights)
-    noise_vector = task_vectors['Average'] * alpha_forgetting_thrsh * -1 # alpha is negative
-    clean_vector = mix_vector - noise_vector
+    # subset_size  = 1024
+    # def random_subset(ds, k, seed: int):
+    #     k = min(k, len(ds))
+    #     g = torch.Generator().manual_seed(seed)
+    #     idx = torch.randperm(len(ds), generator=g)[:k].tolist()
+    #     return Subset(ds, idx)
     
+    
+    poisoned_support = dataset.get_heldoutset()
+    clean_support = dataset_clean.get_heldoutset()
+    non_target_indices = []
+    for smp_idx, sample in enumerate(clean_support):
+        if sample[1] != 0:
+            non_target_indices.append(smp_idx)
+    clean_support = Subset(clean_support, non_target_indices)
+    print(len(poisoned_support), len(clean_support))
+
     # model.load_state_dict(pt_weights, strict=False)
-    # clean_vector.apply_to(model, scaling_coef=1.0, strict=False)
-    # tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-    # print(tv_test_results)
+    # estimated_clean_vector.apply_to(model, scaling_coef=1.0, strict=False)
+    # ho_test_results, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
+    # print(ho_test_results)
+    # model.load_state_dict(pt_weights, strict=False)
+    # estimated_poison_vector.apply_to(model, scaling_coef=1.0, strict=False)
+    # ho_test_results, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
+    # print(ho_test_results)
     # tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
     # print(tv_train_results)
     
@@ -651,17 +637,16 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
     # print(tv_train_results)
     
-    # exit()
     
     model.load_state_dict(pt_weights, strict=False)
     wd_results = apply_WD_analysis(
         model=model,
-        taskvector1=clean_vector,
-        support_tv1=clean_subset,
-        taskvector2=noise_vector,
-        support_tv2=noisy_subset,
-        alhpa_range=(-3.0, 3.0),
-        step=0.3,
+        taskvector1=estimated_clean_vector,
+        support_tv1=clean_support,
+        taskvector2=estimated_poison_vector,
+        support_tv2=poisoned_support,
+        alhpa_range=(0.0, 2.0),
+        step=0.1,
         batch_size=512,
         device=gpu
     )
