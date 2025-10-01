@@ -598,35 +598,56 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
 
     # Weight Space Disentanglemet Analysis
     estimated_poison_vector =  task_vectors['Average'] * (-1 * results_dict['alpha_psn'])
+    # estimated_poison_vector =  task_vectors['Average'] * (0.55)
     estimated_clean_vector = task_vectors['Mix'] - estimated_poison_vector
     
-    # subset_size  = 1024
-    # def random_subset(ds, k, seed: int):
-    #     k = min(k, len(ds))
-    #     g = torch.Generator().manual_seed(seed)
-    #     idx = torch.randperm(len(ds), generator=g)[:k].tolist()
-    #     return Subset(ds, idx)
+    subset_size  = 1024
+    def random_subset(ds, k, seed: int):
+        k = min(k, len(ds))
+        g = torch.Generator().manual_seed(seed)
+        idx = torch.randperm(len(ds), generator=g)[:k].tolist()
+        return Subset(ds, idx)
     
     
     poisoned_support = dataset.get_heldoutset()
-    clean_support = dataset_clean.get_heldoutset()
-    non_target_indices = []
-    for smp_idx, sample in enumerate(clean_support):
-        if sample[1] != 0:
-            non_target_indices.append(smp_idx)
-    clean_support = Subset(clean_support, non_target_indices)
-    print(len(poisoned_support), len(clean_support))
+    # clean_support = dataset_clean.get_heldoutset()
+    # non_target_indices = []
+    # for smp_idx, sample in enumerate(clean_support):
+    #     if sample[1] != 0:
+    #         non_target_indices.append(smp_idx)
+    # clean_support = Subset(clean_support, non_target_indices)
+    # print(len(poisoned_support), len(clean_support))
+    clean_support = random_subset(dataset.get_testset(), k=subset_size, seed=dataset_seed)
+
+
+    # model.load_state_dict(pt_weights, strict=False)
+    # pt_test_results, _, _= evaluate_model(model, dataset.get_test_dataloader(), gpu)
+    # print(pt_test_results)
 
     # model.load_state_dict(pt_weights, strict=False)
     # estimated_clean_vector.apply_to(model, scaling_coef=1.0, strict=False)
-    # ho_test_results, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
-    # print(ho_test_results)
+    # clean_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+    # print(clean_test_results)
+    
     # model.load_state_dict(pt_weights, strict=False)
     # estimated_poison_vector.apply_to(model, scaling_coef=1.0, strict=False)
-    # ho_test_results, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
-    # print(ho_test_results)
-    # tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
-    # print(tv_train_results)
+    # poison_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+    # print(poison_test_results)
+    
+    # model.load_state_dict(pt_weights, strict=False)
+    # pt_ho_results, _, _= evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
+    # print(pt_ho_results)
+
+    # model.load_state_dict(pt_weights, strict=False)
+    # estimated_clean_vector.apply_to(model, scaling_coef=1.0, strict=False)
+    # clean_ho_results, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
+    # print(clean_ho_results)
+    
+    # model.load_state_dict(pt_weights, strict=False)
+    # estimated_poison_vector.apply_to(model, scaling_coef=1.0, strict=False)
+    # poison_ho_results, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
+    # print(poison_ho_results)
+    
     
     # model.load_state_dict(pt_weights, strict=False)
     # noise_vector.apply_to(model, scaling_coef=1.0, strict=False)
@@ -636,7 +657,6 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # print(tv_test_results)
     # tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
     # print(tv_train_results)
-    
     
     model.load_state_dict(pt_weights, strict=False)
     wd_results = apply_WD_analysis(
@@ -650,7 +670,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         batch_size=512,
         device=gpu
     )
-    with open(results_dir / "WD.pkl", "wb") as f:
+    with open(results_dir / "WD2.pkl", "wb") as f:
         pickle.dump(wd_results, f)
     
 

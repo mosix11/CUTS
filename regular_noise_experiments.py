@@ -75,6 +75,7 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
     base_dataset, num_classes = dataset_factory.create_dataset(cfg['dataset'], augmentations)
     base_model = model_factory.create_model(cfg['model'], num_classes)
 
+
     strategy = cfg['strategy']
     base_dataset.inject_noise(**strategy['noise']['pretraining'])
 
@@ -247,6 +248,10 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     model = model_factory.create_model(cfg['model'], num_classes)
     pt_weights = copy.deepcopy(model.state_dict())
+    
+    print(f"Sum: {torch.cat([p.flatten() for p in model.state_dict().values()]).sum().item():.4f}, Average: {torch.cat([p.flatten() for p in model.state_dict().values()]).mean().item():.4f}")
+
+    exit()
 
     dataset.reset_train_dl(shuffle=False)
     
@@ -346,7 +351,22 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         filepath=results_dir / 'task_similarities.png',
         show=False
     )
+    
+    
+    
+    if not results_dir.joinpath('metrics_mix_interpolation.json').exists():
+        mix_intp_metircs = OrderedDict()
+        model.load_state_dict(pt_weights, strict=False)
+        alphas = tqdm(np.round(np.linspace(0.05, 1.0, 20), 2))
+        for alpha in alphas: 
+            model.load_state_dict(pt_weights, strict=False)
+            task_vectors['Mix'].apply_to(model, scaling_coef=alpha, strict=False)
+            tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+            tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+            mix_intp_metircs[alpha] = {'test_results': tv_test_results, 'train_results': tv_train_results}
 
+        with open(results_dir / 'metrics_mix_interpolation.json' , 'w') as json_file:
+            json.dump(mix_intp_metircs, json_file, indent=4)
     
     # results_dict = OrderedDict()
     # with open(results_dir / "metrics.json", "r") as json_file:
@@ -357,7 +377,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # results_dict['FT HO Clean'] = {'test_results': ft_ho_test_results, 'train_results': ft_ho_train_results}
     # with open(results_dir / 'metrics.json' , 'w') as json_file:
     #     json.dump(results_dict, json_file, indent=4)
-    # exit()
+    exit()
     results_dict = OrderedDict()
     if not results_dir.joinpath('metrics.json').exists():
 
@@ -433,21 +453,13 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             k=num_neighbor_agr_check,
             coverage_rate=coverage_rate,
             gamma_nmi=0.2,
-            alphas=np.round(np.linspace(-0.0, -2.0, 81), 3),
+            alphas=np.round(np.linspace(-0.0, -2.0, 41), 3),
             device=gpu
         )
         results_dict['alpha_KNN'] = alpha_kNN
         with open(results_dir / 'metrics.json' , 'w') as json_file:
             json.dump(results_dict, json_file, indent=4)
 
-        # print(alpha_kNN)
-        # # results_dict['alpha_KNN'] = alpha_kNN
-        # # with open(results_dir / 'metrics.json' , 'w') as json_file:
-        # #     json.dump(results_dict, json_file, indent=4)
-        # model.load_state_dict(mix_weights, strict=False)
-        # task_vectors['Average'].apply_to(model, scaling_coef=alpha_kNN, strict=False)
-        # tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-        # print(tv_test_results)
         
 
 

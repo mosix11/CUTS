@@ -1522,7 +1522,7 @@ def generate_regular_symmetric_comp_40pct_table(
     pretty = {"resnet18":"ResNet18","resnet34":"ResNet34","resnet50":"ResNet50","resnet101":"ResNet101"}
 
     # 8 columns: (ResNet18 RND, INv1, ResNet34 RND, INv1, ...)
-    def _mkrow() -> List[str]: return ["-"] * (2 * len(models_order))
+    def _mkrow() -> List[str]: return ["-"] * (10)
     row_mix   = _mkrow()
     row_clean = _mkrow()
     row_tau_r = _mkrow()
@@ -1535,15 +1535,24 @@ def generate_regular_symmetric_comp_40pct_table(
 
     cifar10_block = comp_cfgs.get("CIFAR10", OrderedDict())
 
+    col_idx = 0
     for m_idx, model in enumerate(models_order):
         tup = cifar10_block.get(model)
-        if not tup or not isinstance(tup, tuple) or len(tup) != 2:
+        if not tup or not isinstance(tup, tuple):
             continue
-        rnd_dict, inv1_dict = tup
+        if len(tup) == 2:
+            rnd_dict, inv1_dict = tup
+            inv2_dict = None
+        elif len(tup) == 3:
+            rnd_dict, inv1_dict, inv2_dict = tup
+        else: continue
+        
         cfgs_40 = [ (rnd_dict or {}).get(40, None), (inv1_dict or {}).get(40, None) ]  # [RND, INv1]
-
-        for subcol, cfg_rel in enumerate(cfgs_40):  # 0 -> RND, 1 -> INv1
-            col_idx = m_idx * 2 + subcol
+        
+        if inv2_dict:
+            cfgs_40.append((inv2_dict or {}).get(40, None))
+        print(model, cfgs_40)
+        for subcol, cfg_rel in enumerate(cfgs_40):  # 0 -> RND, 1 -> INv1, 2 -> INv2 if available
             if not cfg_rel:
                 continue
 
@@ -1600,8 +1609,10 @@ def generate_regular_symmetric_comp_40pct_table(
                 rr_cf_val = _get_recovery_rate(cf_ut, baseline)
 
 
-            row_rra[col_idx] = _fmt_perct(rr_a_val)
-            row_rrcf[col_idx] = _fmt_perct(rr_cf_val)
+            row_rra[col_idx] = rr_a_val
+            row_rrcf[col_idx] = rr_cf_val
+            
+            col_idx += 1
 
     # --------- render LaTeX (matches your provided skeleton) ---------
     def row_line(label: str, values: List[str]) -> str:
@@ -1615,20 +1626,20 @@ def generate_regular_symmetric_comp_40pct_table(
 \cmidrule(lr){2-9} 
 &  \multicolumn{2}{c}{ResNet18} & \multicolumn{2}{c}{ResNet34} & \multicolumn{2}{c}{ResNet50} & \multicolumn{2}{c}{ResNet101}  \\
 \cmidrule(lr){2-3} \cmidrule(lr){4-5} \cmidrule(lr){6-7} \cmidrule(lr){8-9}
-Model  & RND & INv1 & RND & INv1 & RND & INv1 & RND & INv1 \\
+Model  & RND & INv1 & RND & INv1 & RND & INv1 & INv2 & RND & INv1 $ INv2 \\
 \midrule
 """
 
     body_lines = [
         row_line(r"$\theta_{\text{mix}}$",   row_mix),
         row_line(r"$\theta_{\text{clean}}$", row_clean),
-        r"\cmidrule(lr){1-9}",
+        r"\cmidrule(lr){1-11}",
         row_line(r"$\tau_{r}$",              row_tau_r),
         row_line(r"$\theta_{\text{CF}}$", row_cf),
-        r"\cmidrule(lr){1-9}",
+        r"\cmidrule(lr){1-11}",
         row_line(r"$\alpha^\ast_a$",         row_a_a),
         row_line(r"$\alpha^\ast_f$",         row_a_f),
-        r"\cmidrule(lr){1-9}",
+        r"\cmidrule(lr){1-11}",
         row_line(r"$\hat{\alpha}^\ast_{\text{knn}}$", row_knn),
         r"\bottomrule",
         row_line(r"\rowcolor{gray!25} RR($\theta_{\text{CF}}$)", row_rrcf),
@@ -1673,7 +1684,6 @@ def plot_recovery_bars_40pct(
         if not metrics:
             return None
 
-        metrics.pop("FT HO Clean", None)
         metrics.pop("alpha_s4", None)
 
         # Preferred: alpha_KNN
@@ -1721,9 +1731,9 @@ def plot_recovery_bars_40pct(
         if not tup:
             continue
         # Expect (RND, INv1 [, INv2-for-resnet50])
-        inits = [("Random Init", 0), ("ImageNet v1", 1)]
-        if m == "resnet50" and len(tup) >= 3:
-            inits.append(("ImageNet v2", 2))
+        inits = [("Random Init", 0), ("ImageNet1K v1", 1)]
+        if m in ["resnet50", "resnet101"] and len(tup) >= 3:
+            inits.append(("ImageNet1K v2", 2))
 
         for init_name, idx in inits:
             try:
@@ -1741,7 +1751,7 @@ def plot_recovery_bars_40pct(
 
     # Ensure consistent ordering in the plot (incl. INv2 "empty slot" for non-50s)
     model_order = ["ResNet18", "ResNet34", "ResNet50", "ResNet101"]
-    init_order  = ["Random Init", "ImageNet v1", "ImageNet v2"]  # INv2 may be absent for most models
+    init_order  = ["Random Init", "ImageNet1K v1", "ImageNet1K v2"]  # INv2 may be absent for most models
     df["Model"] = pd.Categorical(df["Model"], categories=model_order, ordered=True)
     df["Init"]  = pd.Categorical(df["Init"],  categories=init_order,  ordered=True)
 
@@ -1762,8 +1772,8 @@ def plot_recovery_bars_40pct(
     # Use seaborn-like colors explicitly to match the original look
     color_map = {
         "Random Init":  "#4C72B0",  # blue
-        "ImageNet v1": "#DD8452",  # orange
-        "ImageNet v2": "#55A868",  # green
+        "ImageNet1K v1": "#DD8452",  # orange
+        "ImageNet1K v2": "#55A868",  # green
     }
 
     # ---- figure & axes (whitegrid-ish style) ----
@@ -1960,20 +1970,20 @@ if __name__ == "__main__":
     
     regular_symmetric_comp_cfgs = OrderedDict()
     # for table
-    regular_symmetric_comp_cfgs['CIFAR10'] = OrderedDict({
-        'resnet18': (regular_models_cfgs['CIFAR10']['scratch']['ho_2']['symmetric']['resnet18'], regular_models_cfgs['CIFAR10']['pretrained']['ho_2']['symmetric']['resnet18']),
-        'resnet34': (regular_models_cfgs['CIFAR10']['scratch']['ho_2']['symmetric']['resnet34'], regular_models_cfgs['CIFAR10']['pretrained']['ho_2']['symmetric']['resnet34']),
-        'resnet50': (regular_models_cfgs['CIFAR10']['scratch']['ho_2']['symmetric']['resnet50'], regular_models_cfgs['CIFAR10']['pretrained']['ho_2']['symmetric']['resnet50']),
-        'resnet101': (regular_models_cfgs['CIFAR10']['scratch']['ho_2']['symmetric']['resnet101'], regular_models_cfgs['CIFAR10']['pretrained']['ho_2']['symmetric']['resnet101'])
-    })
-
-    # for plot
     # regular_symmetric_comp_cfgs['CIFAR10'] = OrderedDict({
     #     'resnet18': (regular_models_cfgs['CIFAR10']['scratch']['ho_2']['symmetric']['resnet18'], regular_models_cfgs['CIFAR10']['pretrained']['ho_2']['symmetric']['resnet18']),
     #     'resnet34': (regular_models_cfgs['CIFAR10']['scratch']['ho_2']['symmetric']['resnet34'], regular_models_cfgs['CIFAR10']['pretrained']['ho_2']['symmetric']['resnet34']),
-    #     'resnet50': (regular_models_cfgs['CIFAR10']['scratch']['ho_2']['symmetric']['resnet50'], regular_models_cfgs['CIFAR10']['pretrained']['ho_2']['symmetric']['resnet50'], regular_models_cfgs['CIFAR10']['pretrained']['ho_2']['symmetric']['resnet50v2']),
+    #     'resnet50': (regular_models_cfgs['CIFAR10']['scratch']['ho_2']['symmetric']['resnet50'], regular_models_cfgs['CIFAR10']['pretrained']['ho_2']['symmetric']['resnet50']),
     #     'resnet101': (regular_models_cfgs['CIFAR10']['scratch']['ho_2']['symmetric']['resnet101'], regular_models_cfgs['CIFAR10']['pretrained']['ho_2']['symmetric']['resnet101'])
     # })
+
+    # for plot
+    regular_symmetric_comp_cfgs['CIFAR10'] = OrderedDict({
+        'resnet18': (regular_models_cfgs['CIFAR10']['scratch']['ho_2']['symmetric']['resnet18'], regular_models_cfgs['CIFAR10']['pretrained']['ho_2']['symmetric']['resnet18']),
+        'resnet34': (regular_models_cfgs['CIFAR10']['scratch']['ho_2']['symmetric']['resnet34'], regular_models_cfgs['CIFAR10']['pretrained']['ho_2']['symmetric']['resnet34']),
+        'resnet50': (regular_models_cfgs['CIFAR10']['scratch']['ho_2']['symmetric']['resnet50'], regular_models_cfgs['CIFAR10']['pretrained']['ho_2']['symmetric']['resnet50'], regular_models_cfgs['CIFAR10']['pretrained']['ho_2']['symmetric']['resnet50v2']),
+        'resnet101': (regular_models_cfgs['CIFAR10']['scratch']['ho_2']['symmetric']['resnet101'], regular_models_cfgs['CIFAR10']['pretrained']['ho_2']['symmetric']['resnet101'], regular_models_cfgs['CIFAR10']['pretrained']['ho_2']['symmetric']['resnet101v2'])
+    })
     
     
     #################################################################################
@@ -2099,12 +2109,12 @@ if __name__ == "__main__":
     #     outputfile_path= Path("./visulaization_dir/regular_asymmetric_noise_table.txt")
     # )
 
-    generate_clip_poison_table(
-        regular_poison_results_dir,
-        regular_poison_cfgs,
-        dataset_order= ["MNIST", "CIFAR10", "CIFAR100"],
-        outputfile_path=Path("./visulaization_dir/regular_poison_trigger_table.txt")
-    )
+    # generate_clip_poison_table(
+    #     regular_poison_results_dir,
+    #     regular_poison_cfgs,
+    #     dataset_order= ["MNIST", "CIFAR10", "CIFAR100"],
+    #     outputfile_path=Path("./visulaization_dir/regular_poison_trigger_table.txt")
+    # )
     
     # generate_regular_symmetric_comp_40pct_table(
     #     regular_noise_results_dir,
@@ -2112,8 +2122,8 @@ if __name__ == "__main__":
     #     outputfile_path= Path("./visulaization_dir/regular_symmetric_noise_comp_pt_rnd_table.txt")
     # )
     
-    # plot_recovery_bars_40pct(
-    #     regular_noise_results_dir,
-    #     regular_symmetric_comp_cfgs
-    # )
-    # print(regular_symmetric_comp_cfgs)
+    plot_recovery_bars_40pct(
+        regular_noise_results_dir,
+        regular_symmetric_comp_cfgs
+    )
+    print(regular_symmetric_comp_cfgs)
