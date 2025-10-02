@@ -668,7 +668,8 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     )
 
 
-
+    print(task_vectors['Average'].norm())
+    exit()
     
     # model.load_state_dict(mix_weights, strict=False)
     # fig_comp_pt = embedding_space_analysis.all_plot_comp(
@@ -743,7 +744,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             num_clusters=num_clusters,
             k=num_neighbor_agr_check,
             coverage_rate=coverage_rate,
-            alphas=np.round(np.linspace(-0.0, -4.0, 81), 2),
+            alphas=np.round(np.linspace(-0.0, -2.0, 41), 2),
             device=gpu
         )
         

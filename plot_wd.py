@@ -223,7 +223,7 @@ def plot_antitask_wd_maps(pickle_path):
 # fig, axs = plot_wd_pickle('results/single_experiment/clip_poison_TA/config2/WD2.pkl')
 # fig, axs = plot_wd_pickle('results/single_experiment/regular_poison_TA/config2/WD2.pkl')
 
-# fig, axs = plot_wd_pickle('results/single_experiment/clip_poison_TA/config3/WD2.pkl')
+fig, axs = plot_wd_pickle('results/single_experiment/clip_poison_TA/config3/WD2.pkl')
 # fig, axs = plot_wd_pickle('results/single_experiment/regular_poison_TA/config3/WD2.pkl')
 
 # fig, axs = plot_wd_pickle('results/single_experiment/clip_noise_TA/config26/WD_AT2_acc_real.pkl')
