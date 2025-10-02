@@ -268,10 +268,10 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         map_location='cpu'
     )
     
-    ft_ho_clean_weights = torch.load(
-        outputs_dir.joinpath(f"finetune_clean/weights/ft_weights.pth"),
-        map_location='cpu'
-    )
+    # ft_ho_clean_weights = torch.load(
+    #     outputs_dir.joinpath(f"finetune_clean/weights/ft_weights.pth"),
+    #     map_location='cpu'
+    # )
 
     poison_weights = OrderedDict()
     
@@ -296,39 +296,39 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         task_vectors['Average'] = TaskVector.mean(task_vectors)
         
 
-    task_vectors['Clean'] = TaskVector(mix_weights, ft_ho_clean_weights)
+    # task_vectors['Clean'] = TaskVector(mix_weights, ft_ho_clean_weights)
     task_vectors['Mix'] = TaskVector(pt_weights, mix_weights)
     task_vectors['Random Vector'] = task_vectors['Average'].generate_random_vector_with_same_layer_norms(seed=11)
 
 
     
-    ft_tvs_list = list(task_vectors.values())
-    tv_names = list(task_vectors.keys())
+    # ft_tvs_list = list(task_vectors.values())
+    # tv_names = list(task_vectors.keys())
     
-    task_sim = []
-    for i in range(len(ft_tvs_list)):
-        anchor_tv = ft_tvs_list[i]
-        task_sim.append([])
-        for j in range(len(ft_tvs_list)):
-            other_tv = ft_tvs_list[j]
-            cos_sim = anchor_tv.cosine_similarity_flatten(other_tv)
-            task_sim[i].append(cos_sim)
-    task_sim = np.array(task_sim)
+    # task_sim = []
+    # for i in range(len(ft_tvs_list)):
+    #     anchor_tv = ft_tvs_list[i]
+    #     task_sim.append([])
+    #     for j in range(len(ft_tvs_list)):
+    #         other_tv = ft_tvs_list[j]
+    #         cos_sim = anchor_tv.cosine_similarity_flatten(other_tv)
+    #         task_sim[i].append(cos_sim)
+    # task_sim = np.array(task_sim)
 
-    misc_utils.plot_confusion_matrix(
-        title='Task Vector Similarity Matrix',
-        cm=task_sim,
-        class_names=tv_names,
-        color_map='vlag',
-        color_bar=True,
-        vmin= -1.0,
-        vmax= 1.0,
-        x_label='Task Vectors',
-        y_label='Task Vectors',
-        tick_label_font_size=6,
-        filepath=results_dir / 'task_similarities.png',
-        show=False
-    )
+    # misc_utils.plot_confusion_matrix(
+    #     title='Task Vector Similarity Matrix',
+    #     cm=task_sim,
+    #     class_names=tv_names,
+    #     color_map='vlag',
+    #     color_bar=True,
+    #     vmin= -1.0,
+    #     vmax= 1.0,
+    #     x_label='Task Vectors',
+    #     y_label='Task Vectors',
+    #     tick_label_font_size=6,
+    #     filepath=results_dir / 'task_similarities.png',
+    #     show=False
+    # )
     
     
     # results_dict = OrderedDict()
