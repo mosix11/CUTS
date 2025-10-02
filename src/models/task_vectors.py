@@ -28,7 +28,7 @@ class TaskVector:
     #                 self.vector[key] = finetuned_state_dict[key].to('cpu') - pretrained_state_dict[key].to('cpu')
     
 
-    def __init__(self, pretrained_state_dict=None, finetuned_state_dict=None, vector=None):
+    def __init__(self, pretrained_state_dict=None, finetuned_state_dict=None, vector=None, include_bn=False):
         """
         Initialize a TaskVector using either:
         - pretrained_state_dict and finetuned_state_dict, OR
@@ -42,23 +42,25 @@ class TaskVector:
                 "Provide either vector or both state_dicts."
             self.vector = {}
             with torch.no_grad():
-                # Identify all module prefixes that belong to BatchNorm layers
-                # We can do this by looking for 'running_mean' or 'running_var'
                 bn_module_prefixes = set()
-                for key in pretrained_state_dict:
-                    if '.running_mean' in key or '.running_var' in key:
-                        # Extract the module prefix, e.g., 'net.1', 'net.4'
-                        # This assumes the pattern 'module_prefix.parameter_name'
-                        parts = key.rsplit('.', 1) # Split from the right, at most once
-                        if len(parts) > 1:
-                            bn_module_prefixes.add(parts[0])
+                if not include_bn:
+                    # Identify all module prefixes that belong to BatchNorm layers
+                    # We can do this by looking for 'running_mean' or 'running_var'
+                    for key in pretrained_state_dict:
+                        if '.running_mean' in key or '.running_var' in key:
+                            # This assumes the pattern 'module_prefix.parameter_name'
+                            parts = key.rsplit('.', 1) # Split from the right, at most once
+                            if len(parts) > 1:
+                                bn_module_prefixes.add(parts[0])
 
                 for key in pretrained_state_dict:
                     if key not in finetuned_state_dict:
                         print(f"Warning: key {key} missing in finetuned_state_dict.")
                         continue
-                    if pretrained_state_dict[key].dtype not in [torch.float32, torch.float16, torch.bfloat16]:
-                        continue  # Skip non-float entries
+                    allowed_types = [torch.float32, torch.float16, torch.bfloat16]
+                    if include_bn: allowed_types.append(torch.int64) # for batchnorm num_batches_tracked
+                    if pretrained_state_dict[key].dtype not in allowed_types:
+                        continue 
 
                     # Check if the current key belongs to a identified BN module
                     # by checking if its prefix is in our set of bn_module_prefixes

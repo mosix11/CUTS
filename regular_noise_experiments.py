@@ -40,7 +40,7 @@ import math
 import imageio.v2 as imageio
 
 from src.utils import embedding_space_analysis
-from helper_funcs import evaluate_model, eval_model_on_clean_noise_splits, get_confusion_matrix, row_normalize
+from helper_funcs import evaluate_model, eval_model_on_clean_noise_splits, recalibrate_batchnorm, get_confusion_matrix, row_normalize
 from src.utils import weight_norm_analysis
 
 
@@ -249,9 +249,9 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     model = model_factory.create_model(cfg['model'], num_classes)
     pt_weights = copy.deepcopy(model.state_dict())
     
-    print(f"Sum: {torch.cat([p.flatten() for p in model.state_dict().values()]).sum().item():.4f}, Average: {torch.cat([p.flatten() for p in model.state_dict().values()]).mean().item():.4f}")
+    # print(f"Sum: {torch.cat([p.flatten() for p in model.state_dict().values()]).sum().item():.4f}, Average: {torch.cat([p.flatten() for p in model.state_dict().values()]).mean().item():.4f}")
 
-    exit()
+
 
     dataset.reset_train_dl(shuffle=False)
     
@@ -327,46 +327,86 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     ft_tvs_list = list(task_vectors.values())
     tv_names = list(task_vectors.keys())
     
-    task_sim = []
-    for i in range(len(ft_tvs_list)):
-        anchor_tv = ft_tvs_list[i]
-        task_sim.append([])
-        for j in range(len(ft_tvs_list)):
-            other_tv = ft_tvs_list[j]
-            cos_sim = anchor_tv.cosine_similarity_flatten(other_tv)
-            task_sim[i].append(cos_sim)
-    task_sim = np.array(task_sim)
+    # task_sim = []
+    # for i in range(len(ft_tvs_list)):
+    #     anchor_tv = ft_tvs_list[i]
+    #     task_sim.append([])
+    #     for j in range(len(ft_tvs_list)):
+    #         other_tv = ft_tvs_list[j]
+    #         cos_sim = anchor_tv.cosine_similarity_flatten(other_tv)
+    #         task_sim[i].append(cos_sim)
+    # task_sim = np.array(task_sim)
     
-    misc_utils.plot_confusion_matrix(
-        title='Task Vector Similarity Matrix',
-        cm=task_sim,
-        class_names=tv_names,
-        color_map='vlag',
-        color_bar=True,
-        vmin= -1.0,
-        vmax= 1.0,
-        x_label='Task Vectors',
-        y_label='Task Vectors',
-        tick_label_font_size=6,
-        filepath=results_dir / 'task_similarities.png',
-        show=False
-    )
+    # misc_utils.plot_confusion_matrix(
+    #     title='Task Vector Similarity Matrix',
+    #     cm=task_sim,
+    #     class_names=tv_names,
+    #     color_map='vlag',
+    #     color_bar=True,
+    #     vmin= -1.0,
+    #     vmax= 1.0,
+    #     x_label='Task Vectors',
+    #     y_label='Task Vectors',
+    #     tick_label_font_size=6,
+    #     filepath=results_dir / 'task_similarities.png',
+    #     show=False
+    # )
     
     
+    # we use BN stats here, ideally we should re calibrate the stats.
+    mix_vector = TaskVector(pt_weights, mix_weights, include_bn=False)
+    # model.load_state_dict(pt_weights, strict=True)
+    # tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+    # tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+    # print(tv_test_results)
+    # print(tv_train_results)
+    # model.load_state_dict(pt_weights, strict=True)
+    # recalibrate_batchnorm(model, dataset.get_train_dataloader(), gpu)
+    # tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+    # tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+    # print(tv_test_results)
+    # print(tv_train_results)
     
-    if not results_dir.joinpath('metrics_mix_interpolation.json').exists():
+    # model.load_state_dict(mix_weights, strict=True)
+    # tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+    # tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+    # print(tv_test_results)
+    # print(tv_train_results)
+    # model.load_state_dict(mix_weights, strict=True)
+    # recalibrate_batchnorm(model, dataset.get_train_dataloader(), gpu)
+    # tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+    # tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+    # print(tv_test_results)
+    # print(tv_train_results)
+    # exit()
+    
+    if not results_dir.joinpath('metrics_mix_interpolation_bn_cal.json').exists():
         mix_intp_metircs = OrderedDict()
-        model.load_state_dict(pt_weights, strict=False)
         alphas = tqdm(np.round(np.linspace(0.05, 1.0, 20), 2))
         for alpha in alphas: 
-            model.load_state_dict(pt_weights, strict=False)
-            task_vectors['Mix'].apply_to(model, scaling_coef=alpha, strict=False)
+            model.load_state_dict(pt_weights, strict=True)
+            mix_vector.apply_to(model, scaling_coef=alpha, strict=True)
+            recalibrate_batchnorm(model, dataset.get_train_dataloader(), gpu)
             tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
             tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
             mix_intp_metircs[alpha] = {'test_results': tv_test_results, 'train_results': tv_train_results}
 
-        with open(results_dir / 'metrics_mix_interpolation.json' , 'w') as json_file:
+        with open(results_dir / 'metrics_mix_interpolation_bn_cal.json' , 'w') as json_file:
             json.dump(mix_intp_metircs, json_file, indent=4)
+    
+    # if not results_dir.joinpath('metrics_mix_interpolation.json').exists():
+    #     mix_intp_metircs = OrderedDict()
+    #     alphas = tqdm(np.round(np.linspace(0.05, 1.0, 20), 2))
+    #     for alpha in alphas: 
+    #         model.load_state_dict(mix_weights, strict=True)
+    #         task_vectors['Mix'].apply_to(model, scaling_coef=-1.0, strict=True)
+    #         task_vectors['Mix'].apply_to(model, scaling_coef=alpha, strict=True)
+    #         tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+    #         tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+    #         mix_intp_metircs[alpha] = {'test_results': tv_test_results, 'train_results': tv_train_results}
+
+    #     with open(results_dir / 'metrics_mix_interpolation.json' , 'w') as json_file:
+    #         json.dump(mix_intp_metircs, json_file, indent=4)
     
     # results_dict = OrderedDict()
     # with open(results_dir / "metrics.json", "r") as json_file:

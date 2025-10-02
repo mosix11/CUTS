@@ -414,6 +414,38 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             json.dump(results_dict, json_file, indent=4)
 
 
+    # Weight Space Disentanglemet Analysis
+    estimated_poison_vector =  task_vectors['Average'] * (-1 * results_dict['alpha_psn'])
+    estimated_clean_vector = task_vectors['Mix'] - estimated_poison_vector
+    
+    subset_size  = 1024
+    def random_subset(ds, k, seed: int):
+        k = min(k, len(ds))
+        g = torch.Generator().manual_seed(seed)
+        idx = torch.randperm(len(ds), generator=g)[:k].tolist()
+        return Subset(ds, idx)
+    
+    poisoned_support = dataset.get_heldoutset()
+    clean_support = random_subset(dataset.get_testset(), k=subset_size, seed=dataset_seed)
+    
+    
+    model.load_state_dict(pt_weights, strict=False)
+    wd_results = apply_WD_analysis(
+        model=model,
+        taskvector1=estimated_clean_vector,
+        support_tv1=clean_support,
+        taskvector2=estimated_poison_vector,
+        support_tv2=poisoned_support,
+        calibration_dl=dataset.get_train_dataloader(),
+        alhpa_range=(0.0, 2.0),
+        step=0.1,
+        batch_size=512,
+        device=gpu
+    )
+    with open(results_dir / "WD2.pkl", "wb") as f:
+        pickle.dump(wd_results, f)
+
+
 from torch.distributed.elastic.multiprocessing.errors import record
 
 @record

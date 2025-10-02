@@ -10,7 +10,7 @@ from torchmetrics.classification import MulticlassConfusionMatrix
 from typing import Union, Tuple, List
 
 
-from helper_funcs import evaluate_model, eval_model_on_clean_noise_splits, search_optimal_coefficient
+from helper_funcs import evaluate_model, recalibrate_batchnorm, eval_model_on_clean_noise_splits, search_optimal_coefficient
 
 def _build_dataloader(dataset, batch_size):
     return DataLoader(
@@ -28,6 +28,7 @@ def apply_WD_analysis(
     support_tv1: Dataset,             # μ_1
     taskvector2: TaskVector,          # τ_2  (e.g., triggered)
     support_tv2: Dataset,             # μ_2
+    calibration_dl: DataLoader,       # For callibrating bn layers for CNNs
     alhpa_range: tuple,               # (min_alpha, max_alpha)
     step: float,                      # grid step
     batch_size: int,
@@ -56,19 +57,24 @@ def apply_WD_analysis(
     wd_tv2_only = np.zeros_like(wd_map)  # μ2 contribution
 
     pbar = tqdm(total=H * W, desc="Applying alpha combinations", leave=True)
-
     for yi, alpha_tv2 in enumerate(alphas):          # y-axis: τ2 scale
         for xi, alpha_tv1 in enumerate(alphas):      # x-axis: τ1 scale
             # Build three models: θ+α1τ1, θ+α2τ2, θ+α1τ1+α2τ2
             model_tv1 = copy.deepcopy(model).to(device)
             taskvector1.apply_to(model_tv1, scaling_coef=float(alpha_tv1), strict=False)
+            if calibration_dl:
+                recalibrate_batchnorm(model_tv1, calibration_dl, device)
 
             model_tv2 = copy.deepcopy(model).to(device)
             taskvector2.apply_to(model_tv2, scaling_coef=float(alpha_tv2), strict=False)
+            if calibration_dl:
+                recalibrate_batchnorm(model_tv2, calibration_dl, device)
 
             model_mlt = copy.deepcopy(model).to(device)
             taskvector1.apply_to(model_mlt, scaling_coef=float(alpha_tv1), strict=False)
             taskvector2.apply_to(model_mlt, scaling_coef=float(alpha_tv2), strict=False)
+            if calibration_dl:
+                recalibrate_batchnorm(model_mlt, calibration_dl, device)
 
             # Evaluate on each task's own support (your function returns: metrics, preds, labels)
             _, preds_tv1_on_s1, _ = evaluate_model(model_tv1, support_tv1_dl, device)

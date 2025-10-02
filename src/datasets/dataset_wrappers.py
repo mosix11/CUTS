@@ -521,6 +521,8 @@ class PoisonedClassificationDataset(Dataset):
             img = self._orig_transform(img)
 
         poison_flag = torch.tensor(2.0 if is_poisoned else 0.0, dtype=torch.float32)
+        if not torch.is_tensor(y):
+            y = torch.tensor(y, dtype=torch.long)
         return img, y, poison_flag + is_noisy
 
     # -------------------------

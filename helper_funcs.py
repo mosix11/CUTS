@@ -9,9 +9,21 @@ from tqdm import tqdm
 from torchmetrics.classification import MulticlassConfusionMatrix
 from typing import Union
 
+from torch.optim.swa_utils import update_bn
+
 def prepare_batch(batch, device):
     batch = [tens.to(device) for tens in batch]
     return batch
+
+
+
+
+
+def recalibrate_batchnorm(model:torch.nn.Module, dataloader:DataLoader, device:torch.device, max_batches=None):
+    # Recompute BN running_mean / running_var using data from `loader`.
+    # This does *not* change weights; it only updates BN buffers.
+    model.to(device)
+    update_bn(dataloader, model, device=device)
 
 
 def evaluate_model(
