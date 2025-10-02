@@ -438,7 +438,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         support_tv2=poisoned_support,
         calibration_dl=dataset.get_train_dataloader(),
         alhpa_range=(0.0, 2.0),
-        step=0.1,
+        step=0.2,
         batch_size=512,
         device=gpu
     )
