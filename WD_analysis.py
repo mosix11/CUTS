@@ -262,6 +262,7 @@ def apply_WD_antitask_analysis_acc(
     taskvector1,                      # τ_1 (e.g., "clean")
     taskvector2,                      # τ_2 (e.g., "triggered")
     shared_support,                   # single Dataset S used for both terms
+    calibration_dl: DataLoader,
     alpha_range: tuple,               # (min_alpha, max_alpha)
     step: float,                      # grid step
     batch_size: int,
@@ -296,6 +297,8 @@ def apply_WD_antitask_analysis_acc(
     for xi, a1 in enumerate(tqdm(alphas, desc="Preds along α1 axis (τ1)", leave=False)):
         m1 = copy.deepcopy(model).to(device)
         taskvector1.apply_to(m1, scaling_coef=float(a1), strict=False)
+        if calibration_dl:
+            recalibrate_batchnorm(m1, calibration_dl, device)
         _, preds, _ = evaluate_model(m1, dl, device)
         p_tv1.append(preds.view(-1).cpu())
         del m1
@@ -307,6 +310,8 @@ def apply_WD_antitask_analysis_acc(
     for yi, a2 in enumerate(tqdm(alphas, desc="Preds along α2 axis (τ2)", leave=False)):
         m2 = copy.deepcopy(model).to(device)
         taskvector2.apply_to(m2, scaling_coef=float(a2), strict=False)
+        if calibration_dl:
+            recalibrate_batchnorm(m2, calibration_dl, device)
         _, preds, _ = evaluate_model(m2, dl, device)
         p_tv2.append(preds.view(-1).cpu())
         del m2
@@ -328,6 +333,8 @@ def apply_WD_antitask_analysis_acc(
             m12 = copy.deepcopy(model).to(device)
             taskvector1.apply_to(m12, scaling_coef=float(a1), strict=False)
             taskvector2.apply_to(m12, scaling_coef=float(a2), strict=False)
+            if calibration_dl:
+                recalibrate_batchnorm(m12, calibration_dl, device)
             _, p_mlt, _ = evaluate_model(m12, dl, device)
             p_mlt = p_mlt.view(-1).cpu()
             del m12

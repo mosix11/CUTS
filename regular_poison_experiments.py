@@ -330,22 +330,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     #     show=False
     # )
     
-    
-    # results_dict = OrderedDict()
-    # with open(results_dir / "metrics.json", "r") as json_file:
-    #     results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
-        
-    # for alpha in tqdm(np.round(np.linspace(-4.05, -8.0, 80), 2)):
 
-    #     model.load_state_dict(mix_weights, strict=False)
-    #     task_vectors['Average'].apply_to(model, scaling_coef=alpha, strict=False)
-    #     tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-    #     tv_ho_resutls, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
-    #     tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
-
-    #     results_dict[alpha] = {'test_results': tv_test_results, 'ho_results': tv_ho_resutls, 'train_results': tv_train_results}
-
-    
 
     
     results_dict = OrderedDict()

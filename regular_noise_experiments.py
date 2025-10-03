@@ -42,8 +42,7 @@ import imageio.v2 as imageio
 from src.utils import embedding_space_analysis
 from helper_funcs import evaluate_model, eval_model_on_clean_noise_splits, recalibrate_batchnorm, get_confusion_matrix, row_normalize
 from src.utils import weight_norm_analysis
-
-
+from WD_analysis import apply_WD_antitask_analysis_acc
 
     
 def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
@@ -217,6 +216,7 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
 
 def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     training_seed = cfg['training_seed']
+    dataset_seed = cfg['dataset_seed']
     if training_seed:
         random.seed(training_seed)
         np.random.seed(training_seed)
@@ -353,8 +353,8 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # )
     
     
-    # we use BN stats here, ideally we should re calibrate the stats.
-    mix_vector = TaskVector(pt_weights, mix_weights, include_bn=False)
+    # # we use BN stats here, ideally we should re calibrate the stats.
+    # mix_vector = TaskVector(pt_weights, mix_weights, include_bn=False)
     # model.load_state_dict(pt_weights, strict=True)
     # tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
     # tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
@@ -380,19 +380,19 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # print(tv_train_results)
     # exit()
     
-    if not results_dir.joinpath('metrics_mix_interpolation_bn_cal.json').exists():
-        mix_intp_metircs = OrderedDict()
-        alphas = tqdm(np.round(np.linspace(0.05, 1.0, 20), 2))
-        for alpha in alphas: 
-            model.load_state_dict(pt_weights, strict=True)
-            mix_vector.apply_to(model, scaling_coef=alpha, strict=True)
-            recalibrate_batchnorm(model, dataset.get_train_dataloader(), gpu)
-            tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-            tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
-            mix_intp_metircs[alpha] = {'test_results': tv_test_results, 'train_results': tv_train_results}
+    # if not results_dir.joinpath('metrics_mix_interpolation_bn_cal.json').exists():
+    #     mix_intp_metircs = OrderedDict()
+    #     alphas = tqdm(np.round(np.linspace(0.05, 1.0, 20), 2))
+    #     for alpha in alphas: 
+    #         model.load_state_dict(pt_weights, strict=True)
+    #         mix_vector.apply_to(model, scaling_coef=alpha, strict=True)
+    #         recalibrate_batchnorm(model, dataset.get_train_dataloader(), gpu)
+    #         tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+    #         tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+    #         mix_intp_metircs[alpha] = {'test_results': tv_test_results, 'train_results': tv_train_results}
 
-        with open(results_dir / 'metrics_mix_interpolation_bn_cal.json' , 'w') as json_file:
-            json.dump(mix_intp_metircs, json_file, indent=4)
+    #     with open(results_dir / 'metrics_mix_interpolation_bn_cal.json' , 'w') as json_file:
+    #         json.dump(mix_intp_metircs, json_file, indent=4)
     
     # if not results_dir.joinpath('metrics_mix_interpolation.json').exists():
     #     mix_intp_metircs = OrderedDict()
@@ -417,7 +417,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # results_dict['FT HO Clean'] = {'test_results': ft_ho_test_results, 'train_results': ft_ho_train_results}
     # with open(results_dir / 'metrics.json' , 'w') as json_file:
     #     json.dump(results_dict, json_file, indent=4)
-    exit()
+
     results_dict = OrderedDict()
     if not results_dir.joinpath('metrics.json').exists():
 
@@ -514,6 +514,35 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             json.dump(results_dict, json_file, indent=4)
     
 
+    # Weight Space Disentanglemet Analysis
+    estimated_noise_vector =  task_vectors['Average'] * (-1 * results_dict['alpha_KNN'])
+    estimated_clean_vector = task_vectors['Mix'] - estimated_noise_vector
+    
+    subset_size  = 2048
+    def random_subset(ds, k, seed: int):
+        k = min(k, len(ds))
+        g = torch.Generator().manual_seed(seed)
+        idx = torch.randperm(len(ds), generator=g)[:k].tolist()
+        return Subset(ds, idx)
+
+    test_subset = random_subset(dataset.get_testset(), subset_size, dataset_seed)
+    
+    
+    
+    model.load_state_dict(pt_weights, strict=False)
+    wd_results = apply_WD_antitask_analysis_acc(
+        model=model,
+        taskvector1=estimated_clean_vector,
+        taskvector2=estimated_noise_vector,
+        shared_support=test_subset,
+        calibration_dl=dataset.get_train_dataloader(),
+        alpha_range=(0.0, 2.5),
+        step=0.1,
+        batch_size=512,
+        device=gpu,
+    )
+    with open(results_dir / "WD2.pkl", "wb") as f:
+        pickle.dump(wd_results, f)
 
 from torch.distributed.elastic.multiprocessing.errors import record
 
