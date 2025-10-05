@@ -13,6 +13,7 @@ from . import OpenClipImageEncoder, OpenClipMultiHeadImageClassifier
 from .loss_functions import SupervisedContrastiveLoss, CompoundLoss
 
 import os
+import copy
 
 def get_metric(metric_name, num_classes):
     if metric_name == 'ACC':
@@ -27,7 +28,8 @@ def get_metric(metric_name, num_classes):
             return MulticlassF1Score(num_classes=num_classes, average='micro', sync_on_compute=_is_distributed())
     else: raise ValueError(f"Invalid metric {metric_name}.")
     
-def create_model(cfg, num_classes=None):
+def create_model(cfg_orig, num_classes=None):
+    cfg = copy.deepcopy(cfg_orig)
     model_type = cfg.pop('type')
     if not num_classes:
         num_classes = cfg.get('num_classes', None)

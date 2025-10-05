@@ -585,7 +585,6 @@ def plot_noise_alpha_interplay_dual(
             raise FileNotFoundError(f"metrics.json not found or unreadable for {config_rel_path}")
 
         # clean out non-alpha entries; extract alpha_KNN
-        metrics.pop("FT HO Clean", None)
         metrics.pop("alpha_s4", None)
         alpha_kNN = metrics.pop("alpha_KNN", None)
         try:
@@ -600,9 +599,9 @@ def plot_noise_alpha_interplay_dual(
         mix_alpha = 0.0
         alpha_grid[mix_alpha] = {
             "utility": baselines["mix"]["utility"],
-            "forget_rate": baselines["mix"]["forget_rate"],
-            "healing_rate": baselines["mix"]["healing_rate"],
-            "destruction_rate": baselines["mix"]["destruction_rate"],
+            "forget_rate": 0.0,
+            "healing_rate": 0.0,
+            "destruction_rate": 0.0,
         }
 
         # Resolve α*’s
@@ -2102,6 +2101,16 @@ if __name__ == "__main__":
     #     outputfile_path= Path("./visulaization_dir/regular_symmetric_noise_table.txt")
     #     )
     
+    plot_noise_alpha_interplay_dual(
+        regular_noise_results_dir,
+        regular_symmetric_cfgs['CIFAR10'][40],
+        regular_symmetric_cfgs['CIFAR100'][40],
+        dataset_name_A="CIFAR-10 (40%)",
+        dataset_name_B="CIFAR-100 (40%)",
+        forget_threshold_A=0.9,
+        forget_threshold_B=0.9,
+    )
+    
     # generate_clip_noise_utlity_table(
     #     regular_noise_results_dir,
     #     regular_asymmetric_cfgs,
@@ -2122,8 +2131,7 @@ if __name__ == "__main__":
     #     outputfile_path= Path("./visulaization_dir/regular_symmetric_noise_comp_pt_rnd_table.txt")
     # )
     
-    plot_recovery_bars_40pct(
-        regular_noise_results_dir,
-        regular_symmetric_comp_cfgs
-    )
-    print(regular_symmetric_comp_cfgs)
+    # plot_recovery_bars_40pct(
+    #     regular_noise_results_dir,
+    #     regular_symmetric_comp_cfgs
+    # )

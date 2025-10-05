@@ -763,8 +763,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             json.dump(results_dict, json_file, indent=4)
         
         
-    
-    exit()
+
     
     # figs_alpha, fig_gold = embedding_space_analysis.pca_evolution_plot(
     #     model=model,
@@ -792,33 +791,37 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # clean_subset = random_subset(clean_train_ds, subset_size, dataset_seed)
     # noisy_subset = random_subset(noisy_train_ds, subset_size, dataset_seed + 1)
     
-    records = []
-    for a_str, res in results_dict['Seed 10'].items():
-        if a_str in ['Mix', 'Gold', 'FT HO Clean']: continue
-        a = float(a_str) if not isinstance(a_str, (int, float)) else a_str
-        test_acc  = res["test_results"]["ACC"]
-        test_loss = res["test_results"]["Loss"]
-        noisy_acc = res["train_results"]["noisy_set"]["ACC"]
-        records.append((a, test_acc, test_loss, noisy_acc))
-    alpha_max_test_acc = max(records, key=lambda x: x[1])[0]
-    alpha_min_test_loss = min(records, key=lambda x: x[2])[0]
-
-    forgetting_threshold = 0.09
-    alpha_forgetting_thrsh = None
-    for a, _, _, noisy_acc in sorted(records, key=lambda x: x[0], reverse=True):
-        if noisy_acc <= forgetting_threshold:
-            alpha_forgetting_thrsh = a
-            break
-        
-    print(
-        'Alpha Max Test ACC:', alpha_max_test_acc,
-        'Apha Min Test Loss:', alpha_min_test_loss,
-        'Alpha Forget Threshold:', alpha_forgetting_thrsh
-        )
-
-    noise_vector = task_vectors['Seed 10'] * alpha_forgetting_thrsh * -1 # alpha is negative
-    clean_vector = task_vectors['Mix'] - noise_vector
+    with open(results_dir / "metrics_seed.json", "r") as json_file:
+        results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
     
+    # records = []
+    # for a_str, res in results_dict['Seed 10'].items():
+    #     if a_str in ['Mix', 'Gold', 'FT HO Clean']: continue
+    #     a = float(a_str) if not isinstance(a_str, (int, float)) else a_str
+    #     test_acc  = res["test_results"]["ACC"]
+    #     test_loss = res["test_results"]["Loss"]
+    #     noisy_acc = res["train_results"]["noisy_set"]["ACC"]
+    #     records.append((a, test_acc, test_loss, noisy_acc))
+    # alpha_max_test_acc = max(records, key=lambda x: x[1])[0]
+    # alpha_min_test_loss = min(records, key=lambda x: x[2])[0]
+
+    # forgetting_threshold = 0.09
+    # alpha_forgetting_thrsh = None
+    # for a, _, _, noisy_acc in sorted(records, key=lambda x: x[0], reverse=True):
+    #     if noisy_acc <= forgetting_threshold:
+    #         alpha_forgetting_thrsh = a
+    #         break
+        
+    # print(
+    #     'Alpha Max Test ACC:', alpha_max_test_acc,
+    #     'Apha Min Test Loss:', alpha_min_test_loss,
+    #     'Alpha Forget Threshold:', alpha_forgetting_thrsh
+    #     )
+
+    # noise_vector = task_vectors['Seed 10'] * alpha_forgetting_thrsh * -1 # alpha is negative
+    # clean_vector = task_vectors['Mix'] - noise_vector
+    estimated_noise_vector =  task_vectors['Seed 10'] * (-1 * results_dict['alpha_KNN'])
+    estimated_clean_vector = task_vectors['Mix'] - estimated_noise_vector
 
     
     # exit()
@@ -847,13 +850,6 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
 
     test_subset = random_subset(dataset.get_testset(), subset_size, dataset_seed)
     
-    model.load_state_dict(pt_weights, strict=False)
-    clean_vector.apply_to(model, scaling_coef=1.0, strict=False)
-    noise_vector.apply_to(model, scaling_coef=1.0, strict=False)
-    tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-    print(tv_test_results)
-
-    
 
     # model.load_state_dict(pt_weights, strict=False)
     # wd_results = apply_WD_antitask_analysis(
@@ -870,18 +866,20 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # with open(results_dir / "WD_AT2_acc.pkl", "wb") as f:
     #     pickle.dump(wd_results, f)
     
+    
     model.load_state_dict(pt_weights, strict=False)
     wd_results = apply_WD_antitask_analysis_acc(
         model=model,
-        taskvector1=clean_vector,
-        taskvector2=noise_vector,
+        taskvector1=estimated_clean_vector,
+        taskvector2=estimated_noise_vector,
         shared_support=test_subset,
+        calibration_dl=None,
         alpha_range=(0.0, 2.5),
         step=0.1,
         batch_size=512,
         device=gpu,
     )
-    with open(results_dir / "WD_AT2_acc_real.pkl", "wb") as f:
+    with open(results_dir / "WD2.pkl", "wb") as f:
         pickle.dump(wd_results, f)
     
     

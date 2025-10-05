@@ -305,7 +305,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             ft_expr_dir.joinpath(f"weights/ft_weights.pth"),
             map_location='cpu'
         )
-        noise_weights[f"{noise_tv['noise_rate']*100:.0f}% Noise, {noise_tv['seed']} Seed"] = n_weights
+        noise_weights[f"Seed {noise_tv['seed']}"] = n_weights
         
             
     task_vectors = OrderedDict()
@@ -418,6 +418,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # with open(results_dir / 'metrics.json' , 'w') as json_file:
     #     json.dump(results_dict, json_file, indent=4)
 
+
     results_dict = OrderedDict()
     if not results_dir.joinpath('metrics.json').exists():
 
@@ -513,9 +514,11 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         with open(results_dir / 'metrics.json' , 'w') as json_file:
             json.dump(results_dict, json_file, indent=4)
     
-
+    # exit()
     # Weight Space Disentanglemet Analysis
-    estimated_noise_vector =  task_vectors['Average'] * (-1 * results_dict['alpha_KNN'])
+    with open(results_dir / "metrics_seed.json", "r") as json_file:
+        results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
+    estimated_noise_vector =  task_vectors['Seed 10'] * (-1 * results_dict['alpha_KNN'])
     estimated_clean_vector = task_vectors['Mix'] - estimated_noise_vector
     
     subset_size  = 2048
@@ -535,7 +538,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         taskvector1=estimated_clean_vector,
         taskvector2=estimated_noise_vector,
         shared_support=test_subset,
-        calibration_dl=dataset.get_train_dataloader(),
+        calibration_dl=dataset.get_train_dataloader() if cfg['model']['type'] != 'fc1' else None,
         alpha_range=(0.0, 2.5),
         step=0.1,
         batch_size=512,

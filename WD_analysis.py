@@ -125,9 +125,9 @@ def apply_WD_analysis(
 
 def apply_WD_antitask_analysis(
     model: torch.nn.Module,            # θ_pre
-    clean_tv: TaskVector,            # τ_c (clean task vector)
-    noise_tv: TaskVector,            # τ_n (noise / anti-task vector)
-    testset: Dataset,                # same support for both
+    clean_tv: TaskVector,              # τ_c (clean task vector)
+    noise_tv: TaskVector,              # τ_n (noise / anti-task vector)
+    testset: Dataset,                  # same support for both
     alpha_range: tuple,                # (min_alpha, max_alpha)
     step: float,                       # grid step
     batch_size: int,
