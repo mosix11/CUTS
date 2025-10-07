@@ -224,7 +224,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         results_dict['Mix'] = {'test_results': mix_test_results}
         print('0.0', mix_test_results)
 
-        alphas = tqdm(np.round(np.linspace(-0.02, -2.0, 100), 3))
+        alphas = tqdm(np.round(np.linspace(-0.04, -2.0, 50), 3))
         for alpha in alphas:
             
             model.load_state_dict(mix_weights, strict=False)
@@ -246,6 +246,8 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     if 'alpha_KNN' not in results_dict:
         if dataset.dataset_name == 'Clothing1M':
             coverage_rate = 1.0
+        elif dataset.dataset_name == 'Food101':
+            coverage_rate = 0.95
 
         # if strategy['noise']['finetuning'][0]['noise_type'] == 'asymmetric':
         #     if dataset.dataset_name == 'MNIST':
@@ -272,7 +274,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             num_clusters=num_clusters,
             k=num_neighbor_agr_check,
             coverage_rate=coverage_rate,
-            alphas=np.round(np.linspace(-0.0, -2.0, 101), 2),
+            alphas=np.round(np.linspace(-0.0, -2.0, 51), 2),
             device=gpu
         )
     

@@ -508,7 +508,7 @@ def apply(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # dino cifar100: 0.56
     # clip mnist: 0.35
     # clip cifar100 cfg49: -0.315
-    task_vectors['Average'].apply_to(model, scaling_coef=-0.5, strict=False)
+    task_vectors['Average'].apply_to(model, scaling_coef=-0.8, strict=False)
     train_results, misclassified_cleans, misclassified_cleans_smp, misclassified_heals = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
     print(train_results)
     # test_results = evaluate_model(model, dataset.get_test_dataloader(), gpu)[0]
@@ -550,7 +550,7 @@ def apply(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     # labels_str = vectorized_converter(lbls)
     misclassified_strs = [
-        fr"{vectorized_converter(t)} $\rightarrow$ {vectorized_converter(p)}"
+        fr"{vectorized_converter(t)}$\rightarrow${vectorized_converter(p)}"
         for (t, p) in misclassified_cleans_smp
     ]
         
@@ -563,8 +563,8 @@ def apply(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     fig = show_image_grid(
         images=imgs,
         labels=misclassified_strs,
-        label_fontsize=12,
-        label_wrap=36,
+        label_fontsize=9,
+        label_wrap=40,
         hspace=0.07,
         wspace=0.01,
         image_height_frac=0.82,
@@ -604,7 +604,8 @@ if __name__ == "__main__":
         cfg_path = Path('configs/single_experiment/dino_noise_TA') / f"{args.config}.yaml"
     elif args.model == 'clip':
         cfg_path = Path('configs/single_experiment/clip_noise_TA') / f"{args.config}.yaml"
-    
+    else:
+        RuntimeError('Invalid model type.')
 
     if not cfg_path.exists(): raise RuntimeError('The specified config file does not exist.')
     with open(cfg_path, 'r') as file:
