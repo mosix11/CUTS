@@ -367,6 +367,7 @@ class BaseClassificationDataset(ABC):
         
         if val_dataset != None:
             valset = val_dataset
+            trainset = train_dataset
         else:
             if self.valset_ratio > 0.0 and len(train_dataset) > 1:
                 trainset, valset = random_split(train_dataset, [self.trainset_ratio, self.valset_ratio], generator=self.generator)

@@ -598,7 +598,6 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
 
     # Weight Space Disentanglemet Analysis
     estimated_poison_vector =  task_vectors['Average'] * (-1 * results_dict['alpha_psn'])
-    # estimated_poison_vector =  task_vectors['Average'] * (0.55)
     estimated_clean_vector = task_vectors['Mix'] - estimated_poison_vector
     
     subset_size  = 1024
@@ -658,20 +657,35 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
     # print(tv_train_results)
     
-    model.load_state_dict(pt_weights, strict=False)
-    wd_results = apply_WD_analysis(
+    # model.load_state_dict(pt_weights, strict=False)
+    # wd_results = apply_WD_analysis(
+    #     model=model,
+    #     taskvector1=estimated_clean_vector,
+    #     support_tv1=clean_support,
+    #     taskvector2=estimated_poison_vector,
+    #     support_tv2=poisoned_support,
+    #     alhpa_range=(0.0, 2.0),
+    #     step=0.1,
+    #     batch_size=512,
+    #     device=gpu
+    # )
+    # with open(results_dir / "WD2.pkl", "wb") as f:
+    #     pickle.dump(wd_results, f)
+    
+    from alignemnt_score import compute_task_vector_alignment
+    
+    alingment_score = compute_task_vector_alignment(
         model=model,
-        taskvector1=estimated_clean_vector,
-        support_tv1=clean_support,
-        taskvector2=estimated_poison_vector,
-        support_tv2=poisoned_support,
-        alhpa_range=(0.0, 2.0),
-        step=0.1,
+        clean_tv=estimated_clean_vector,
+        corruption_tv=estimated_poison_vector,
+        testset_tv1=clean_support,
+        testset_tv2=poisoned_support,
+        dataset_name=dataset.dataset_name,
+        corruption_type='pois',
         batch_size=512,
-        device=gpu
+        device=gpu,
     )
-    with open(results_dir / "WD2.pkl", "wb") as f:
-        pickle.dump(wd_results, f)
+    print(alingment_score)
     
 
 from torch.distributed.elastic.multiprocessing.errors import record

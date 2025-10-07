@@ -5,10 +5,13 @@ import torchvision.transforms.v2 as transforms
 from .base_classification_dataset import BaseClassificationDataset
 from typing import Tuple, List, Union, Dict
 from pathlib import Path
+from torch.utils.data import Subset
 
 import torch.distributed as dist
 
 class Food101(BaseClassificationDataset):
+    DEFAULT_SEED = 1111
+    
     def __init__(
         self,
         data_dir: Path = Path("./data").absolute(),
@@ -19,6 +22,8 @@ class Food101(BaseClassificationDataset):
         augmentations: Union[list, None] = None,
         train_transforms: Union[tv.transforms.Compose, transforms.Compose] = None,
         val_transforms: Union[tv.transforms.Compose, transforms.Compose] = None,
+        val_from_test_size: int = None,
+        val_split_seed: int = DEFAULT_SEED,
         **kwargs
     ) -> None:
         self.img_size = img_size
@@ -37,6 +42,9 @@ class Food101(BaseClassificationDataset):
         dataset_dir = data_dir / 'Food101'
         dataset_dir.mkdir(exist_ok=True, parents=True)
         
+        
+        self.val_from_test_size = 0 if val_from_test_size == None else val_from_test_size
+        self.val_split_seed = val_split_seed
         
         super().__init__(
             dataset_name='Food101',
@@ -64,6 +72,21 @@ class Food101(BaseClassificationDataset):
         return trainset
 
     def load_validation_set(self):
+        if self.val_from_test_size != None:
+            self.train_transforms = self.get_transforms(train=True)
+            root = self.dataset_dir
+            if self.is_distributed():
+                if self.is_node_leader():
+                    _ = datasets.Food101(root=root, split="test", download=True)  # pre-download only
+                dist.barrier()
+                testset = datasets.Food101(root=root, split="test",
+                                        transform=self.train_transforms, download=False)
+            else:
+                testset = datasets.Food101(root=root, split="test",
+                                        transform=self.train_transforms, download=True)
+            
+            valset, _ = self._random_subset(testset, size=self.val_from_test_size, seed=self.val_split_seed)
+            return valset
         return None
 
     def load_test_set(self):
@@ -80,7 +103,21 @@ class Food101(BaseClassificationDataset):
             testset = datasets.Food101(root=root, split="test",
                                     transform=self.val_transforms, download=True)
 
+        if self.val_from_test_size != None:
+            _, testset = self._random_subset(testset, size=self.val_from_test_size, seed=self.val_split_seed)
         return testset
+    
+    def _random_subset(self, ds, size: int, seed: int):
+        n = len(ds)
+        k = max(0, min(size, n))
+
+        g = torch.Generator().manual_seed(seed)
+        perm = torch.randperm(n, generator=g)
+
+        idx_selected = perm[:k].tolist()
+        idx_complement = perm[k:].tolist()
+
+        return Subset(ds, idx_selected), Subset(ds, idx_complement)
 
     def get_transforms(self, train=True):
         if self._train_transforms and train:

@@ -791,8 +791,8 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # clean_subset = random_subset(clean_train_ds, subset_size, dataset_seed)
     # noisy_subset = random_subset(noisy_train_ds, subset_size, dataset_seed + 1)
     
-    with open(results_dir / "metrics_seed.json", "r") as json_file:
-        results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
+    # with open(results_dir / "metrics_seed.json", "r") as json_file:
+    #     results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
     
     # records = []
     # for a_str, res in results_dict['Seed 10'].items():
@@ -818,9 +818,9 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     #     'Alpha Forget Threshold:', alpha_forgetting_thrsh
     #     )
 
-    # noise_vector = task_vectors['Seed 10'] * alpha_forgetting_thrsh * -1 # alpha is negative
-    # clean_vector = task_vectors['Mix'] - noise_vector
-    estimated_noise_vector =  task_vectors['Seed 10'] * (-1 * results_dict['alpha_KNN'])
+    # estimated_noise_vector = task_vectors['Seed 10'] * alpha_forgetting_thrsh * -1 # alpha is negative
+    # estimated_clean_vector = task_vectors['Mix'] - estimated_noise_vector
+    estimated_noise_vector =  task_vectors['Average'] * (-1 * results_dict['alpha_KNN'])
     estimated_clean_vector = task_vectors['Mix'] - estimated_noise_vector
 
     
@@ -841,7 +841,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # with open(results_dir / "WD.pkl", "wb") as f:
     #     pickle.dump(wd_results, f)
     
-    subset_size  = 2048
+    subset_size  = 4096
     def random_subset(ds, k, seed: int):
         k = min(k, len(ds))
         g = torch.Generator().manual_seed(seed)
@@ -867,21 +867,35 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     #     pickle.dump(wd_results, f)
     
     
-    model.load_state_dict(pt_weights, strict=False)
-    wd_results = apply_WD_antitask_analysis_acc(
+    # model.load_state_dict(pt_weights, strict=False)
+    # wd_results = apply_WD_antitask_analysis_acc(
+        # model=model,
+        # taskvector1=estimated_clean_vector,
+        # taskvector2=estimated_noise_vector,
+        # shared_support=test_subset,
+        # calibration_dl=None,
+        # alpha_range=(0.0, 2.5),
+        # step=0.1,
+        # batch_size=512,
+        # device=gpu,
+    # )
+    # with open(results_dir / "WD2.pkl", "wb") as f:
+    #     pickle.dump(wd_results, f)
+    
+    from alignemnt_score import compute_task_vector_alignment
+    
+    alingment_score = compute_task_vector_alignment(
         model=model,
-        taskvector1=estimated_clean_vector,
-        taskvector2=estimated_noise_vector,
-        shared_support=test_subset,
-        calibration_dl=None,
-        alpha_range=(0.0, 2.5),
-        step=0.1,
+        clean_tv=estimated_clean_vector,
+        corruption_tv=estimated_noise_vector,
+        testset_tv1=test_subset,
+        testset_tv2=None,
+        dataset_name=dataset.dataset_name,
+        corruption_type='sym',
         batch_size=512,
         device=gpu,
     )
-    with open(results_dir / "WD2.pkl", "wb") as f:
-        pickle.dump(wd_results, f)
-    
+    print(alingment_score)
     
 
 
