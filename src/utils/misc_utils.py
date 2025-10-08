@@ -525,7 +525,7 @@ def describe_structure(obj, depth=0):
 
 
 
-def plot_confusion_matrix(cm, class_names=None, title='Confusion Matrix', color_map='Blues', color_bar=False, 
+def plot_confusion_matrix(cm, class_names=None, title='Confusion Matrix', color_map='Blues', figsize=(8, 6), color_bar=False, 
                             x_label=None, y_label=None, vmin=None, vmax=None, tick_label_font_size=None,
                             filepath=None, show=True):
     """
@@ -597,7 +597,7 @@ def plot_confusion_matrix(cm, class_names=None, title='Confusion Matrix', color_
         else:
             vmax_effective = vmax
 
-    plt.figure(figsize=(8, 6))
+    plt.figure(figsize=figsize)
     
     # Use vmin_effective and vmax_effective for the color mapping
     ax = sns.heatmap(cm_np, annot=True, fmt=fmt, cmap=color_map, cbar=color_bar,

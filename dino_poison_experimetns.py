@@ -302,7 +302,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     task_vectors['Mix'] = TaskVector(pt_weights, mix_weights)
     task_vectors['Random Vector'] = task_vectors['Average'].generate_random_vector_with_same_layer_norms(seed=11)
 
-
+    
     
     ft_tvs_list = list(task_vectors.values())
     tv_names = list(task_vectors.keys())
@@ -317,6 +317,9 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             task_sim[i].append(cos_sim)
     task_sim = np.array(task_sim)
 
+    with open(results_dirs['cms'] / "tv_sim.pkl", "wb") as f:
+        pickle.dump(task_sim, f)
+    exit()
     misc_utils.plot_confusion_matrix(
         title='Task Vector Similarity Matrix',
         cm=task_sim,

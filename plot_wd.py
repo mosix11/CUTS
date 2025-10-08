@@ -25,6 +25,9 @@ def plot_wd_pickle(
     alphas = np.asarray(out["alphas"], dtype=float)          # 1D
     wd_map = np.asarray(out["wd_map"], dtype=float)          # [len(a2), len(a1)]
 
+    alphas = alphas[1:]
+    wd_map = wd_map[1:, 1:]
+
     # Convert to % if requested
     if percent:
         Z = 100.0 * wd_map
@@ -223,7 +226,7 @@ def plot_antitask_wd_maps(pickle_path):
 # fig, axs = plot_wd_pickle('results/single_experiment/clip_poison_TA/config2/WD2.pkl')
 # fig, axs = plot_wd_pickle('results/single_experiment/regular_poison_TA/config2/WD2.pkl')
 
-fig, axs = plot_wd_pickle('results/single_experiment/clip_poison_TA/config3/WD2.pkl')
+# fig, axs = plot_wd_pickle('results/single_experiment/clip_poison_TA/config3/WD2.pkl')
 # fig, axs = plot_wd_pickle('results/single_experiment/regular_poison_TA/config3/WD2.pkl')
 
 # fig, axs = plot_wd_pickle('results/single_experiment/clip_noise_TA/config26/WD_AT2_acc_real.pkl')
@@ -234,5 +237,5 @@ fig, axs = plot_wd_pickle('results/single_experiment/clip_poison_TA/config3/WD2.
 # fig, axs = plot_wd_pickle('results/single_experiment/clip_noise_TA/config39/WD2.pkl')
 
 # fig, axs = plot_antitask_wd_maps('results/single_experiment/clip_noise_TA/config26/WD_AT2_acc.pkl')
-# fig, axs = plot_antitask_wd_maps('results/single_experiment/clip_noise_TA/config7/WD_AT2.pkl') 
+fig, axs = plot_antitask_wd_maps('results/single_experiment/clip_noise_TA/config7/WD_AT2.pkl') 
 plt.show()

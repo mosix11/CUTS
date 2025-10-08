@@ -501,7 +501,11 @@ def apply(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     else:
         task_vectors['Average'] = TaskVector.mean(task_vectors)
         
-
+    mix_vector = TaskVector(pt_weights, mix_weights)
+    
+    print('mix', mix_vector.norm())
+    print('noise', task_vectors['Average'].norm())
+    exit()
     model.load_state_dict(mix_weights, strict=False)
     
     # coef for 64:

@@ -452,16 +452,23 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     else:
         task_vectors['Average'] = TaskVector.mean(task_vectors)
 
-    task_vectors['Clean'] = TaskVector(mix_weights, ft_ho_clean_weights)
+    task_vectors['CF'] = TaskVector(mix_weights, ft_ho_clean_weights)
     task_vectors['Mix'] = TaskVector(pt_weights, mix_weights)
+    task_vectors['Gold'] = TaskVector(pt_weights, gold_weights)
     task_vectors['Random Vector'] = task_vectors['Average'].generate_random_vector_with_same_layer_norms(seed=20)
 
-    
-    
+    with open(results_dir / "metrics.json", "r") as json_file:
+        results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
+    estimated_poison_vector =  task_vectors['Average'] * (-1 * results_dict['alpha_psn'])
+    estimated_clean_vector = task_vectors['Mix'] - estimated_poison_vector
+    task_vectors['Clean'] = estimated_clean_vector
     
     ft_tvs_list = list(task_vectors.values())
     tv_names = list(task_vectors.keys())
-    
+
+    for name, tv in task_vectors.items():
+        print(name, tv.norm())
+        
     task_sim = []
     for i in range(len(ft_tvs_list)):
         anchor_tv = ft_tvs_list[i]
@@ -471,6 +478,9 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             cos_sim = anchor_tv.cosine_similarity_flatten(other_tv)
             task_sim[i].append(cos_sim)
     task_sim = np.array(task_sim)
+    
+    with open(results_dirs['cms'] / "tv_sim.pkl", "wb") as f:
+        pickle.dump(task_sim, f)
     
     misc_utils.plot_confusion_matrix(
         title='Task Vector Similarity Matrix',
@@ -482,12 +492,13 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         vmax= 1.0,
         x_label='Task Vectors',
         y_label='Task Vectors',
-        tick_label_font_size=6,
+        figsize=(8, 6),
+        tick_label_font_size=10,
         filepath=results_dir / 'task_similarities.png',
         show=False
     )
 
-
+    exit()
     # results_dict = OrderedDict()
     # with open(results_dir / "metrics.json", "r") as json_file:
     #     results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
