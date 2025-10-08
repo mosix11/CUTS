@@ -209,7 +209,7 @@ def select_alpha_by_knn_self_agreement(
             random_state=random_state,
         )
         
-        # print(f'Alpha={a}, Score={score}')
+        print(f'Alpha={a}, Aggregate Score={score}')
         # track best
         if score > best_score:
             best_score = score
