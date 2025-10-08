@@ -716,7 +716,7 @@ def plot_noise_alpha_interplay_dual(
 
         _annotate_on_axis(P["ann_x"](P["alpha_star_u"]), r"$\alpha^\ast_a$", linestyle=":")
         _annotate_on_axis(P["ann_x"](P["alpha_star_f"]), r"$\alpha^\ast_f$", linestyle="--", y_margin=0.08)
-        _annotate_on_axis(P["ann_x"](P["alpha_kNN"]),   r"$\hat{\alpha}^\ast_{\mathrm{knn}}$", linestyle="-.")
+        _annotate_on_axis(P["ann_x"](P["alpha_kNN"]),   r"$\hat{\alpha}^\ast_{\mathrm{knn}}$", linestyle="-.", y_margin=0.08)
 
         # return handles for a single shared legend if requested
         if add_legend:
@@ -1293,217 +1293,6 @@ def plot_alpha_poison_interplay_dual(
     plt.close(fig)
     return save_path
 
-# def plot_alpha_noise_and_poison_interplay_dual(
-#     results_dir_noise: Path,
-#     config_rel_path_noise: str,
-#     results_dir_poison: Path,
-#     config_rel_path_poison: str,
-#     dataset_name_noise: str = "CIFAR10",
-#     dataset_name_poison: str = "CIFAR10",
-#     forget_threshold_noise: float = 0.9,
-#     forget_threshold_poison: float = 0.9,
-#     save_path: Path = Path("./visulaization_dir/noise_and_poison_interplay_dual.png"),
-# ) -> Path:
-#     """
-#     Make a 1x2 figure of UT/FR/HR/DR vs α for two experiments of DIFFERENT types:
-#       - Left (A): NOISE experiment (expects 'alpha_KNN' in metrics.json) → annotate kNN alpha
-#       - Right (B): POISON experiment (expects 'alpha_psn' in metrics.json) → annotate poison alpha
-
-#     Shared behavior:
-#       - Preferred x-ordering: alphas <= 0 only, with 0 at left and more negative to the right.
-#       - Fallback: if no negatives exist, plot against |alpha| ascending.
-#       - Mix injected at α=0.
-#       - Clean UT horizontal reference line.
-#       - α*_a, α*_f, and alpha_key highlighted on x-axis (bottom labels).
-#       - Shared y-axis and a single, shared legend.
-#     Saves to: ./visulaization_dir/interplay_noise_vs_poison_{nameA}__{nameB}.png
-#     Returns: saved Path
-#     """
-
-#     def _prepare_one(
-#         results_dir: Path,
-#         config_rel_path: str,
-#         dataset_name: str,
-#         forget_threshold: float,
-#         alpha_key: str,  # 'alpha_KNN' OR 'alpha_psn'
-#     ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-#         """Load metrics, inject mix@0, compute alphas, choose ordering, return plotting payload + meta."""
-#         metrics = _load_metrics(results_dir / config_rel_path)
-#         if not metrics:
-#             raise FileNotFoundError(f"metrics.json not found or unreadable for {config_rel_path}")
-
-#         # Clean out non-alpha extras; extract alpha_key
-#         metrics.pop("FT HO Clean", None)
-#         metrics.pop("alpha_s4", None)
-
-#         alpha_raw = metrics.pop(alpha_key, None)
-#         try:
-#             alpha_special = None if alpha_raw is None else round(float(alpha_raw), 2)
-#         except Exception:
-#             alpha_special = None
-
-#         baselines = _collect_baseline_metrics(metrics)   # pops Mix/Gold/Random Vector
-#         alpha_grid = _collect_alpha_metrics(metrics)     # keys are rounded floats
-
-#         # Inject Mix at α=0
-#         mix_alpha = 0.0
-#         alpha_grid[mix_alpha] = {
-#             "utility": baselines["mix"].get("utility", 0),
-#             "forget_rate": baselines["mix"].get("forget_rate", 0),
-#             "healing_rate": baselines["mix"].get("healing_rate", 0),
-#             "destruction_rate": baselines["mix"].get("destruction_rate", 0),
-#         }
-
-#         # Resolve α*’s
-#         alpha_star_u = _get_alpha_star_utility(alpha_grid)
-#         alpha_star_f = _get_alpha_star_forgetting(alpha_grid, forget_threshold)
-
-#         # Choose x mapping & ordering
-#         all_as = list(alpha_grid.keys())
-#         neg_as = sorted([a for a in all_as if a < 0], key=lambda a: abs(a))  # -0.01, -0.02, ...
-#         use_abs_mode = (len(neg_as) == 0)
-
-#         if not use_abs_mode:
-#             ordered_alphas: List[float] = [mix_alpha] + neg_as
-#             x_vals = ordered_alphas
-#             xlabel = r"$\alpha$"
-#             def _series(k: str): return [alpha_grid[a].get(k, None) for a in ordered_alphas]
-#             def _ann_x(a: Optional[float]) -> Optional[float]:
-#                 return a if (a is not None and a in alpha_grid and a <= 0.0) else None
-#             x_left, x_right = 0.0, (min(neg_as) if neg_as else 0.0)  # invert axis
-#         else:
-#             ordered_alphas = sorted(all_as, key=lambda a: (abs(a), a))
-#             x_vals = [abs(a) for a in ordered_alphas]
-#             xlabel = r"$|\alpha|$"
-#             def _series(k: str): return [alpha_grid[a].get(k, None) for a in ordered_alphas]
-#             def _ann_x(a: Optional[float]) -> Optional[float]:
-#                 return abs(a) if (a is not None and a in alpha_grid) else None
-#             x_left, x_right = 0.0, (max(x_vals) if x_vals else 0.0)
-
-#         payload = dict(
-#             dataset_name=dataset_name,
-#             config_rel_path=config_rel_path,
-#             baselines=baselines,
-#             alpha_grid=alpha_grid,
-#             alpha_star_u=alpha_star_u,
-#             alpha_star_f=alpha_star_f,
-#             alpha_special=alpha_special,   # kNN or psn depending on panel
-#             x_vals=x_vals,
-#             xlabel=xlabel,
-#             xlim=(x_left, x_right),
-#             UT=_series("utility"),
-#             FR=_series("forget_rate"),
-#             HR=_series("healing_rate"),
-#             DR=_series("destruction_rate"),
-#             ann_x=_ann_x,
-#             use_abs_mode=use_abs_mode,
-#         )
-#         meta = dict(alpha_key=alpha_key)
-#         return payload, meta
-
-#     # Prepare A (noise, alpha_KNN) and B (poison, alpha_psn)
-#     payloadA, metaA = _prepare_one(
-#         results_dir_noise, config_rel_path_noise, dataset_name_noise, forget_threshold_noise, alpha_key="alpha_KNN"
-#     )
-#     payloadB, metaB = _prepare_one(
-#         results_dir_poison, config_rel_path_poison, dataset_name_poison, forget_threshold_poison, alpha_key="alpha_psn"
-#     )
-
-#     # ---------- plotting ----------
-
-
-#     fig, axes = plt.subplots(1, 2, figsize=(11.6, 4.2), dpi=220, sharey=True)
-
-#     def _plot_panel(ax, P: Dict[str, Any], title: Optional[str], special_label: str, add_legend: bool = False):
-#         # Lines only (no markers)
-#         h_ut, = ax.plot(P["x_vals"], P["UT"], linewidth=2.2, label="UT")
-#         h_fr, = ax.plot(P["x_vals"], P["FR"], linewidth=2.0, label="FR")
-#         h_hr, = ax.plot(P["x_vals"], P["HR"], linewidth=2.0, label="HR")
-#         h_dr, = ax.plot(P["x_vals"], P["DR"], linewidth=2.0, label="DR")
-
-#         # Axes styling
-#         ax.set_xlabel(P["xlabel"], fontsize=11)
-#         ax.set_ylim(0.0, 1.0)
-#         ax.grid(False)
-#         ax.tick_params(axis="both", labelsize=9)
-#         ax.set_xlim(*P["xlim"])
-
-#         # Panel title
-#         if title is None:
-#             title = f"{P['dataset_name']} · {Path(P['config_rel_path']).parent.name}"
-#         ax.set_title(title, fontsize=12)
-
-#         # Clean UT reference
-#         clean_ut = P["baselines"]["clean"]["utility"]
-#         if clean_ut is not None:
-#             ax.axhline(clean_ut, color="#BBBBBB", linewidth=1.5, linestyle="--", alpha=0.9)
-
-#         # Alpha annotations on x-axis (bottom)
-#         def _annotate_on_axis(x_at: Optional[float], label: str, linestyle, y_margin=0.015):
-#             if x_at is None:
-#                 return
-#             ymin, ymax = ax.get_ylim()
-#             ax.axvline(x_at, linestyle=linestyle, linewidth=1.1, alpha=0.6, color="black")
-#             ax.text(
-#                 x_at,
-#                 ymin + y_margin * (ymax - ymin),
-#                 label,
-#                 va="bottom",
-#                 ha="center",
-#                 fontsize=9,
-#                 color="black",
-#                 bbox=dict(facecolor="white", alpha=0.85, edgecolor="none", pad=1.0),
-#                 clip_on=False,
-#             )
-
-#         _annotate_on_axis(P["ann_x"](P["alpha_star_u"]), r"$\alpha^\ast_a$", linestyle=":")
-#         _annotate_on_axis(P["ann_x"](P["alpha_star_f"]), r"$\alpha^\ast_f$", linestyle="--", y_margin=0.08)
-#         _annotate_on_axis(P["ann_x"](P["alpha_special"]), special_label, linestyle="-.")
-
-#         # return handles for a single shared legend if requested
-#         if add_legend:
-#             return [h_ut, h_fr, h_hr, h_dr]
-#         return []
-
-#     # Left panel (NOISE): annotate kNN alpha
-#     handles = _plot_panel(
-#         axes[0],
-#         payloadA,
-#         title=f"{payloadA['dataset_name']}",
-#         special_label=r"$\hat{\alpha}^\ast_{\mathrm{kNN}}$",
-#         add_legend=True,
-#     )
-#     # Right panel (POISON): annotate poison alpha
-#     _plot_panel(
-#         axes[1],
-#         payloadB,
-#         title=f"{payloadB['dataset_name']}",
-#         special_label=r"$\hat{\alpha}^\ast_{\mathrm{psn}}$",
-#         add_legend=False,
-#     )
-
-#     # Shared Y label on the figure
-#     fig.text(0.04, 0.5, "Metric value", va="center", rotation="vertical", fontsize=11)
-
-#     # Single shared legend (deduplicated by dict)
-#     by_label = {}
-#     for h in handles:
-#         by_label[h.get_label()] = h
-#     fig.legend(
-#         list(by_label.values()),
-#         list(by_label.keys()),
-#         loc="lower center",
-#         ncol=4,
-#         frameon=True,
-#         fontsize=9,
-#         bbox_to_anchor=(0.52, -0.02),
-#     )
-
-#     fig.tight_layout()
-#     fig.subplots_adjust(left=0.09, bottom=0.18)  # space for y-label & legend
-#     fig.savefig(save_path, bbox_inches="tight", pad_inches=0.06)
-#     plt.close(fig)
-#     return save_path
 
 def plot_alpha_noise_and_poison_interplay_dual(
     results_dir_noise: Path,
@@ -2219,16 +2008,16 @@ if __name__ == "__main__":
     # generate_clip_noise_utlity_table(clip_noise_results_dir, clip_symmetric_cfgs)
     # generate_clip_noise_fr_dr_hr_table(clip_noise_results_dir, clip_symmetric_cfgs['CIFAR10'])
     # plot_alpha_interplay(clip_noise_results_dir, clip_symmetric_cfgs['CIFAR10'][60])
-    plot_noise_alpha_interplay_dual(
-        clip_noise_results_dir,
-        clip_symmetric_cfgs['CIFAR10'][60],
-        clip_symmetric_cfgs['CIFAR100'][10],
-        dataset_name_A=r"CIFAR-10 ($\eta=60\%$)",
-        dataset_name_B=r"CIFAR-100 ($\eta=10\%$)",
-        forget_threshold_A=0.9,
-        forget_threshold_B=0.9,
-        save_path=Path("./visulaization_dir/clip_noise_sym_interplay_plot.png")
-    )
+    # plot_noise_alpha_interplay_dual(
+    #     clip_noise_results_dir,
+    #     clip_symmetric_cfgs['CIFAR10'][60],
+    #     clip_symmetric_cfgs['CIFAR100'][10],
+    #     dataset_name_A=r"CIFAR-10 ($\eta=60\%$)",
+    #     dataset_name_B=r"CIFAR-100 ($\eta=10\%$)",
+    #     forget_threshold_A=0.9,
+    #     forget_threshold_B=0.9,
+    #     save_path=Path("./visulaization_dir/clip_noise_sym_interplay_plot.png")
+    # )
     
     
     # generate_clip_noise_utlity_table(
@@ -2335,10 +2124,11 @@ if __name__ == "__main__":
     #     regular_noise_results_dir,
     #     regular_symmetric_cfgs['CIFAR10'][40],
     #     regular_symmetric_cfgs['CIFAR100'][40],
-    #     dataset_name_A="CIFAR-10 (40%)",
-    #     dataset_name_B="CIFAR-100 (40%)",
+    #     dataset_name_A=r"CIFAR-10 ($\eta=40\%$)",
+    #     dataset_name_B=r"CIFAR-100 ($\eta=40\%$)",
     #     forget_threshold_A=0.9,
     #     forget_threshold_B=0.9,
+    #     save_path=Path("./visulaization_dir/regular_noise_sym_interplay_plot.png")
     # )
     
     # generate_clip_noise_utlity_table(
