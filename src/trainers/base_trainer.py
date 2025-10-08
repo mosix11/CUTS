@@ -488,29 +488,11 @@ class BaseClassificationTrainer(ABC):
                 pass
         
         
-        def should_validate(global_step: int, total_steps: int = 5000, zero_indexed: bool = True) -> bool:
-            s = global_step + 1 if zero_indexed else global_step  
-
-            if s <= 20:
-                return True
-            elif s <= 40:
-                return s % 2 == 0
-            elif s <= 100:
-                return s % 5 == 0
-            elif s <= 500:
-                return s % 25 == 0
-            elif s <= 1000:
-                return s % 100 == 0
-            else:
-                return (s % 250 == 0) or (s == total_steps)
-                
         if self.iteration_mode:
             # Validation on step frequency
-            # if self._should_validate_now():
-            if should_validate(self.global_step):
-                val_stats = self.evaluate(set='Test')
+            if self._should_validate_now():
+                val_stats = self.evaluate(set='Val')
                 self._check_update_best_and_save(val_stats, train_snapshot)
-                self.comet_experiment.log_metrics(val_stats, step=self.global_step)
 
             # Checkpoint on step frequency
             if self._should_checkpoint_now():
@@ -537,7 +519,6 @@ class BaseClassificationTrainer(ABC):
             if self._should_validate_now():
                 val_stats = self.evaluate(set='Val')
                 self._check_update_best_and_save(val_stats, epoch_train_stats)
-                self.comet_experiment.log_metrics(val_stats, epoch=self.epoch)
 
             # Checkpoint on epoch frequency
             if self._should_checkpoint_now():
