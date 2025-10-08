@@ -136,12 +136,6 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
                 dataset.set_trainset(hs_noisy, shuffle=True)
                 
                 
-            print(len(dataset.get_trainset()))
-            for item in dataset.get_trainset():
-                if not item[3]:
-                    print(item[2])
-            
-            exit()
             finetuning_cfg = None
             if 'noise' in cfg['trainer']['finetuning']:
                 finetuning_cfg = cfg['trainer']['finetuning']['noise']
