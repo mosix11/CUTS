@@ -491,7 +491,7 @@ class BaseClassificationTrainer(ABC):
         if self.iteration_mode:
             # Validation on step frequency
             if self._should_validate_now():
-                val_stats = self.evaluate(set='Val')
+                val_stats = self.evaluate(set='Test')
                 self._check_update_best_and_save(val_stats, train_snapshot)
                 self.comet_experiment.log_metrics(val_stats, step=self.global_step)
 
