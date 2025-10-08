@@ -493,6 +493,7 @@ class BaseClassificationTrainer(ABC):
             if self._should_validate_now():
                 val_stats = self.evaluate(set='Val')
                 self._check_update_best_and_save(val_stats, train_snapshot)
+                self.comet_experiment.log_metrics(val_stats, step=self.global_step)
 
             # Checkpoint on step frequency
             if self._should_checkpoint_now():
@@ -519,6 +520,7 @@ class BaseClassificationTrainer(ABC):
             if self._should_validate_now():
                 val_stats = self.evaluate(set='Val')
                 self._check_update_best_and_save(val_stats, epoch_train_stats)
+                self.comet_experiment.log_metrics(val_stats, epoch=self.epoch)
 
             # Checkpoint on epoch frequency
             if self._should_checkpoint_now():

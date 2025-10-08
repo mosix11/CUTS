@@ -1660,7 +1660,7 @@ def plot_recovery_bars_40pct(
     results_dir: Path,
     comp_cfgs: Dict[str, Any],
     save_path: Path = Path("./visulaization_dir/regular_symmetric_40_comp_bars.png"),
-    zero_position: float = 0.35,   # where y=0 sits (fraction from bottom). >0.5 means "above center"
+    zero_position: float = 0.0,   # where y=0 sits (fraction from bottom). >0.5 means "above center"
     annotate: bool = True,         # write numbers above bars
     fallback_to_alpha_a: bool = False,  # if alpha_KNN missing, use alpha*_a
 ) -> Path:
@@ -1673,7 +1673,7 @@ def plot_recovery_bars_40pct(
       - bars drawn from axis bottom (ymin) with shaded region under θ_mix
       - legend on top, annotations, grid, despined top/right
     """
-    assert 0.05 < zero_position < 0.95, "zero_position should be in (0.05, 0.95)"
+    # assert 0.05 < zero_position < 0.95, "zero_position should be in (0.05, 0.95)"
 
     # ---- helpers (same as your seaborn version) ----
     def _rr_from_metrics(cfg_rel: Optional[str]) -> Optional[float]:
@@ -1836,15 +1836,15 @@ def plot_recovery_bars_40pct(
 
     # Vertical, compact y-label at left (below θ_mix), like your seaborn code
     trans = mtransforms.blended_transform_factory(ax.transAxes, ax.transData)
-    # y_text = ymin + 0.35 * (0 - ymin)  # 35% of way from ymin up to 0
+    y_text = ymin + 0.35 * (0 - ymin)  # 35% of way from ymin up to 0
     ax.text(
-        -0.02, -54, "Recovery (RR) [%]",
+        -0.1, -1.5, "Recovery (RR) [%]",
         rotation=90, va="bottom", ha="center",
         fontsize=FS_XY_LABEL - 2, alpha=0.9, transform=trans
     )
     
     ax.text(
-        -0.045, -55, r'$\longrightarrow$',
+        -0.135, -2, r'$\longrightarrow$',
         rotation=90, va="bottom", ha="center",
         alpha=0.7, transform=trans, fontsize=7
     )
@@ -1852,16 +1852,16 @@ def plot_recovery_bars_40pct(
 
     # θ_mix dashed line on top of bars
     x0, x1 = ax.get_xlim()
-    ax.plot([x0, x1], [0, 0], **ZERO_LINE_STYLE)
+    # ax.plot([x0, x1], [0, 0], **ZERO_LINE_STYLE)
 
     # θ_clean reference line (subtle, behind)
     ax.axhline(100, color="black", linewidth=0.9, linestyle="-", zorder=1)
 
     # Shaded region below θ_mix (overlay, including bars)
-    ax.axhspan(
-        ymin, 0, facecolor=SHADE_FACE, alpha=SHADE_ALPHA,
-        hatch=SHADE_HATCH, edgecolor=SHADE_EDGE, zorder=6
-    )
+    # ax.axhspan(
+    #     ymin, 0, facecolor=SHADE_FACE, alpha=SHADE_ALPHA,
+    #     hatch=SHADE_HATCH, edgecolor=SHADE_EDGE, zorder=6
+    # )
 
     # Legend (only for inits that actually appear)
     present_inits = [i for i in init_order if (df["Init"] == i).any()]
@@ -2101,15 +2101,15 @@ if __name__ == "__main__":
     #     outputfile_path= Path("./visulaization_dir/regular_symmetric_noise_table.txt")
     #     )
     
-    plot_noise_alpha_interplay_dual(
-        regular_noise_results_dir,
-        regular_symmetric_cfgs['CIFAR10'][40],
-        regular_symmetric_cfgs['CIFAR100'][40],
-        dataset_name_A="CIFAR-10 (40%)",
-        dataset_name_B="CIFAR-100 (40%)",
-        forget_threshold_A=0.9,
-        forget_threshold_B=0.9,
-    )
+    # plot_noise_alpha_interplay_dual(
+    #     regular_noise_results_dir,
+    #     regular_symmetric_cfgs['CIFAR10'][40],
+    #     regular_symmetric_cfgs['CIFAR100'][40],
+    #     dataset_name_A="CIFAR-10 (40%)",
+    #     dataset_name_B="CIFAR-100 (40%)",
+    #     forget_threshold_A=0.9,
+    #     forget_threshold_B=0.9,
+    # )
     
     # generate_clip_noise_utlity_table(
     #     regular_noise_results_dir,
@@ -2131,7 +2131,7 @@ if __name__ == "__main__":
     #     outputfile_path= Path("./visulaization_dir/regular_symmetric_noise_comp_pt_rnd_table.txt")
     # )
     
-    # plot_recovery_bars_40pct(
-    #     regular_noise_results_dir,
-    #     regular_symmetric_comp_cfgs
-    # )
+    plot_recovery_bars_40pct(
+        regular_noise_results_dir,
+        regular_symmetric_comp_cfgs
+    )
