@@ -117,6 +117,16 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
             elif strategy['finetuning_set'] == 'Val':
                 dataset.set_trainset(dataset.get_valset(), shuffle=True)
                 dataset.inject_noise(**noise_tv)
+            elif strategy['finetuning_set'] == 'Val+Subset':
+                valset = dataset.get_valset()
+                def random_subset(ds, k, seed: int):
+                    k = min(k, len(ds))
+                    g = torch.Generator().manual_seed(seed)
+                    idx = torch.randperm(len(ds), generator=g)[:k].tolist()
+                    return Subset(ds, idx)
+                valset_subset = random_subset(valset, 2000, cfg['dataset_seed'])
+                dataset.set_trainset(valset_subset, shuffle=True)
+                dataset.inject_noise(**noise_tv)
             elif strategy['finetuning_set'] == 'Train':
                 dataset.inject_noise(**noise_tv)
                 

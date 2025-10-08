@@ -4,13 +4,18 @@ dataset_seed: &dataset_seed 11
 
 
 strategy:
-  finetuning_set: &finetuning_set 'Val'
+  finetuning_set: &finetuning_set 'Val+Subset'
   noise:
     finetuning:
       - set: 'Train'
         noise_rate: 1.0
-        noise_type: 'asymmetric'
+        noise_type: 'symmetric'
         seed: 12
+      - set: 'Train'
+        noise_rate: 1.0
+        noise_type: 'symmetric'
+        seed: 10
+
 
 
 dataset:
