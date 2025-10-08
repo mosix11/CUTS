@@ -127,6 +127,7 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
                 valset_subset = random_subset(valset, 2000, cfg['dataset_seed'])
                 dataset.set_trainset(valset_subset, shuffle=True)
                 dataset.inject_noise(**noise_tv)
+                
             elif strategy['finetuning_set'] == 'Train':
                 dataset.inject_noise(**noise_tv)
                 
@@ -134,6 +135,13 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
                 hs_clean, hs_noisy = dataset.get_clean_noisy_subsets(set='Train')
                 dataset.set_trainset(hs_noisy, shuffle=True)
                 
+                
+            print(len(dataset.get_trainset()))
+            for item in dataset.get_trainset():
+                if not item[3]:
+                    print(item[2])
+            
+            exit()
             finetuning_cfg = None
             if 'noise' in cfg['trainer']['finetuning']:
                 finetuning_cfg = cfg['trainer']['finetuning']['noise']
