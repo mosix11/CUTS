@@ -54,5 +54,5 @@ trainer:
       run_on_gpu: True
       use_amp: True
       log_comet: True
-      comet_project_name: 'clip-noise-TA'
+      comet_project_name: 'clip-noise-TA-with-test-val'
       seed: *training_seed
