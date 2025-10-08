@@ -277,6 +277,8 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         alphas=np.round(np.linspace(-0.0, -2.0, 101), 2),
         device=gpu
     )
+    
+    print(alpha_kNN)
 
     
         # results_dict['alpha_KNN'] = alpha_kNN
