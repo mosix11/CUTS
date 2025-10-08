@@ -491,12 +491,12 @@ class BaseClassificationTrainer(ABC):
         def should_validate(global_step: int, total_steps: int = 5000, zero_indexed: bool = True) -> bool:
             s = global_step + 1 if zero_indexed else global_step  
 
-            if s <= 5:
+            if s <= 20:
                 return True
-            elif s <= 30:
+            elif s <= 40:
+                return s % 2 == 0
+            elif s <= 100:
                 return s % 5 == 0
-            elif s <= 80:
-                return s % 10 == 0
             elif s <= 500:
                 return s % 25 == 0
             elif s <= 1000:
