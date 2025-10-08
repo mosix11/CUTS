@@ -140,7 +140,7 @@ def knn_self_agreement_diversity(
             km_labels = km.fit_predict(feats_np)
             nmi_bonus = float(NMI(yhat, km_labels)) * gamma_nmi
 
-    # print(f'SA_adj={SA_adj}, nmi_bonus={nmi_bonus}, penalty_eff={-penalty_eff}, penalty_cov={penalty_cov}')
+    print(f'SA_adj={SA_adj}, nmi_bonus={nmi_bonus}, penalty_eff={-penalty_eff}, penalty_cov={-penalty_cov}')
     return SA_adj - (penalty_eff + penalty_cov) + nmi_bonus
 
 # -----------------------------
@@ -216,10 +216,10 @@ def select_alpha_by_knn_self_agreement(
             best_alpha = float(a)
 
         # update window and check early-stop
-        window.append(score)
-        if len(window) == window.maxlen:
-            # strictly decreasing if all diffs < 0
-            if np.all(np.diff(np.array(window)) < 0):
-                break
+        # window.append(score)
+        # if len(window) == window.maxlen:
+        #     # strictly decreasing if all diffs < 0
+        #     if np.all(np.diff(np.array(window)) < 0):
+        #         break
 
     return best_alpha

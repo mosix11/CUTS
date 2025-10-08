@@ -674,10 +674,24 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         filepath=results_dir / 'task_similarities.png',
         show=False
     )
-    exit()
+
 
     
+    results_mtl_dict = OrderedDict()
+    if not results_dir.joinpath('metrics_mtl.json').exists():
+        alphas = tqdm(np.round(np.linspace(0.0, 1.0, 21), 2))
+        
+        for alpha in alphas:
+            model.load_state_dict(pt_weights, strict=False)
+            task_vectors['Mix'].apply_to(model, scaling_coef=alpha, strict=False)
+            tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+            tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+
+            results_mtl_dict[alpha] = {'test_results': tv_test_results, 'train_results': tv_train_results}
+        with open(results_dir / 'metrics_mtl.json' , 'w') as json_file:
+            json.dump(results_mtl_dict, json_file, indent=4)
     
+    exit()
     # model.load_state_dict(mix_weights, strict=False)
     # fig_comp_pt = embedding_space_analysis.all_plot_comp(
     #     feature_extractor=model.get_image_encoder(),
