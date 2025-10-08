@@ -119,7 +119,10 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
                 dataset.inject_noise(**noise_tv)
             elif strategy['finetuning_set'] == 'Train':
                 dataset.inject_noise(**noise_tv)
-
+                
+            if noise_tv['noise_type'] == 'asymmetric':
+                hs_clean, hs_noisy = dataset.get_clean_noisy_subsets(set='Train')
+                dataset.set_trainset(hs_noisy, shuffle=True)
                 
             finetuning_cfg = None
             if 'noise' in cfg['trainer']['finetuning']:
