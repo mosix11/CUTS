@@ -1991,15 +1991,15 @@ if __name__ == "__main__":
     # generate_clip_noise_utlity_table(clip_noise_results_dir, clip_symmetric_cfgs)
     # generate_clip_noise_fr_dr_hr_table(clip_noise_results_dir, clip_symmetric_cfgs['CIFAR10'])
     # plot_alpha_interplay(clip_noise_results_dir, clip_symmetric_cfgs['CIFAR10'][60])
-    # plot_alpha_interplay_dual(
-    #     clip_noise_results_dir,
-    #     clip_symmetric_cfgs['CIFAR10'][60],
-    #     clip_symmetric_cfgs['CIFAR100'][10],
-    #     dataset_name_A="CIFAR-10 (60%)",
-    #     dataset_name_B="CIFAR-100 (10%)",
-    #     forget_threshold_A=0.9,
-    #     forget_threshold_B=0.9,
-    # )
+    plot_noise_alpha_interplay_dual(
+        clip_noise_results_dir,
+        clip_symmetric_cfgs['CIFAR10'][60],
+        clip_symmetric_cfgs['CIFAR100'][10],
+        dataset_name_A=r"CIFAR-10 ($\eta=60\%$)",
+        dataset_name_B=r"CIFAR-100 ($\eta=10\%$)",
+        forget_threshold_A=0.9,
+        forget_threshold_B=0.9,
+    )
     
     
     # generate_clip_noise_utlity_table(
@@ -2131,7 +2131,7 @@ if __name__ == "__main__":
     #     outputfile_path= Path("./visulaization_dir/regular_symmetric_noise_comp_pt_rnd_table.txt")
     # )
     
-    plot_recovery_bars_40pct(
-        regular_noise_results_dir,
-        regular_symmetric_comp_cfgs
-    )
+    # plot_recovery_bars_40pct(
+    #     regular_noise_results_dir,
+    #     regular_symmetric_comp_cfgs
+    # )
