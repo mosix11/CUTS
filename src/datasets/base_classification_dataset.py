@@ -153,9 +153,9 @@ class BaseClassificationDataset(ABC):
     def get_valset(self):
         return self.valset
     
-    def set_valset(self, set):
+    def set_valset(self, set, shuffle=False):
         self.valset = set
-        self.val_loader = self._build_dataloader(self.valset, shuffle=False)
+        self.val_loader = self._build_dataloader(self.valset, shuffle=shuffle)
     
     def get_testset(self):
         return self.testset
