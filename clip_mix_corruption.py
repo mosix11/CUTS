@@ -537,7 +537,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             json.dump(results_dict, json_file, indent=4)
         
     model.load_state_dict(mix_weights, strict=False)
-    poison_vector['P Seed 10'].apply_to(model, scaling_coef=results_dict['alpha_psn'], strict=False)
+    poison_vector['P Seed 10'].apply_to(model, scaling_coef=-0.95, strict=False)
     unpoisoned_weights = model.state_dict()
     
     results_dict = OrderedDict()

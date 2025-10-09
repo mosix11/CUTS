@@ -237,7 +237,7 @@ def plot_tv_similarity_grid_2x3(
 
     if savepath is not None:
         Path(savepath).parent.mkdir(parents=True, exist_ok=True)
-        fig.savefig(savepath, dpi=300)
+        fig.savefig(savepath, dpi=600)
 
     if show:
         plt.show()
@@ -280,13 +280,28 @@ subtitles_asym = ['CLIP—CIFAR-10', 'CLIP—CIFAR-100', 'DINO—CIFAR-10', 'DIN
 
 
 pickle_paths_sym = [
-    '/home/mosix11/Projects/TaskVectors/files/results/single_experiment/clip_noise_TA/config26/confusion_mats/tv_sim.pkl',
-    '/home/mosix11/Projects/TaskVectors/files/results/single_experiment/clip_noise_TA/config27/confusion_mats/tv_sim.pkl',
     '/home/mosix11/Projects/TaskVectors/files/results/single_experiment/clip_noise_TA/config39/confusion_mats/tv_sim.pkl',
+    '/home/mosix11/Projects/TaskVectors/files/results/single_experiment/clip_noise_TA/config26/confusion_mats/tv_sim.pkl',
+    '/home/mosix11/Projects/TaskVectors/files/results/single_experiment/clip_noise_TA/config27/confusion_mats/tv_sim.pkl',    
+    '/home/mosix11/Projects/TaskVectors/files/results/single_experiment/dino_noise_TA/config3/confusion_mats/tv_sim.pkl',
     '/home/mosix11/Projects/TaskVectors/files/results/single_experiment/dino_noise_TA/config1/confusion_mats/tv_sim.pkl',
     '/home/mosix11/Projects/TaskVectors/files/results/single_experiment/dino_noise_TA/config2/confusion_mats/tv_sim.pkl',
-    '/home/mosix11/Projects/TaskVectors/files/results/single_experiment/dino_noise_TA/config3/confusion_mats/tv_sim.pkl'
 ]
 
 tv_names = [r"$\tau_p^1$", r"$\tau_p^2$", r"$\tau_p^\text{avg}$", r"$\tau_\text{CF}$", r"$\tau_r$", r"$\tau_\text{mix}$"]
-subtitles_asym = ['CLIP—CIFAR-10', 'CLIP—CIFAR-100', 'DINO—CIFAR-10', 'DINO—CIFAR-100']
+subtitles_sym = ['CLIP—MNIST', 'CLIP—CIFAR-10', 'CLIP—CIFAR-100', 'DINO—MNIST', 'DINO—CIFAR-10', 'DINO—CIFAR-100']
+
+
+plot_tv_similarity_grid_2x3(
+    pickle_paths=pickle_paths_sym,
+    subtitles=subtitles_sym,
+    tv_names=tv_names,
+    cmap="vlag",
+    vmin=-1.0,
+    vmax=1.0,
+    figsize=(13, 8),
+    tick_label_font_size=9,
+    annot=True,
+    savepath="./visulaization_dir/task_sim_grid_sym.png",
+    show=True,
+)
