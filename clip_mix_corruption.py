@@ -479,7 +479,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     results_dict = OrderedDict()
     if not results_dir.joinpath('metrics_both.json').exists():
 
-        for alpha in tqdm(np.round(np.linspace(-0.1, -1.5, 30), 2)):
+        for alpha in tqdm(np.round(np.linspace(-0.1, -1.5, 15), 2)):
             model.load_state_dict(mix_weights, strict=False)
             av_vec.apply_to(model, scaling_coef=alpha, strict=False)
             tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
