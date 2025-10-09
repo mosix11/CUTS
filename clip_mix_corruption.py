@@ -475,7 +475,30 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # print(mix_test_results)
     # print(mix_train_results)
     
+    av_vec = noise_vectors['Average'] + poison_vector['P Seed 10']
+    results_dict = OrderedDict()
+    if not results_dir.joinpath('metrics_both.json').exists():
+
+        for alpha in tqdm(np.round(np.linspace(-0.1, -1.5, 30), 2)):
+            model.load_state_dict(mix_weights, strict=False)
+            av_vec.apply_to(model, scaling_coef=alpha, strict=False)
+            tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+
+            tv_train_results = eval_model_on_clean_corr_splits(model, dataset, gpu)
+
+            results_dict[alpha] = {'test_results': tv_test_results, 'train_results': tv_train_results}
+            print(alpha, tv_test_results)
+            print(alpha, tv_train_results)
+        
+        with open(results_dir / 'metrics_both.json' , 'w') as json_file:
+            json.dump(results_dict, json_file, indent=4)
+
+    else:
+        with open(results_dir / "metrics_both.json", "r") as json_file:
+            results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
     
+    
+    exit()
     results_dict = OrderedDict()
     if not results_dir.joinpath('metrics_poison.json').exists():
     
