@@ -88,6 +88,53 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
         results = trainer.fit(model, dataset, resume=False)
         torch.save(model.state_dict(), weights_dir / Path("ft_weights.pth"))
         
+        
+    if not outputs_dir.joinpath(f"{cfg_name}/finetune_clean/weights/ft_weights.pth").exists():
+        dataset = copy.deepcopy(base_dataset)
+        model = copy.deepcopy(base_model)
+        
+        mix_model_ckp_path = outputs_dir/ Path(f"{cfg_name}/mix") / Path('weights/ft_weights.pth')
+        checkpoint = torch.load(mix_model_ckp_path)
+        model.load_state_dict(checkpoint)
+        
+        
+        if strategy['finetuning_set'] == 'Val':
+            dataset.set_trainset(dataset.get_valset(), shuffle=True)
+        elif strategy['finetuning_set'] == 'Val+Subset':
+            valset = dataset.get_valset()
+            def random_subset(ds, k, seed: int):
+                k = min(k, len(ds))
+                g = torch.Generator().manual_seed(seed)
+                idx = torch.randperm(len(ds), generator=g)[:k].tolist()
+                return Subset(ds, idx)
+            valset_subset = random_subset(valset, 2000, cfg['dataset_seed'])
+            dataset.set_trainset(valset_subset, shuffle=True)
+
+        experiment_name = f"{cfg_name}/finetune_clean"
+        experiment_dir = outputs_dir / Path(experiment_name)
+
+        weights_dir = experiment_dir / Path("weights")
+        weights_dir.mkdir(exist_ok=True, parents=True)
+
+        plots_dir = experiment_dir / Path("plots")
+        plots_dir.mkdir(exist_ok=True, parents=True)
+        
+        finetuning_cfg = None
+        if 'heldout' in cfg['trainer']['finetuning']:
+            finetuning_cfg = cfg['trainer']['finetuning']['heldout']
+            finetuning_cfg['comet_api_key'] =  os.getenv("COMET_API_KEY")
+        else: finetuning_cfg = cfg['trainer']['finetuning']
+        
+        trainer = StandardTrainer(
+            outputs_dir=outputs_dir,
+            **finetuning_cfg,
+            exp_name=experiment_name,
+            exp_tags=None,
+        )
+        
+        results = trainer.fit(model, dataset, resume=False)
+        torch.save(model.state_dict(), weights_dir / Path("ft_weights.pth"))
+        
       
         
         
@@ -286,22 +333,8 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     ideal_cluster_balance = alpha_est_support_size / num_clusters
     num_neighbor_agr_check = math.floor(ideal_cluster_balance / 2)
     
-    from estimate_alpha import select_alpha_by_knn_self_agreement, select_alpha_by_knn_self_agreement_or_combo
-    # alpha_kNN = select_alpha_by_knn_self_agreement(
-    #     model=model,
-    #     feature_extractor=model.get_feature_extractor(),
-    #     classifier=model.get_classifier_head(),
-    #     state0=mix_weights,
-    #     taskvector=task_vectors['Average'],
-    #     unlabeled_loader=alpha_est_support_dl,
-    #     num_clusters=num_clusters,
-    #     k=10,
-    #     coverage_rate=coverage_rate,
-    #     alphas=np.round(np.linspace(-0.0, -2.0, 51), 2),
-    #     device=gpu
-    # )
-    
-    alpha_kNN = select_alpha_by_knn_self_agreement_or_combo(
+    from estimate_alpha import select_alpha_by_knn_self_agreement
+    alpha_kNN = select_alpha_by_knn_self_agreement(
         model=model,
         feature_extractor=model.get_feature_extractor(),
         classifier=model.get_classifier_head(),
@@ -309,12 +342,13 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         taskvector=task_vectors['Average'],
         unlabeled_loader=alpha_est_support_dl,
         num_clusters=num_clusters,
-        k_list=(10, 50, 100),
+        k=10,
         coverage_rate=coverage_rate,
         alphas=np.round(np.linspace(-0.0, -2.0, 51), 2),
         device=gpu
     )
     
+
     print(alpha_kNN)
 
     
