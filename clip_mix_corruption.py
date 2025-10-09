@@ -559,7 +559,8 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             noise_vectors['Average'].apply_to(model, scaling_coef=alpha, strict=False)
             tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
             tv_train_results = eval_model_on_clean_corr_splits(model, dataset, gpu)
-
+            print(alpha, tv_test_results)
+            print(alpha, tv_train_results)
             results_dict[alpha] = {'test_results': tv_test_results, 'train_results': tv_train_results}
         with open(results_dir / 'metrics_noise.json' , 'w') as json_file:
             json.dump(results_dict, json_file, indent=4)
