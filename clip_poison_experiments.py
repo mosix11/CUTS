@@ -457,11 +457,11 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     task_vectors['Mix'] = TaskVector(pt_weights, mix_weights)
     # task_vectors['Gold'] = TaskVector(pt_weights, gold_weights)
 
-    with open(results_dir / "metrics.json", "r") as json_file:
-        results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
-    estimated_poison_vector =  task_vectors['Average'] * (-1 * results_dict['alpha_psn'])
-    estimated_clean_vector = task_vectors['Mix'] - estimated_poison_vector
-    task_vectors['Clean'] = estimated_clean_vector
+    # with open(results_dir / "metrics.json", "r") as json_file:
+    #     results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
+    # estimated_poison_vector =  task_vectors['Average'] * (-1 * results_dict['alpha_psn'])
+    # estimated_clean_vector = task_vectors['Mix'] - estimated_poison_vector
+    # task_vectors['Clean'] = estimated_clean_vector
     
     ft_tvs_list = list(task_vectors.values())
     tv_names = list(task_vectors.keys())
@@ -470,7 +470,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     for name, tv in task_vectors.items():
         TV_norms[name] = tv.norm().item()
     with open(results_dirs['TV_norms'] / 'norms.json' , 'w') as json_file:
-        json.dump(results_dict, json_file, indent=4)
+        json.dump(TV_norms, json_file, indent=4)
         
     task_sim = []
     for i in range(len(ft_tvs_list)):

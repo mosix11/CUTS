@@ -664,6 +664,9 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             task_sim[i].append(cos_sim)
     task_sim = np.array(task_sim)
     
+    with open(results_dirs['cms'] / "tv_sim.pkl", "wb") as f:
+        pickle.dump(task_sim, f)
+    
     misc_utils.plot_confusion_matrix(
         title='Task Vector Similarity Matrix',
         cm=task_sim,
@@ -680,7 +683,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     )
 
 
-    
+    exit()
     # results_mtl_dict = OrderedDict()
     # if not results_dir.joinpath('metrics_mtl.json').exists():
     #     alphas = tqdm(np.round(np.linspace(0.0, 1.0, 21), 2))
