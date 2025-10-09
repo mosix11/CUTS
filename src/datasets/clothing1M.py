@@ -150,9 +150,8 @@ class Clothing1M(BaseClassificationDataset):
             return self._val_transforms
         
         trnsfrms = []
-        trnsfrms.append(transforms.Resize((256, 256)))
         if train:
-            trnsfrms.append(transforms.RandomCrop((224, 224)))
+            trnsfrms.append(transforms.RandomResizedCrop((224, 224)))
         else:
             trnsfrms.append(transforms.CenterCrop((224, 224)))
             
@@ -166,7 +165,7 @@ class Clothing1M(BaseClassificationDataset):
             transforms.ToDtype(torch.float32, scale=True),
         ])
         if self.normalize_imgs:
-            mean, std = ((0.5,), (0.5,)) if self.grayscale else ((0.6959, 0.6537, 0.6371), (0.3113, 0.3192, 0.3214))
+            mean, std = ((0.5,), (0.5,)) if self.grayscale else ((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
             trnsfrms.append(transforms.Normalize(mean, std))
         if self.flatten:
             trnsfrms.append(transforms.Lambda(lambda x: torch.flatten(x)))
