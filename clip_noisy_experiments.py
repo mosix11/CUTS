@@ -633,19 +633,23 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         
     
     task_vectors['CF'] = TaskVector(mix_weights, ft_ho_clean_weights)
-    task_vectors['Mix'] = TaskVector(pt_weights, mix_weights)
-    task_vectors['Gold'] = TaskVector(pt_weights, gold_weights)
-    task_vectors['Random Vector'] = task_vectors['Average'].generate_random_vector_with_same_layer_norms(seed=20)
     
-    with open(results_dir / "metrics.json", "r") as json_file:
-        results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
-    estimated_noise_vector =  task_vectors['Average'] * (-1 * results_dict['alpha_KNN'])
-    estimated_clean_vector = task_vectors['Mix'] - estimated_noise_vector
-    task_vectors['Clean'] = estimated_clean_vector
+    # task_vectors['Gold'] = TaskVector(pt_weights, gold_weights)
+    task_vectors['Random Vector'] = task_vectors['Average'].generate_random_vector_with_same_layer_norms(seed=20)
+    task_vectors['Mix'] = TaskVector(pt_weights, mix_weights)
+    
+    # with open(results_dir / "metrics.json", "r") as json_file:
+    #     results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
+    # estimated_noise_vector =  task_vectors['Average'] * (-1 * results_dict['alpha_KNN'])
+    # estimated_clean_vector = task_vectors['Mix'] - estimated_noise_vector
+    # task_vectors['Clean'] = estimated_clean_vector
 
 
+    TV_norms = OrderedDict()
     for name, tv in task_vectors.items():
-        print(name, tv.norm())
+        TV_norms[name] = tv.norm().item()
+    with open(results_dirs['TV_norms'] / 'norms.json' , 'w') as json_file:
+        json.dump(TV_norms, json_file, indent=4)
     
     ft_tvs_list = list(task_vectors.values())
     tv_names = list(task_vectors.keys())
@@ -677,19 +681,19 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
 
 
     
-    results_mtl_dict = OrderedDict()
-    if not results_dir.joinpath('metrics_mtl.json').exists():
-        alphas = tqdm(np.round(np.linspace(0.0, 1.0, 21), 2))
+    # results_mtl_dict = OrderedDict()
+    # if not results_dir.joinpath('metrics_mtl.json').exists():
+    #     alphas = tqdm(np.round(np.linspace(0.0, 1.0, 21), 2))
         
-        for alpha in alphas:
-            model.load_state_dict(pt_weights, strict=False)
-            task_vectors['Mix'].apply_to(model, scaling_coef=alpha, strict=False)
-            tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-            tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+    #     for alpha in alphas:
+    #         model.load_state_dict(pt_weights, strict=False)
+    #         task_vectors['Mix'].apply_to(model, scaling_coef=alpha, strict=False)
+    #         tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+    #         tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
 
-            results_mtl_dict[alpha] = {'test_results': tv_test_results, 'train_results': tv_train_results}
-        with open(results_dir / 'metrics_mtl.json' , 'w') as json_file:
-            json.dump(results_mtl_dict, json_file, indent=4)
+    #         results_mtl_dict[alpha] = {'test_results': tv_test_results, 'train_results': tv_train_results}
+    #     with open(results_dir / 'metrics_mtl.json' , 'w') as json_file:
+    #         json.dump(results_mtl_dict, json_file, indent=4)
     
     exit()
     # model.load_state_dict(mix_weights, strict=False)

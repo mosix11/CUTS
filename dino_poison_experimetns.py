@@ -299,8 +299,9 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         
 
     task_vectors['Clean'] = TaskVector(mix_weights, ft_ho_clean_weights)
-    task_vectors['Mix'] = TaskVector(pt_weights, mix_weights)
     task_vectors['Random Vector'] = task_vectors['Average'].generate_random_vector_with_same_layer_norms(seed=11)
+    task_vectors['Mix'] = TaskVector(pt_weights, mix_weights)
+    
 
     
     

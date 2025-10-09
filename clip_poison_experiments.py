@@ -453,9 +453,9 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         task_vectors['Average'] = TaskVector.mean(task_vectors)
 
     task_vectors['CF'] = TaskVector(mix_weights, ft_ho_clean_weights)
-    task_vectors['Mix'] = TaskVector(pt_weights, mix_weights)
-    task_vectors['Gold'] = TaskVector(pt_weights, gold_weights)
     task_vectors['Random Vector'] = task_vectors['Average'].generate_random_vector_with_same_layer_norms(seed=20)
+    task_vectors['Mix'] = TaskVector(pt_weights, mix_weights)
+    # task_vectors['Gold'] = TaskVector(pt_weights, gold_weights)
 
     with open(results_dir / "metrics.json", "r") as json_file:
         results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
@@ -466,8 +466,11 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     ft_tvs_list = list(task_vectors.values())
     tv_names = list(task_vectors.keys())
 
+    TV_norms = OrderedDict()
     for name, tv in task_vectors.items():
-        print(name, tv.norm())
+        TV_norms[name] = tv.norm().item()
+    with open(results_dirs['TV_norms'] / 'norms.json' , 'w') as json_file:
+        json.dump(results_dict, json_file, indent=4)
         
     task_sim = []
     for i in range(len(ft_tvs_list)):
@@ -481,6 +484,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     with open(results_dirs['cms'] / "tv_sim.pkl", "wb") as f:
         pickle.dump(task_sim, f)
+    
     
     misc_utils.plot_confusion_matrix(
         title='Task Vector Similarity Matrix',

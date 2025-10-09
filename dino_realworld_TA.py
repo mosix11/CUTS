@@ -195,7 +195,15 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     strategy = cfg['strategy']
 
-
+    if strategy['finetuning_set'] == 'Val+Subset':
+        valset = dataset.get_valset()
+        def random_subset(ds, k, seed: int):
+            k = min(k, len(ds))
+            g = torch.Generator().manual_seed(seed)
+            idx = torch.randperm(len(ds), generator=g)[:k].tolist()
+            return Subset(ds, idx)
+        valset_subset = random_subset(valset, 2000, cfg['dataset_seed'])
+        dataset.set_valset(valset_subset, shuffle=False)
 
 
     # Load weights while removing classifier weights from the state dict
@@ -287,9 +295,9 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         taskvector=task_vectors['Average'],
         unlabeled_loader=alpha_est_support_dl,
         num_clusters=num_clusters,
-        k=20,
+        k=10,
         coverage_rate=coverage_rate,
-        alphas=np.round(np.linspace(-0.0, -2.0, 101), 2),
+        alphas=np.round(np.linspace(-0.0, -2.0, 51), 2),
         device=gpu
     )
     
