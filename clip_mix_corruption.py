@@ -482,12 +482,12 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         model.load_state_dict(mix_weights, strict=False)
         mix_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
         mix_ho_results, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
-        mix_train_results = eval_model_on_clean_corr_splits(model, None, dataset, gpu)
+        mix_train_results = eval_model_on_clean_corr_splits(model, dataset, gpu)
         
         model.load_state_dict(gold_weights, strict=False)
         gold_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
         gold_ho_results, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
-        gold_train_results = eval_model_on_clean_corr_splits(model, None, dataset, gpu)
+        gold_train_results = eval_model_on_clean_corr_splits(model, dataset, gpu)
         
         # model.load_state_dict(ft_ho_clean_weights, strict=False)
         # ft_ho_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
