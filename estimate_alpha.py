@@ -6,6 +6,8 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from collections import deque
+import math
+from sklearn.neighbors import NearestNeighbors
 # -----------------------------
 # Batch prep + feature extraction
 # -----------------------------
@@ -78,7 +80,6 @@ def knn_self_agreement_diversity(
     num_clusters: int,
     coverage_rate: float = 1.0,          # e.g., 0.6–0.8 for CIFAR-100 with ~2k samples
     cov_penalty_weight: float = 1.0,     # penalty for coverage shortfall
-    gamma_nmi: float = 0.2,              # set 0.0 to disable NMI alignment
     hard_min_per_class: int | None = None,
     random_state: int = 0,
 ) -> float:
@@ -129,19 +130,9 @@ def knn_self_agreement_diversity(
     coverage_shortfall = max(0.0, float(required - num_supported)) / float(required)
     penalty_cov = cov_penalty_weight * coverage_shortfall
 
-    # --- optional structure bonus: NMI(yhat, kmeans(required))
-    nmi_bonus = 0.0
-    if gamma_nmi > 0.0 and required >= 2 and N >= required:
-        from sklearn.cluster import KMeans
-        from sklearn.metrics.cluster import normalized_mutual_info_score as NMI
-        nclust = min(required, len(feats_np))
-        if nclust >= 2:
-            km = KMeans(n_clusters=nclust, n_init=10, random_state=random_state)
-            km_labels = km.fit_predict(feats_np)
-            nmi_bonus = float(NMI(yhat, km_labels)) * gamma_nmi
 
-    print(f'SA={SA}, SA_adj={SA_adj}, nmi_bonus={nmi_bonus}, penalty_eff={-penalty_eff}, penalty_cov={-penalty_cov}')
-    return SA_adj - (penalty_eff + penalty_cov) + nmi_bonus
+    print(f'SA={SA}, SA_adj={SA_adj}, penalty_eff={-penalty_eff}, penalty_cov={-penalty_cov}')
+    return SA_adj - (penalty_eff + penalty_cov)
 
 # -----------------------------
 # Alpha selection with early stop
@@ -162,10 +153,9 @@ def select_alpha_by_knn_self_agreement(
     device: str = "cuda",
     coverage_rate: float = 1.0,
     cov_penalty_weight: float = 1.0,
-    gamma_nmi: float = 0.2,
     hard_min_per_class: int | None = None,
     random_state: int = 0,
-    decrease_patience: int = 5,
+    decrease_patience: int = 10,
 ) -> float:
     """
     Select alpha that maximizes the adjusted, coverage-aware kNN self-agreement.
@@ -204,7 +194,6 @@ def select_alpha_by_knn_self_agreement(
             num_clusters=num_clusters,
             coverage_rate=coverage_rate,
             cov_penalty_weight=cov_penalty_weight,
-            gamma_nmi=gamma_nmi,
             hard_min_per_class=hard_min_per_class,
             random_state=random_state,
         )
@@ -216,10 +205,195 @@ def select_alpha_by_knn_self_agreement(
             best_alpha = float(a)
 
         # update window and check early-stop
-        # window.append(score)
-        # if len(window) == window.maxlen:
-        #     # strictly decreasing if all diffs < 0
-        #     if np.all(np.diff(np.array(window)) < 0):
-        #         break
+        window.append(score)
+        if len(window) == window.maxlen:
+            # strictly decreasing if all diffs < 0
+            if np.all(np.diff(np.array(window)) < 0):
+                break
+
+    return best_alpha
+
+
+
+
+
+
+
+
+
+
+# -----------------------------
+# Test New Selector
+# -----------------------------
+
+
+
+def _knn_indices_multi(feats_np: np.ndarray, k_list):
+    nbrs = {}
+    for k in k_list:
+        k_eff = min(k + 1, len(feats_np))
+        nn = NearestNeighbors(n_neighbors=k_eff, algorithm='auto')
+        nn.fit(feats_np)
+        _, idx = nn.kneighbors(feats_np, return_distance=True)
+        nbrs[k] = idx[:, 1:]  # drop self
+    return nbrs
+
+def _entropy(p, eps=1e-8):
+    p = np.clip(p, eps, 1.0)
+    return -np.sum(p * np.log(p), axis=-1)
+
+def unsup_score_combo(
+    feats, probs,
+    *,
+    k_list=(10, 50, 100),
+    num_clusters: int,
+    # weights
+    macro_weight: float = 0.5,          # mix macro & micro SA
+    infomax_weight: float = 0.5,        # add InfoMax term
+    cov_penalty_weight: float = 0.5,    # softer coverage penalty
+    # coverage control
+    coverage_rate: float = 1.0,         # target fraction of classes “supported”
+    hard_min_per_class: int | None = None,
+    # misc
+    eps: float = 1e-8,
+):
+    """
+    Returns a scalar: higher is better. All-unsupervised.
+    """
+    feats_np = feats.numpy()
+    probs_np = probs.numpy()
+    N, K = probs_np.shape
+    yhat = probs_np.argmax(axis=1)
+    counts = np.bincount(yhat, minlength=K)
+    p_marg = probs_np.mean(axis=0)
+
+    # ---- InfoMax (IIC-style)
+    H_marg = float(_entropy(p_marg[None, :]))            # scalar
+    H_cond = float(_entropy(probs_np).mean())            # avg per-sample entropy
+    infomax = (H_marg - H_cond) / (math.log(K) + eps)    # normalize to ~[0,1]
+
+    # ---- kNN self-agreement: micro + macro (chance-corrected)
+    if hard_min_per_class is None:
+        # keep your default behavior but cap upward to avoid 11+ on small subsets
+        hard_min_per_class = max(3, min(10, min(k_list)))
+    nbrs = _knn_indices_multi(feats_np, k_list)
+
+    sa_micro_list, sa_macro_list = [], []
+    for k in k_list:
+        idx = nbrs[k]
+        nn_labels = yhat[idx]                              # (N, k)
+        SA = float((nn_labels == yhat[:, None]).mean())
+        P_match = float((p_marg ** 2).sum())
+        SA_micro = (SA - P_match) / max(eps, 1.0 - P_match)
+
+        # macro: classwise chance-corrected within-class NN agreement
+        per_cls_scores = []
+        for c in range(K):
+            mask = (yhat == c)
+            n_c = int(mask.sum())
+            if n_c < hard_min_per_class:
+                continue
+            # neighbors for those i with yhat=c
+            nn_c = nn_labels[mask]
+            SA_c = float((nn_c == c).mean())
+            p_c = max(eps, counts[c] / N)
+            SA_c_adj = (SA_c - p_c) / max(eps, 1.0 - p_c)
+            per_cls_scores.append(SA_c_adj)
+        if len(per_cls_scores) == 0:
+            # degenerate: fall back to micro only
+            SA_macro = SA_micro
+        else:
+            SA_macro = float(np.mean(per_cls_scores))
+
+        sa_micro_list.append(SA_micro)
+        sa_macro_list.append(SA_macro)
+
+    SA_micro_avg = float(np.mean(sa_micro_list))
+    SA_macro_avg = float(np.mean(sa_macro_list))
+    sa_blend = (1 - macro_weight) * SA_micro_avg + macro_weight * SA_macro_avg
+
+    # ---- smooth coverage penalty (avoid brittle "all 14" gate)
+    # supported classes: those with >= hard_min_per_class predicted samples
+    supported = int((counts >= hard_min_per_class).sum())
+    required = max(2, min(K, math.ceil(coverage_rate * num_clusters)))
+    # soft deficit in [0,1]
+    cov_deficit = max(0.0, (required - supported) / float(required))
+    # also discourage extreme collapse into very few effective classes (Hill q=2)
+    P_match = float((p_marg ** 2).sum())
+    effective_classes = 1.0 / max(eps, P_match)
+    target_eff = max(2.0, float(required))
+    eff_deficit = max(0.0, (target_eff - effective_classes) / target_eff)
+
+    coverage_penalty = cov_deficit * 0.7 + eff_deficit * 0.3
+
+    # ---- final score
+    score = sa_blend + infomax_weight * infomax - cov_penalty_weight * coverage_penalty
+    return float(score)
+
+
+
+
+
+
+
+
+
+def select_alpha_by_knn_self_agreement_or_combo(
+    model, state0, taskvector, unlabeled_loader, feature_extractor, classifier,
+    *,
+    num_clusters: int,
+    alphas=(0.0, -0.05, -0.1, -0.2, -0.3, -0.4, -0.6, -0.8, -1.0, -1.2),
+    k_list=(10, 50, 100),
+    bs_logits: int = 4096,
+    device: str = "cuda",
+    # scoring knobs
+    use_combo: bool = True,
+    macro_weight: float = 0.5,
+    infomax_weight: float = 0.5,
+    coverage_rate: float = 1.0,
+    cov_penalty_weight: float = 0.5,
+    hard_min_per_class: int | None = None,
+    decrease_patience: int = 10,
+) -> float:
+    from collections import deque
+    import numpy as np
+    import torch.nn.functional as F
+
+    best_alpha, best_score = None, -float("inf")
+    window = deque(maxlen=decrease_patience + 1)
+
+    for a in alphas:
+        model.load_state_dict(state0, strict=False)
+        taskvector.apply_to(model, scaling_coef=a, strict=False)
+
+        feats, _ = extract_features(feature_extractor, unlabeled_loader, True, device=torch.device(device))
+        logits = logits_from_features(classifier, feats, bs_logits, device)
+        probs = F.softmax(logits, dim=-1).cpu()
+
+        if use_combo:
+            score = unsup_score_combo(
+                feats, probs,
+                k_list=k_list,
+                num_clusters=num_clusters,
+                macro_weight=macro_weight,
+                infomax_weight=infomax_weight,
+                coverage_rate=coverage_rate,
+                cov_penalty_weight=cov_penalty_weight,
+                hard_min_per_class=hard_min_per_class,
+            )
+        else:
+            score = knn_self_agreement_diversity(
+                feats=feats, probs=probs, k=min(k_list), num_clusters=num_clusters,
+                coverage_rate=coverage_rate, cov_penalty_weight=cov_penalty_weight,
+                hard_min_per_class=hard_min_per_class
+            )
+
+        print(f'Alpha={a:.2f}  Score={score:.6f}')
+        if score > best_score:
+            best_score, best_alpha = score, float(a)
+
+        window.append(score)
+        if len(window) == window.maxlen and np.all(np.diff(np.array(window)) < 0):
+            break
 
     return best_alpha

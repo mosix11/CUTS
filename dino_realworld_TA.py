@@ -286,8 +286,22 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     ideal_cluster_balance = alpha_est_support_size / num_clusters
     num_neighbor_agr_check = math.floor(ideal_cluster_balance / 2)
     
-    from estimate_alpha import select_alpha_by_knn_self_agreement
-    alpha_kNN = select_alpha_by_knn_self_agreement(
+    from estimate_alpha import select_alpha_by_knn_self_agreement, select_alpha_by_knn_self_agreement_or_combo
+    # alpha_kNN = select_alpha_by_knn_self_agreement(
+    #     model=model,
+    #     feature_extractor=model.get_feature_extractor(),
+    #     classifier=model.get_classifier_head(),
+    #     state0=mix_weights,
+    #     taskvector=task_vectors['Average'],
+    #     unlabeled_loader=alpha_est_support_dl,
+    #     num_clusters=num_clusters,
+    #     k=10,
+    #     coverage_rate=coverage_rate,
+    #     alphas=np.round(np.linspace(-0.0, -2.0, 51), 2),
+    #     device=gpu
+    # )
+    
+    alpha_kNN = select_alpha_by_knn_self_agreement_or_combo(
         model=model,
         feature_extractor=model.get_feature_extractor(),
         classifier=model.get_classifier_head(),
@@ -295,7 +309,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         taskvector=task_vectors['Average'],
         unlabeled_loader=alpha_est_support_dl,
         num_clusters=num_clusters,
-        k=10,
+        k_list=(10, 50, 100),
         coverage_rate=coverage_rate,
         alphas=np.round(np.linspace(-0.0, -2.0, 51), 2),
         device=gpu
