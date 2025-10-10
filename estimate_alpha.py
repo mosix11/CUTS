@@ -78,8 +78,8 @@ def knn_self_agreement_diversity(
     *,
     k: int,
     num_clusters: int,
-    coverage_rate: float = 1.0,          # e.g., 0.6–0.8 for CIFAR-100 with ~2k samples
-    cov_penalty_weight: float = 1.0,     # penalty for coverage shortfall
+    coverage_rate: float = 1.0,          
+    cov_penalty_weight: float = 1.0,   
     hard_min_per_class: int | None = None,
     random_state: int = 0,
 ) -> float:
