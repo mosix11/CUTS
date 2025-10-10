@@ -262,9 +262,9 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
             dataset = copy.deepcopy(base_dataset)
             model = copy.deepcopy(base_model)
             
-            if not outputs_dir/ Path(f"{cfg_name}/unpoisoned") / Path('weights/ft_weights.pth').exists():
+            if not outputs_dir.joinpath(f"{cfg_name}/unpoisoned/weights/ft_weights.pth").exists():
                 continue
-            mix_model_ckp_path = outputs_dir/ Path(f"{cfg_name}/unpoisoned") / Path('weights/ft_weights.pth')
+            mix_model_ckp_path = outputs_dir/ Path(f"{cfg_name}/unpoisoned/weights/ft_weights.pth")
             checkpoint = torch.load(mix_model_ckp_path)
             model.load_state_dict(checkpoint)
             
