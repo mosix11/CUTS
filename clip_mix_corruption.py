@@ -212,6 +212,80 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
         
 
         
+    for idx, poison_tv in enumerate(strategy['poison']['finetuning']):
+        for idx, noise_tv in enumerate(strategy['noise']['finetuning']):
+            if not outputs_dir.joinpath(f"{cfg_name}/finetune_np_{noise_tv['seed']}_{poison_tv['seed']}/weights/ft_weights.pth").exists():
+                dataset = copy.deepcopy(base_dataset)
+                model = copy.deepcopy(base_model)
+                
+                mix_model_ckp_path = outputs_dir/ Path(f"{cfg_name}/mix") / Path('weights/ft_weights.pth')
+                checkpoint = torch.load(mix_model_ckp_path)
+                model.load_state_dict(checkpoint)
+                
+                        
+                experiment_name = f"{cfg_name}/finetune_np_{noise_tv['seed']}_{poison_tv['seed']}"
+                experiment_dir = outputs_dir / Path(experiment_name)
+
+                weights_dir = experiment_dir / Path("weights")
+                weights_dir.mkdir(exist_ok=True, parents=True)
+
+                plots_dir = experiment_dir / Path("plots")
+                plots_dir.mkdir(exist_ok=True, parents=True)
+                
+                
+                clean_heldout_set = copy.deepcopy(dataset.get_heldoutset())
+                noise_tv['set'] = 'Heldout'
+                dataset.inject_noise(**noise_tv)
+                
+                noisy_heldout_set = copy.deepcopy(dataset.get_heldoutset())
+                
+                dataset.set_heldoutset(clean_heldout_set)
+                
+                
+                # Exclude clean samples from target class
+                poison_tv['set'] = 'Heldout'
+                dataset.inject_poison(**poison_tv)
+                clean_ho_ds, poinsoned_ho_ds = dataset.get_clean_noisy_subsets('Heldout')
+                
+                
+                mixed_ho_set = ConcatDataset([noisy_heldout_set, poinsoned_ho_ds])
+                
+                dataset.set_trainset(mixed_ho_set, shuffle=True)
+                
+                
+                # trainset = dataset.get_trainset()
+                
+                # num_noisy = 0
+                # num_poisoned = 0
+                # num_both = 0
+                # for item in trainset:
+                #     x, y, idx, is_corr = item
+                #     if is_corr == 1:
+                #         num_noisy += 1
+                #     elif is_corr == 2:
+                #         num_poisoned += 1
+                #     elif is_corr == 3:
+                #         num_both += 1
+                        
+                # print(num_noisy, num_poisoned, num_both)
+                
+                # exit()
+                    
+                finetuning_cfg = None
+                if 'poison' in cfg['trainer']['finetuning']:
+                    finetuning_cfg = cfg['trainer']['finetuning']['poison']
+                    finetuning_cfg['comet_api_key'] =  os.getenv("COMET_API_KEY")
+                else: finetuning_cfg = cfg['trainer']['finetuning']
+                trainer = StandardTrainer(
+                    outputs_dir=outputs_dir,
+                    **finetuning_cfg,
+                    exp_name=experiment_name,
+                    exp_tags=None,
+                )
+                
+                results = trainer.fit(model, dataset, resume=False)
+                torch.save(model.state_dict(), weights_dir / Path("ft_weights.pth"))  
+        
 
             
     for idx, poison_tv in enumerate(strategy['poison']['finetuning']):
