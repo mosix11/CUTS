@@ -272,8 +272,8 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
                 # exit()
                     
                 finetuning_cfg = None
-                if 'poison' in cfg['trainer']['finetuning']:
-                    finetuning_cfg = cfg['trainer']['finetuning']['poison']
+                if 'poison_noise' in cfg['trainer']['finetuning']:
+                    finetuning_cfg = cfg['trainer']['finetuning']['poison_noise']
                     finetuning_cfg['comet_api_key'] =  os.getenv("COMET_API_KEY")
                 else: finetuning_cfg = cfg['trainer']['finetuning']
                 trainer = StandardTrainer(
