@@ -475,7 +475,18 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             map_location='cpu'
         ).items() if "classifier_heads" not in k)
         poison_weights[f"P Seed {poison_tv['seed']}"] = n_weights
+        
     
+    poison_noise_weights = OrderedDict()
+    for poison_tv in strategy['poison']['finetuning']:
+        for noise_tv in strategy['noise']['finetuning']:
+            ft_expr_dir = outputs_dir / f"finetune_np_{noise_tv['seed']}_{poison_tv['seed']}"
+            np_weights = OrderedDict(
+            (k, v) for k, v in torch.load(
+                ft_expr_dir.joinpath(f"weights/ft_weights.pth"),
+                map_location='cpu'
+            ).items() if "classifier_heads" not in k)
+            poison_noise_weights[f"NP Seed {noise_tv['seed']}_{poison_tv['seed']}"] = np_weights
     
             
     noise_vectors = OrderedDict()
@@ -486,9 +497,13 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     for task_name, finetuend_weights in poison_weights.items():
         poison_vector[task_name] = TaskVector(mix_weights, finetuend_weights)
         
-    
+    poison_noise_vectors = OrderedDict()
+    for task_name, finetuend_weights in poison_noise_weights.items():
+        poison_noise_vectors[task_name] = TaskVector(mix_weights, finetuend_weights)
      
     noise_vectors['Average'] = TaskVector.mean(noise_vectors)
+    
+    poison_noise_vectors['Average'] = TaskVector.mean(poison_noise_vectors)
         
     
     # task_vectors['Clean'] = TaskVector(mix_weights, ft_ho_clean_weights)
@@ -557,45 +572,49 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
 
     results_dict = OrderedDict()
-    if not results_dir.joinpath('metrics_poison.json').exists():
+    if not results_dir.joinpath('metrics.json').exists():
     
-        model.load_state_dict(mix_weights, strict=False)
-        mix_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-        mix_ho_results, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
-        mix_train_results = eval_model_on_clean_corr_splits(model, dataset, gpu)
+        # model.load_state_dict(mix_weights, strict=False)
+        # mix_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+        # mix_ho_results, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
+        # mix_train_results = eval_model_on_clean_corr_splits(model, dataset, gpu)
         
-        model.load_state_dict(gold_weights, strict=False)
-        gold_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-        gold_ho_results, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
-        gold_train_results = eval_model_on_clean_corr_splits(model, dataset, gpu)
+        # model.load_state_dict(gold_weights, strict=False)
+        # gold_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+        # gold_ho_results, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
+        # gold_train_results = eval_model_on_clean_corr_splits(model, dataset, gpu)
         
         # model.load_state_dict(ft_ho_clean_weights, strict=False)
         # ft_ho_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
         # ft_ho_ho_results, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
         # ft_ho_train_results = eval_model_on_clean_corr_splits(model, None, dataset, gpu)
-    
+
         
-        results_dict['Mix'] = {'test_results': mix_test_results, 'ho_results': mix_ho_results, 'train_results': mix_train_results}
-        results_dict['Gold'] = {'test_results': gold_test_results, 'ho_results': gold_ho_results, 'train_results': gold_train_results}
+        # results_dict['Mix'] = {'test_results': mix_test_results, 'ho_results': mix_ho_results, 'train_results': mix_train_results}
+        # results_dict['Gold'] = {'test_results': gold_test_results, 'ho_results': gold_ho_results, 'train_results': gold_train_results}
         # results_dict['FT HO Clean'] = {'test_results': ft_ho_test_results, 'ho_results': ft_ho_ho_results, 'train_results': ft_ho_train_results}
-        for alpha in tqdm(np.round(np.linspace(-0.05, -1.5, 30), 2)):
+        for alpha in tqdm(np.round(np.linspace(-0.1, -1.5, 15), 2)):
         
             model.load_state_dict(mix_weights, strict=False)
-            poison_vector['P Seed 10'].apply_to(model, scaling_coef=alpha, strict=False)
+            poison_noise_vectors['Average'].apply_to(model, scaling_coef=alpha, strict=False)
             tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-            tv_ho_resutls, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
+            # tv_ho_resutls, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
             tv_train_results = eval_model_on_clean_corr_splits(model, dataset, gpu)
 
-            results_dict[alpha] = {'test_results': tv_test_results, 'ho_results': tv_ho_resutls, 'train_results': tv_train_results}
+            
+            print(alpha, tv_test_results)
+            print(alpha, tv_train_results)
+            # results_dict[alpha] = {'test_results': tv_test_results, 'ho_results': tv_ho_resutls, 'train_results': tv_train_results}
+            
         
-        with open(results_dir / 'metrics_poison.json' , 'w') as json_file:
+        with open(results_dir / 'metrics.json' , 'w') as json_file:
             json.dump(results_dict, json_file, indent=4)
 
     else:
-        with open(results_dir / "metrics_poison.json", "r") as json_file:
+        with open(results_dir / "metrics.json", "r") as json_file:
             results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
         
-    
+    exit()
     if 'alpha_psn' not in results_dict:
         forget_rate_thrsh = {
             'MNIST': 0.01,
@@ -613,49 +632,8 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
                 break
         
         results_dict['alpha_psn'] = alpha_psn
-        with open(results_dir / 'metrics_poison.json' , 'w') as json_file:
+        with open(results_dir / 'metrics.json' , 'w') as json_file:
             json.dump(results_dict, json_file, indent=4)
-        
-    model.load_state_dict(mix_weights, strict=False)
-    poison_vector['P Seed 10'].apply_to(model, scaling_coef=-0.95, strict=False)
-    unpoisoned_weights = model.state_dict()
-    
-    unpoisoned_dir = outputs_dir / "unpoisoned"
-    if not unpoisoned_dir.exists():
-        unpoisoned_dir.mkdir(parents=True)
-        unpoisoned_dir_weights_dir = unpoisoned_dir / 'weights'
-        unpoisoned_dir_weights_dir.mkdir(parents=True)
-        torch.save(unpoisoned_weights, unpoisoned_dir / Path('weights/ft_weights.pth'))  
-
-    results_dict = OrderedDict()
-    if not results_dir.joinpath('metrics_noise.json').exists():
-
-        model.load_state_dict(unpoisoned_weights, strict=False)
-        mix_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-        mix_train_results = eval_model_on_clean_corr_splits(model, dataset, gpu)
-        
-        results_dict['Unpoisoned'] = {'test_results': mix_test_results, 'train_results': mix_train_results}
-        print("0.0", mix_test_results)
-        print("0.0", mix_train_results)
-        
-        if strategy['noise']['finetuning'][0]['noise_type'] == 'asymmetric':
-            alphas = tqdm(np.round(np.linspace(-0.05, -2.0, 40), 2))
-        else:
-            alphas = tqdm(np.round(np.linspace(-0.1, -2.0, 20), 2))
-        for alpha in alphas:
-            
-            model.load_state_dict(unpoisoned_weights, strict=False)
-            noise_vectors['Average'].apply_to(model, scaling_coef=alpha, strict=False)
-            tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-            tv_train_results = eval_model_on_clean_corr_splits(model, dataset, gpu)
-            print(alpha, tv_test_results)
-            print(alpha, tv_train_results)
-            results_dict[alpha] = {'test_results': tv_test_results, 'train_results': tv_train_results}
-        with open(results_dir / 'metrics_noise.json' , 'w') as json_file:
-            json.dump(results_dict, json_file, indent=4)
-    else:
-        with open(results_dir / "metrics_noise.json", "r") as json_file:
-            results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
             
     
     
@@ -677,7 +655,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             model=model,
             feature_extractor=model.get_feature_extractor(),
             classifier=model.get_active_head(),
-            state0=unpoisoned_weights,
+            state0=mix_weights,
             taskvector=noise_vectors['Average'],
             unlabeled_loader=alpha_est_support_dl,
             num_clusters=num_clusters,
@@ -689,7 +667,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
 
         
         results_dict['alpha_KNN'] = alpha_kNN
-        with open(results_dir / 'metrics_noise.json' , 'w') as json_file:
+        with open(results_dir / 'metrics.json' , 'w') as json_file:
             json.dump(results_dict, json_file, indent=4)
     
 
