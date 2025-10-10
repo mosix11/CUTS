@@ -547,7 +547,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     unpoisoned_weights = model.state_dict()
     
     if not Path(outputs_dir / f"{cfg_name}/unpoisoned").exists():
-        outputs_dir/ Path(f"{cfg_name}/unpoisoned").mkdir()
+        Path(outputs_dir/ f"{cfg_name}/unpoisoned").mkdir()
         torch.save(unpoisoned_weights, outputs_dir/ Path(f"{cfg_name}/unpoisoned") / Path('weights/ft_weights.pth'))  
     exit()
     results_dict = OrderedDict()
