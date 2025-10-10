@@ -546,7 +546,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     poison_vector['P Seed 10'].apply_to(model, scaling_coef=-0.95, strict=False)
     unpoisoned_weights = model.state_dict()
     
-    if not outputs_dir/ Path(f"{cfg_name}/unpoisoned").exists():
+    if not Path(outputs_dir / f"{cfg_name}/unpoisoned").exists():
         outputs_dir/ Path(f"{cfg_name}/unpoisoned").mkdir()
         torch.save(unpoisoned_weights, outputs_dir/ Path(f"{cfg_name}/unpoisoned") / Path('weights/ft_weights.pth'))  
     exit()
