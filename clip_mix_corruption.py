@@ -551,8 +551,8 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         unpoisoned_dir.mkdir(parents=True)
         unpoisoned_dir_weights_dir = unpoisoned_dir / 'weights'
         unpoisoned_dir_weights_dir.mkdir(parents=True)
-    torch.save(unpoisoned_weights, unpoisoned_dir / Path('weights/ft_weights.pth'))  
-    exit()
+        torch.save(unpoisoned_weights, unpoisoned_dir / Path('weights/ft_weights.pth'))  
+
     results_dict = OrderedDict()
     if not results_dir.joinpath('metrics_noise.json').exists():
 
@@ -565,7 +565,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         if strategy['noise']['finetuning'][0]['noise_type'] == 'asymmetric':
             alphas = tqdm(np.round(np.linspace(-0.05, -2.0, 40), 2))
         else:
-            alphas = tqdm(np.round(np.linspace(-0.05, -2.0, 40), 2))
+            alphas = tqdm(np.round(np.linspace(-0.1, -2.0, 20), 2))
         for alpha in alphas:
             
             model.load_state_dict(unpoisoned_weights, strict=False)
