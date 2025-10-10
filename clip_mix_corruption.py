@@ -561,6 +561,8 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         mix_train_results = eval_model_on_clean_corr_splits(model, dataset, gpu)
         
         results_dict['Unpoisoned'] = {'test_results': mix_test_results, 'train_results': mix_train_results}
+        print("0.0", mix_test_results)
+        print("0.0", mix_train_results)
         
         if strategy['noise']['finetuning'][0]['noise_type'] == 'asymmetric':
             alphas = tqdm(np.round(np.linspace(-0.05, -2.0, 40), 2))
