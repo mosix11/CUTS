@@ -343,7 +343,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         taskvector=task_vectors['Average'],
         unlabeled_loader=alpha_est_support_dl,
         num_clusters=num_clusters,
-        k=num_neighbor_agr_check,
+        k=20,
         coverage_rate=coverage_rate,
         alphas=np.round(np.linspace(-0.0, -2.0, 51), 2),
         device=gpu
