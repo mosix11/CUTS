@@ -332,7 +332,8 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     alpha_est_support_size = len(dataset.get_valset())
     ideal_cluster_balance = alpha_est_support_size / num_clusters
     num_neighbor_agr_check = math.floor(ideal_cluster_balance / 2)
-    
+    print(ideal_cluster_balance)
+    print(num_neighbor_agr_check)
     from estimate_alpha import select_alpha_by_knn_self_agreement
     alpha_kNN = select_alpha_by_knn_self_agreement(
         model=model,

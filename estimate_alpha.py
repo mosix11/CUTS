@@ -131,7 +131,7 @@ def knn_self_agreement_diversity(
     penalty_cov = cov_penalty_weight * coverage_shortfall
 
 
-    print(f'SA={SA}, SA_adj={SA_adj}, penalty_eff={-penalty_eff}, penalty_cov={-penalty_cov}')
+    print(f'\nSA={SA}, SA_adj={SA_adj}, penalty_eff={-penalty_eff}, penalty_cov={-penalty_cov}')
     return SA_adj - (penalty_eff + penalty_cov)
 
 # -----------------------------

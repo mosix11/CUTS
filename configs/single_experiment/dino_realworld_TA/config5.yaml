@@ -5,7 +5,7 @@ dataset_seed: &dataset_seed 11
 
 strategy:
   finetuning_set: &finetuning_set 'Val+Subset'
-  subset_size: 2000
+  subset_size: 1000
   noise:
     finetuning:
       - set: 'Train'
@@ -16,7 +16,6 @@ strategy:
         noise_rate: 1.0
         noise_type: 'symmetric'
         seed: 10
-
 
 
 dataset:
@@ -42,7 +41,7 @@ model:
 trainer:
   finetuning:
     mix:
-      max_iterations: 50000
+      max_iterations: 150000
       optimizer_cfg: 
         type: "adamw"
         lr: 1.0e-5
@@ -50,9 +49,9 @@ trainer:
       lr_schedule_cfg:
         type: 'cosann_warmup'
         update_on: 'gradient_step'
-        warmup_steps: 300
-        hold_steps: 30000
-        T_max: 50000
+        warmup_steps: 1000
+        hold_steps: 79000
+        T_max: 150000
         eta_min: 0
       early_stopping: False
       validation_freq: -1
@@ -75,30 +74,6 @@ trainer:
         warmup_steps: 200
         hold_steps: 2300
         T_max: 5000
-        eta_min: 0
-      early_stopping: False
-      validation_freq: -1
-      save_best_model: False
-      checkpoint_freq: -1
-      run_on_gpu: True
-      use_amp: True
-      log_comet: True
-      comet_project_name: 'dino-realworld-TA'
-      seed: *training_seed
-
-
-    heldout:
-      max_iterations: 500
-      optimizer_cfg: 
-        type: "adamw" 
-        lr: 1.0e-5
-        betas: [0.9, 0.999]
-      lr_schedule_cfg:
-        type: 'cosann_warmup'
-        update_on: 'gradient_step'
-        warmup_steps: 100
-        hold_steps: 200
-        T_max: 500
         eta_min: 0
       early_stopping: False
       validation_freq: -1
