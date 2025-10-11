@@ -107,7 +107,7 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
                 g = torch.Generator().manual_seed(seed)
                 idx = torch.randperm(len(ds), generator=g)[:k].tolist()
                 return Subset(ds, idx)
-            valset_subset = random_subset(valset, 2000, cfg['dataset_seed'])
+            valset_subset = random_subset(valset, strategy['subset_size'], cfg['dataset_seed'])
             dataset.set_trainset(valset_subset, shuffle=True)
 
         experiment_name = f"{cfg_name}/finetune_clean"
@@ -171,7 +171,7 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
                     g = torch.Generator().manual_seed(seed)
                     idx = torch.randperm(len(ds), generator=g)[:k].tolist()
                     return Subset(ds, idx)
-                valset_subset = random_subset(valset, 2000, cfg['dataset_seed'])
+                valset_subset = random_subset(valset, strategy['subset_size'], cfg['dataset_seed'])
                 dataset.set_trainset(valset_subset, shuffle=True)
                 dataset.inject_noise(**noise_tv)
                 
@@ -249,7 +249,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             g = torch.Generator().manual_seed(seed)
             idx = torch.randperm(len(ds), generator=g)[:k].tolist()
             return Subset(ds, idx)
-        valset_subset = random_subset(valset, 2000, cfg['dataset_seed'])
+        valset_subset = random_subset(valset, strategy['subset_size'], cfg['dataset_seed'])
         dataset.set_valset(valset_subset, shuffle=False)
 
 
