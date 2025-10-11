@@ -341,9 +341,9 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         classifier=model.get_classifier_head(),
         state0=mix_weights,
         taskvector=task_vectors['Average'],
-        unlabeled_loader=20,
+        unlabeled_loader=alpha_est_support_dl,
         num_clusters=num_clusters,
-        k=num_neighbor_agr_check,
+        k=20,
         coverage_rate=coverage_rate,
         alphas=np.round(np.linspace(-0.0, -2.0, 21), 2),
         device=gpu
