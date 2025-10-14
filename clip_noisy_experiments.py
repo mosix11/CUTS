@@ -683,7 +683,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     )
 
 
-    exit()
+
     # results_mtl_dict = OrderedDict()
     # if not results_dir.joinpath('metrics_mtl.json').exists():
     #     alphas = tqdm(np.round(np.linspace(0.0, 1.0, 21), 2))
@@ -698,17 +698,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     #     with open(results_dir / 'metrics_mtl.json' , 'w') as json_file:
     #         json.dump(results_mtl_dict, json_file, indent=4)
     
-    exit()
-    # model.load_state_dict(mix_weights, strict=False)
-    # fig_comp_pt = embedding_space_analysis.all_plot_comp(
-    #     feature_extractor=model.get_image_encoder(),
-    #     dataloader=dataset_clean.get_heldout_dataloader(),
-    #     device=gpu,
-    #     class_names=dataset.get_class_names(),
-    # )
-    
-    # fig_comp_pt.savefig(results_dirs['embed_plots'] / "comp_pt.png", bbox_inches="tight")
-    
+
     results_dict = OrderedDict()
     if not results_dir.joinpath('metrics.json').exists():
 
@@ -794,19 +784,20 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         
 
     
-    # figs_alpha, fig_gold = embedding_space_analysis.pca_evolution_plot(
-    #     model=model,
-    #     base_weights=mix_weights,
-    #     gold_weights=None,
-    #     dataset=dataset_clean,
-    #     task_vector=task_vectors['Average'],
-    #     split='Test',
-    #     alpha_range=np.round(np.linspace(0.0, results_dict['alpha_KNN'], 4) / 0.05) * 0.05,
-    #     device=gpu,
-    #     saving_dir=results_dirs['embed_plots']
-    # )
+    figs_alpha, fig_gold = embedding_space_analysis.pca_evolution_plot(
+        model=model,
+        base_weights=mix_weights,
+        gold_weights=None,
+        dataset=dataset_clean,
+        task_vector=task_vectors['Average'],
+        split='Test',
+        # alpha_range=np.round(np.linspace(0.0, results_dict['alpha_KNN'], 4) / 0.05) * 0.05,
+        alpha_range=np.round(np.linspace(0.0, results_dict['alpha_KNN'], 60)),
+        device=gpu,
+        saving_dir=results_dirs['embed_plots']
+    )
     
-
+    exit()
 
     # Weight Space Disentanglemet Analysis
     # clean_train_ds, noisy_train_ds = dataset.get_clean_noisy_subsets('Train')
