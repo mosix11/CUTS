@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 import matplotlib.patches as patches
 import pickle
+from PIL import Image
 
 def _figure_to_rgb(fig, dpi=150):
     """Render a Matplotlib Figure to an RGB numpy array."""
@@ -75,6 +76,65 @@ def show_figure_grid(figs, rows=None, cols=None, dpi=150, strip_axes=True,
     plt.show()
     return grid_fig
 
+
+def figures_to_gif(figs, out_path, total_duration=6.0, dpi=150,
+                   strip_axes=False, background=(255, 255, 255)):
+    """
+    Save an animated GIF from a list of Matplotlib Figure objects.
+
+    Args:
+        figs: list[matplotlib.figure.Figure]
+        out_path: str, output GIF path (e.g., 'plots.gif')
+        total_duration: float, total length of the GIF in seconds
+        dpi: int, rasterization DPI for each figure
+        strip_axes: bool, remove ticks/labels/spines before rendering
+        background: RGB tuple used for padding when sizes differ
+    Returns:
+        out_path
+    """
+    if not figs:
+        raise ValueError("No figures provided.")
+
+    if strip_axes:
+        for f in figs:
+            for ax in f.axes:
+                ax.set_xlabel(''); ax.set_ylabel('')
+                ax.set_xticks([]); ax.set_yticks([])
+                for s in ax.spines.values():
+                    s.set_visible(False)
+
+    # Rasterize to numpy arrays
+    frames = [_figure_to_rgb(f, dpi=dpi) for f in figs]
+
+    # Pad frames to a common size (GIF requires uniform dimensions)
+    h_max = max(fr.shape[0] for fr in frames)
+    w_max = max(fr.shape[1] for fr in frames)
+
+    pil_frames = []
+    for arr in frames:
+        h, w, _ = arr.shape
+        base = Image.new("RGB", (w_max, h_max), background)
+        im = Image.fromarray(arr)
+        # center the frame on the canvas
+        x = (w_max - w) // 2
+        y = (h_max - h) // 2
+        base.paste(im, (x, y))
+        pil_frames.append(base)
+
+    # Per-frame duration in ms
+    per_frame_ms = int(round(1000 * total_duration / len(pil_frames)))
+
+    # Save GIF
+    pil_frames[0].save(
+        out_path,
+        save_all=True,
+        append_images=pil_frames[1:],
+        duration=per_frame_ms,
+        loop=0,          # loop forever
+        disposal=2,      # clear between frames
+        optimize=True    # smaller file size
+    )
+    return out_path
     
     
 if __name__ == '__main__':
@@ -91,12 +151,15 @@ if __name__ == '__main__':
     # with open('results/single_experiment/clip_noise_TA/config42/embedding_plots/pca_alpha_4_figs.pkl', 'rb') as f:
     # with open('results/single_experiment/clip_noise_TA/config26/embedding_plots/pca_alpha_figs.pkl', 'rb') as f:
     
-    with open('results/single_experiment/clip_IC_TA/config2/embedding_plots/pca_alpha_4_figs.pkl', 'rb') as f:
+    pickle_path =  'results/single_experiment/clip_noise_TA/config28/embedding_plots/pca_alpha_60_figs.pkl'
+    
+    with open(pickle_path, 'rb') as f:
     
         figs = pickle.load(f)
     for f in figs:
             plt.close(f)
-    # figs = [figs[0], figs[5], figs[10], figs[15]]
+    figs = [figs[0], figs[3], figs[5], figs[10]]
+    # figs = figs[0:60:5]
     
     # labels = [
     #     r"$\theta_{\text{mix}}$",
@@ -109,3 +172,12 @@ if __name__ == '__main__':
     
     # grid_fig.savefig("./visulaization_dir/pca_evol_dino_sym_cifar10_40.png", dpi=300, bbox_inches="tight")
     # show_figure_grid(figs)
+    
+    
+    # figures_to_gif(
+    #     figs,
+    #     out_path='./visulaization_dir/pca_evol_gif_clip_noise_config28.gif',
+    #     total_duration=6,
+    #     dpi=300,
+    #     strip_axes=False,
+    # )

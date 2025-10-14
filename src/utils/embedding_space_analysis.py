@@ -154,6 +154,7 @@ def pca_evolution_plot(
         raise ValueError(f"Invalid dataset split {split}")
 
     color_mapping = get_color_mappings(dataset.dataset_name)
+    
 
     # -------- reference at alpha = 0 (anchor space) --------
     model.load_state_dict(base_weights, strict=False)

@@ -461,7 +461,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         task_vector=task_vectors['Average'],
         split='Test',
         # alpha_range=np.round(np.linspace(0.0, results_dict['alpha_KNN'], 4) / 0.05) * 0.05,
-        alpha_range=np.round(np.linspace(0.0, results_dict['alpha_KNN'], 60)),
+        alpha_range=np.linspace(0.0, results_dict['alpha_KNN'], 60),
         device=gpu,
         saving_dir=results_dirs['embed_plots']
     )
