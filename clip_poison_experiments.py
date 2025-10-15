@@ -466,54 +466,43 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     ft_tvs_list = list(task_vectors.values())
     tv_names = list(task_vectors.keys())
 
-    TV_norms = OrderedDict()
-    for name, tv in task_vectors.items():
-        TV_norms[name] = tv.norm().item()
-    with open(results_dirs['TV_norms'] / 'norms.json' , 'w') as json_file:
-        json.dump(TV_norms, json_file, indent=4)
+    # TV_norms = OrderedDict()
+    # for name, tv in task_vectors.items():
+    #     TV_norms[name] = tv.norm().item()
+    # with open(results_dirs['TV_norms'] / 'norms.json' , 'w') as json_file:
+    #     json.dump(TV_norms, json_file, indent=4)
         
-    task_sim = []
-    for i in range(len(ft_tvs_list)):
-        anchor_tv = ft_tvs_list[i]
-        task_sim.append([])
-        for j in range(len(ft_tvs_list)):
-            other_tv = ft_tvs_list[j]
-            cos_sim = anchor_tv.cosine_similarity_flatten(other_tv)
-            task_sim[i].append(cos_sim)
-    task_sim = np.array(task_sim)
+    # task_sim = []
+    # for i in range(len(ft_tvs_list)):
+    #     anchor_tv = ft_tvs_list[i]
+    #     task_sim.append([])
+    #     for j in range(len(ft_tvs_list)):
+    #         other_tv = ft_tvs_list[j]
+    #         cos_sim = anchor_tv.cosine_similarity_flatten(other_tv)
+    #         task_sim[i].append(cos_sim)
+    # task_sim = np.array(task_sim)
     
-    with open(results_dirs['cms'] / "tv_sim.pkl", "wb") as f:
-        pickle.dump(task_sim, f)
+    # with open(results_dirs['cms'] / "tv_sim.pkl", "wb") as f:
+    #     pickle.dump(task_sim, f)
     
     
-    misc_utils.plot_confusion_matrix(
-        title='Task Vector Similarity Matrix',
-        cm=task_sim,
-        class_names=tv_names,
-        color_map='vlag',
-        color_bar=True,
-        vmin= -1.0,
-        vmax= 1.0,
-        x_label='Task Vectors',
-        y_label='Task Vectors',
-        figsize=(8, 6),
-        tick_label_font_size=10,
-        filepath=results_dir / 'task_similarities.png',
-        show=False
-    )
+    # misc_utils.plot_confusion_matrix(
+    #     title='Task Vector Similarity Matrix',
+    #     cm=task_sim,
+    #     class_names=tv_names,
+    #     color_map='vlag',
+    #     color_bar=True,
+    #     vmin= -1.0,
+    #     vmax= 1.0,
+    #     x_label='Task Vectors',
+    #     y_label='Task Vectors',
+    #     figsize=(8, 6),
+    #     tick_label_font_size=10,
+    #     filepath=results_dir / 'task_similarities.png',
+    #     show=False
+    # )
 
-    exit()
-    # results_dict = OrderedDict()
-    # with open(results_dir / "metrics.json", "r") as json_file:
-    #     results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
-    # model.load_state_dict(ft_ho_clean_weights, strict=False)
-    # ft_ho_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-    # ft_ho_ho_results, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
-    # ft_ho_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
-    # results_dict['FT HO Clean'] = {'test_results': ft_ho_test_results, 'ho_results': ft_ho_ho_results, 'train_results': ft_ho_train_results}
-    # with open(results_dir / 'metrics.json' , 'w') as json_file:
-    #     json.dump(results_dict, json_file, indent=4)
-    # exit()
+
     
     results_dict = OrderedDict()
     if not results_dir.joinpath('metrics.json').exists():
@@ -589,27 +578,28 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     
     
-    # tmp_dataset = copy.deepcopy(dataset_clean)
-    # tmp_dataset.inject_poison(**poison_tv_cfg)
-    # # Exclude clean samples from target class
-    # # clean_ho_ds, poinsoned_ho_ds = dataset.get_clean_noisy_subsets('Heldout')
-    # # dataset.set_heldoutset(poinsoned_ho_ds)
-    # ho_set = tmp_dataset.get_heldoutset()
-    # tmp_dataset.switch_labels_to_clean(ho_set)
-    # tmp_dataset.set_heldoutset(ho_set)
-    # figs_alpha, fig_gold = embedding_space_analysis.pca_evolution_plot(
-    #     model=model,
-    #     base_weights=mix_weights,
-    #     gold_weights=gold_weights,
-    #     dataset=tmp_dataset,
-    #     task_vector=task_vectors['Average'],
-    #     split='Heldout',
-    #     alpha_range=np.round(np.linspace(0.0, results_dict['alpha_psn'], 4) / 0.05) * 0.05,
-    #     device=gpu,
-    #     saving_dir=results_dirs['embed_plots']
-    # )  
+    tmp_dataset = copy.deepcopy(dataset_clean)
+    tmp_dataset.inject_poison(**poison_tv_cfg)
+    # Exclude clean samples from target class
+    # clean_ho_ds, poinsoned_ho_ds = dataset.get_clean_noisy_subsets('Heldout')
+    # dataset.set_heldoutset(poinsoned_ho_ds)
+    ho_set = tmp_dataset.get_heldoutset()
+    tmp_dataset.switch_labels_to_clean(ho_set)
+    tmp_dataset.set_heldoutset(ho_set)
+    figs_alpha, fig_gold = embedding_space_analysis.pca_evolution_plot(
+        model=model,
+        base_weights=mix_weights,
+        gold_weights=gold_weights,
+        dataset=tmp_dataset,
+        task_vector=task_vectors['Average'],
+        split='Heldout',
+        # alpha_range=np.round(np.linspace(0.0, results_dict['alpha_psn'], 4) / 0.05) * 0.05,
+        alpha_range=np.linspace(0.0, results_dict['alpha_psn'], 60),
+        device=gpu,
+        saving_dir=results_dirs['embed_plots']
+    )  
     
-    
+    exit()
 
     # Weight Space Disentanglemet Analysis
     estimated_poison_vector =  task_vectors['Average'] * (-1 * results_dict['alpha_psn'])

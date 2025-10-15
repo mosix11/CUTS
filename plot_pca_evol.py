@@ -151,14 +151,17 @@ if __name__ == '__main__':
     # with open('results/single_experiment/clip_noise_TA/config42/embedding_plots/pca_alpha_4_figs.pkl', 'rb') as f:
     # with open('results/single_experiment/clip_noise_TA/config26/embedding_plots/pca_alpha_figs.pkl', 'rb') as f:
     
-    pickle_path =  'results/single_experiment/clip_noise_TA/config28/embedding_plots/pca_alpha_60_figs.pkl'
+    # pickle_path =  'results/single_experiment/clip_noise_TA/config28/embedding_plots/pca_alpha_60_figs.pkl'
+    pickle_path =  'results/single_experiment/clip_noise_TA/config41/embedding_plots/pca_alpha_60_figs.pkl'
+    # pickle_path =  'results/single_experiment/dino_noise_TA/config1/embedding_plots/pca_alpha_60_figs.pkl'
+    # pickle_path =  'results/single_experiment/dino_noise_TA/config3/embedding_plots/pca_alpha_60_figs.pkl'
     
     with open(pickle_path, 'rb') as f:
     
         figs = pickle.load(f)
     for f in figs:
             plt.close(f)
-    figs = [figs[0], figs[3], figs[5], figs[10]]
+    # figs = [figs[0], figs[3], figs[5], figs[10]]
     # figs = figs[0:60:5]
     
     # labels = [
@@ -168,16 +171,19 @@ if __name__ == '__main__':
     #     r"$\hat{\alpha}^{\ast}_{knn}=-2.3$",
     # ]
     
-    grid_fig = show_figure_grid(figs, rows=1, cols=4)
+    # grid_fig = show_figure_grid(figs, rows=1, cols=4)
     
     # grid_fig.savefig("./visulaization_dir/pca_evol_dino_sym_cifar10_40.png", dpi=300, bbox_inches="tight")
     # show_figure_grid(figs)
     
     
-    # figures_to_gif(
-    #     figs,
-    #     out_path='./visulaization_dir/pca_evol_gif_clip_noise_config28.gif',
-    #     total_duration=6,
-    #     dpi=300,
-    #     strip_axes=False,
-    # )
+    figures_to_gif(
+        figs,
+        # out_path='./visulaization_dir/pca_evol_gif_clip_noise_config28.gif',
+        out_path='./visulaization_dir/pca_evol_gif_clip_noise_config41.gif',
+        # out_path='./visulaization_dir/pca_evol_gif_dino_noise_config1.gif',
+        # out_path='./visulaization_dir/pca_evol_gif_dino_noise_config3.gif',
+        total_duration=10,
+        dpi=300,
+        strip_axes=False,
+    )

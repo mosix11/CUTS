@@ -308,45 +308,34 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     ft_tvs_list = list(task_vectors.values())
     tv_names = list(task_vectors.keys())
     
-    task_sim = []
-    for i in range(len(ft_tvs_list)):
-        anchor_tv = ft_tvs_list[i]
-        task_sim.append([])
-        for j in range(len(ft_tvs_list)):
-            other_tv = ft_tvs_list[j]
-            cos_sim = anchor_tv.cosine_similarity_flatten(other_tv)
-            task_sim[i].append(cos_sim)
-    task_sim = np.array(task_sim)
+    # task_sim = []
+    # for i in range(len(ft_tvs_list)):
+    #     anchor_tv = ft_tvs_list[i]
+    #     task_sim.append([])
+    #     for j in range(len(ft_tvs_list)):
+    #         other_tv = ft_tvs_list[j]
+    #         cos_sim = anchor_tv.cosine_similarity_flatten(other_tv)
+    #         task_sim[i].append(cos_sim)
+    # task_sim = np.array(task_sim)
 
-    with open(results_dirs['cms'] / "tv_sim.pkl", "wb") as f:
-        pickle.dump(task_sim, f)
-    exit()
-    misc_utils.plot_confusion_matrix(
-        title='Task Vector Similarity Matrix',
-        cm=task_sim,
-        class_names=tv_names,
-        color_map='vlag',
-        color_bar=True,
-        vmin= -1.0,
-        vmax= 1.0,
-        x_label='Task Vectors',
-        y_label='Task Vectors',
-        tick_label_font_size=6,
-        filepath=results_dir / 'task_similarities.png',
-        show=False
-    )
-    
-    results_dict = OrderedDict()
-    with open(results_dir / "metrics.json", "r") as json_file:
-        results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
-    model.load_state_dict(ft_ho_clean_weights, strict=False)
-    ft_ho_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-    ft_ho_ho_results, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
-    ft_ho_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
-    results_dict['FT HO Clean'] = {'test_results': ft_ho_test_results, 'ho_results': ft_ho_ho_results, 'train_results': ft_ho_train_results}
-    with open(results_dir / 'metrics.json' , 'w') as json_file:
-        json.dump(results_dict, json_file, indent=4)
-    exit()
+    # with open(results_dirs['cms'] / "tv_sim.pkl", "wb") as f:
+    #     pickle.dump(task_sim, f)
+
+    # misc_utils.plot_confusion_matrix(
+    #     title='Task Vector Similarity Matrix',
+    #     cm=task_sim,
+    #     class_names=tv_names,
+    #     color_map='vlag',
+    #     color_bar=True,
+    #     vmin= -1.0,
+    #     vmax= 1.0,
+    #     x_label='Task Vectors',
+    #     y_label='Task Vectors',
+    #     tick_label_font_size=6,
+    #     filepath=results_dir / 'task_similarities.png',
+    #     show=False
+    # )
+
 
     results_dict = OrderedDict()
     if not results_dir.joinpath('metrics.json').exists():
@@ -360,10 +349,15 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         gold_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
         gold_ho_results, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
         gold_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+        
+        model.load_state_dict(ft_ho_clean_weights, strict=False)    
+        ft_ho_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+        ft_ho_ho_results, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
+        ft_ho_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
 
         results_dict['Mix'] = {'test_results': mix_test_results, 'ho_results': mix_ho_results, 'train_results': mix_train_results}
         results_dict['Gold'] = {'test_results': gold_test_results, 'ho_results': gold_ho_results, 'train_results': gold_train_results}
-
+        results_dict['FT HO Clean'] = {'test_results': ft_ho_test_results, 'ho_results': ft_ho_ho_results, 'train_results': ft_ho_train_results}
 
         for alpha in tqdm(np.round(np.linspace(-0.05, -3.0, 60), 2)):
 
@@ -429,7 +423,8 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         dataset=tmp_dataset,
         task_vector=task_vectors['Average'],
         split='Heldout',
-        alpha_range=np.round(np.linspace(0.0, results_dict['alpha_psn'], 4) / 0.05) * 0.05,
+        # alpha_range=np.round(np.linspace(0.0, results_dict['alpha_psn'], 4) / 0.05) * 0.05,
+        alpha_range=np.linspace(0.0, results_dict['alpha_psn'], 60),
         device=gpu,
         saving_dir=results_dirs['embed_plots']
     )        
