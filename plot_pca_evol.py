@@ -152,9 +152,13 @@ if __name__ == '__main__':
     # with open('results/single_experiment/clip_noise_TA/config26/embedding_plots/pca_alpha_figs.pkl', 'rb') as f:
     
     # pickle_path =  'results/single_experiment/clip_noise_TA/config28/embedding_plots/pca_alpha_60_figs.pkl'
-    pickle_path =  'results/single_experiment/clip_noise_TA/config41/embedding_plots/pca_alpha_60_figs.pkl'
+    # pickle_path =  'results/single_experiment/clip_noise_TA/config41/embedding_plots/pca_alpha_60_figs.pkl'
     # pickle_path =  'results/single_experiment/dino_noise_TA/config1/embedding_plots/pca_alpha_60_figs.pkl'
     # pickle_path =  'results/single_experiment/dino_noise_TA/config3/embedding_plots/pca_alpha_60_figs.pkl'
+    
+    # pickle_path =  'results/single_experiment/clip_poison_TA/config1/embedding_plots/pca_alpha_60_figs.pkl'
+    pickle_path =  'results/single_experiment/clip_poison_TA/config2/embedding_plots/pca_alpha_60_figs.pkl'
+    # pickle_path =  'results/single_experiment/dino_poison_TA/config1/embedding_plots/pca_alpha_60_figs.pkl'
     
     with open(pickle_path, 'rb') as f:
     
@@ -180,9 +184,12 @@ if __name__ == '__main__':
     figures_to_gif(
         figs,
         # out_path='./visulaization_dir/pca_evol_gif_clip_noise_config28.gif',
-        out_path='./visulaization_dir/pca_evol_gif_clip_noise_config41.gif',
+        # out_path='./visulaization_dir/pca_evol_gif_clip_noise_config41.gif',
         # out_path='./visulaization_dir/pca_evol_gif_dino_noise_config1.gif',
         # out_path='./visulaization_dir/pca_evol_gif_dino_noise_config3.gif',
+        # out_path='./visulaization_dir/pca_evol_gif_clip_poison_config1.gif',
+        out_path='./visulaization_dir/pca_evol_gif_clip_poison_config2.gif',
+        # out_path='./visulaization_dir/pca_evol_gif_dino_poison_config1.gif',
         total_duration=10,
         dpi=300,
         strip_axes=False,

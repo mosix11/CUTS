@@ -425,6 +425,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         split='Heldout',
         # alpha_range=np.round(np.linspace(0.0, results_dict['alpha_psn'], 4) / 0.05) * 0.05,
         alpha_range=np.linspace(0.0, results_dict['alpha_psn'], 60),
+        align_on='points',
         device=gpu,
         saving_dir=results_dirs['embed_plots']
     )        
