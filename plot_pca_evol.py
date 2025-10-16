@@ -3,7 +3,10 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 import matplotlib.patches as patches
 import pickle
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
+from typing import List, Optional, Sequence, Tuple, Union
+
+import os
 
 def _figure_to_rgb(fig, dpi=150):
     """Render a Matplotlib Figure to an RGB numpy array."""
@@ -137,6 +140,241 @@ def figures_to_gif(figs, out_path, total_duration=6.0, dpi=150,
     return out_path
     
     
+def figures_to_frames(figs, out_dir, dpi=150,
+                      strip_axes=False, background=(255, 255, 255),
+                      prefix="frame", start_index=0, zero_pad=None,
+                      close_figs=False):
+    """
+    Render a list of Matplotlib Figure objects into PNG frames on disk.
+
+    Args:
+        figs: list[matplotlib.figure.Figure]
+        out_dir: str | Path, directory to write frames into (created if needed)
+        dpi: int, rasterization DPI for each figure
+        strip_axes: bool, remove ticks/labels/spines before rendering
+        background: RGB tuple used for padding when sizes differ
+        prefix: str, filename prefix (e.g., 'frame' -> frame000.png)
+        start_index: int, starting index for filenames
+        zero_pad: Optional[int], zero-padding width for index; if None uses len(figs)
+        close_figs: bool, if True, calls `plt.close(fig)` after saving each frame
+
+    Returns:
+        List[str]: absolute paths to saved PNG frames in order.
+    """
+    if not figs:
+        raise ValueError("No figures provided.")
+
+    os.makedirs(out_dir, exist_ok=True)
+
+    if strip_axes:
+        for f in figs:
+            for ax in f.axes:
+                ax.set_xlabel(''); ax.set_ylabel('')
+                ax.set_xticks([]); ax.set_yticks([])
+                for s in ax.spines.values():
+                    s.set_visible(False)
+
+    # Rasterize figs -> numpy arrays (H, W, 3)
+    frames = [_figure_to_rgb(f, dpi=dpi) for f in figs]
+
+    # Pad to common size so all frames share identical dimensions
+    h_max = max(fr.shape[0] for fr in frames)
+    w_max = max(fr.shape[1] for fr in frames)
+
+    # Decide zero padding (e.g., 3 -> 001)
+    if zero_pad is None:
+        zero_pad = max(2, len(str(start_index + len(frames) - 1)))
+
+    saved_paths = []
+    for i, arr in enumerate(frames):
+        h, w, _ = arr.shape
+        base = Image.new("RGB", (w_max, h_max), background)
+        im = Image.fromarray(arr)
+        x = (w_max - w) // 2
+        y = (h_max - h) // 2
+        base.paste(im, (x, y))
+
+        idx_str = str(start_index + i).zfill(zero_pad)
+        fname = f"{prefix}{idx_str}.png"
+        fpath = os.path.abspath(os.path.join(out_dir, fname))
+        base.save(fpath, format="PNG", optimize=True)
+        saved_paths.append(fpath)
+
+        if close_figs:
+            try:
+                import matplotlib.pyplot as plt
+                plt.close(figs[i])
+            except Exception:
+                pass
+
+    return saved_paths
+
+
+
+def figures_to_frames_dual(
+    figs_a: List,                         # list[matplotlib.figure.Figure]
+    out_dir: Union[str, os.PathLike],
+    figs_b: Optional[List] = None,        # optional second list; must match len(figs_a) if provided
+    dpi: int = 150,
+    strip_axes: bool = False,
+    background: Tuple[int, int, int] = (255, 255, 255),
+
+    # Filenames
+    prefix: str = "frame",
+    start_index: int = 0,
+    zero_pad: Optional[int] = None,
+
+    # Layout / styling
+    border_px: int = 2,
+    border_color: Tuple[int, int, int] = (180, 180, 180),
+    gutter_px: int = 0,                   # spacing between left/right panels
+    close_figs: bool = False,
+
+    # Optional per-panel numbers (drawn bottom-left inside each bordered panel)
+    nums_a: Optional[Sequence[Union[int, float, str]]] = None,
+    nums_b: Optional[Sequence[Union[int, float, str]]] = None,
+    number_fmt: str = "{:g}",             # used if nums_* items are int/float
+    text_color: Tuple[int, int, int] = (0, 0, 0),
+    text_margin: Tuple[int, int] = (6, 4),# (x_margin, y_margin) from bottom-left
+    font_path: Optional[str] = None,      # custom TTF path
+    font_size: Optional[int] = None,      # if None, auto based on panel height
+) -> List[str]:
+    """
+    Render 1 or 2 lists of Matplotlib figures as PNG frames.
+    If `figs_b` is provided, each output frame contains two panels (A|B) aligned side-by-side.
+
+    Borders are applied *per panel*. Optional numbers (nums_a / nums_b) are drawn
+    bottom-left inside the border for each corresponding panel.
+
+    Returns:
+        List[str]: absolute paths to saved frames in order.
+    """
+    if not figs_a:
+        raise ValueError("figs_a is empty.")
+
+    if figs_b is not None and len(figs_b) != len(figs_a):
+        raise ValueError("figs_b must have the same length as figs_a.")
+
+    N = len(figs_a)
+    os.makedirs(out_dir, exist_ok=True)
+
+    # Strip axes if requested
+    if strip_axes:
+        for f in figs_a:
+            for ax in f.axes:
+                ax.set_xlabel(''); ax.set_ylabel('')
+                ax.set_xticks([]); ax.set_yticks([])
+                for s in ax.spines.values():
+                    s.set_visible(False)
+        if figs_b is not None:
+            for f in figs_b:
+                for ax in f.axes:
+                    ax.set_xlabel(''); ax.set_ylabel('')
+                    ax.set_xticks([]); ax.set_yticks([])
+                    for s in ax.spines.values():
+                        s.set_visible(False)
+
+    # Rasterize all figures to numpy arrays
+    frames_a = [_figure_to_rgb(f, dpi=dpi) for f in figs_a]
+    frames_b = [_figure_to_rgb(f, dpi=dpi) for f in figs_b] if figs_b is not None else None
+
+    # Compute common panel size across all panels to ensure uniform dims
+    h_max = max([fa.shape[0] for fa in frames_a] + ([fb.shape[0] for fb in frames_b] if frames_b else []))
+    w_max = max([fa.shape[1] for fa in frames_a] + ([fb.shape[1] for fb in frames_b] if frames_b else []))
+
+    # Prepare font
+    # If font_size not given, pick a size that scales with panel height
+    # (roughly 5% of panel height but at least 10px)
+    auto_font_size = max(10, int(0.05 * h_max))
+    fs = font_size or auto_font_size
+    try:
+        font = ImageFont.truetype(font_path, fs) if font_path else ImageFont.load_default()
+        # If default bitmap font looks tiny, try to fall back to truetype if provided
+        if font_path is None and isinstance(font, ImageFont.ImageFont):
+            # Keep default font; it's small but always available
+            pass
+    except Exception:
+        font = ImageFont.load_default()
+
+    # Determine filename zero-padding
+    if zero_pad is None:
+        zero_pad = max(2, len(str(start_index + N - 1)))
+
+    # Helper: pad a panel to (w_max, h_max), add border, draw number
+    def make_panel(arr, number_text: Optional[str]) -> Image.Image:
+        h, w, _ = arr.shape
+        base = Image.new("RGB", (w_max, h_max), background)
+        im = Image.fromarray(arr)
+
+        # Center the frame on the base
+        x = (w_max - w) // 2
+        y = (h_max - h) // 2
+        base.paste(im, (x, y))
+
+        # Draw border (inside the panel area) as a rectangle around full base
+        draw = ImageDraw.Draw(base)
+        # Border rectangle around the entire base image
+        for k in range(border_px):
+            draw.rectangle([k, k, w_max - 1 - k, h_max - 1 - k], outline=border_color)
+
+        # Number (if provided), bottom-left inside the border
+        if number_text is not None:
+            tx_margin, ty_margin = text_margin
+            # Slightly above the bottom edge accounting for border
+            text_x = border_px + tx_margin
+            text_y = h_max - border_px - ty_margin - fs  # approx baseline
+            # Draw text background for readability (optional; commented out)
+            # tw, th = draw.textsize(number_text, font=font)
+            # draw.rectangle([text_x-2, text_y-2, text_x+tw+2, text_y+th+2], fill=(255,255,255))
+            draw.text((text_x, text_y), number_text, fill=text_color, font=font)
+
+        return base
+
+    saved_paths = []
+    for i in range(N):
+        # Format numbers if provided
+        txt_a = None
+        if nums_a is not None:
+            val = nums_a[i]
+            txt_a = number_fmt.format(val) if isinstance(val, (int, float)) else str(val)
+
+        panel_a = make_panel(frames_a[i], txt_a)
+
+        if frames_b is not None:
+            txt_b = None
+            if nums_b is not None:
+                valb = nums_b[i]
+                txt_b = number_fmt.format(valb) if isinstance(valb, (int, float)) else str(valb)
+            panel_b = make_panel(frames_b[i], txt_b)
+
+            # Combine side-by-side with gutter
+            W = w_max * 2 + gutter_px
+            H = h_max
+            combined = Image.new("RGB", (W, H), background)
+            combined.paste(panel_a, (0, 0))
+            combined.paste(panel_b, (w_max + gutter_px, 0))
+            final_img = combined
+        else:
+            final_img = panel_a
+
+        # Save
+        idx_str = str(start_index + i).zfill(zero_pad)
+        fname = f"{prefix}{idx_str}.png"
+        fpath = os.path.abspath(os.path.join(out_dir, fname))
+        final_img.save(fpath, format="PNG", optimize=True)
+        saved_paths.append(fpath)
+
+        if close_figs:
+            try:
+                import matplotlib.pyplot as plt
+                plt.close(figs_a[i])
+                if figs_b is not None:
+                    plt.close(figs_b[i])
+            except Exception:
+                pass
+
+    return saved_paths
+    
 if __name__ == '__main__':
     
     # with open('results/single_experiment/dino_noise_TA/config1/embedding_plots/pca_alpha_4_figs.pkl', 'rb') as f:
@@ -151,22 +389,23 @@ if __name__ == '__main__':
     # with open('results/single_experiment/clip_noise_TA/config42/embedding_plots/pca_alpha_4_figs.pkl', 'rb') as f:
     # with open('results/single_experiment/clip_noise_TA/config26/embedding_plots/pca_alpha_figs.pkl', 'rb') as f:
     
-    # pickle_path =  'results/single_experiment/clip_noise_TA/config28/embedding_plots/pca_alpha_60_figs.pkl'
+    pickle_path =  'results/single_experiment/clip_noise_TA/config28/embedding_plots/pca_alpha_60_figs.pkl'
     # pickle_path =  'results/single_experiment/clip_noise_TA/config41/embedding_plots/pca_alpha_60_figs.pkl'
     # pickle_path =  'results/single_experiment/dino_noise_TA/config1/embedding_plots/pca_alpha_60_figs.pkl'
     # pickle_path =  'results/single_experiment/dino_noise_TA/config3/embedding_plots/pca_alpha_60_figs.pkl'
     
     # pickle_path =  'results/single_experiment/clip_poison_TA/config1/embedding_plots/pca_alpha_60_figs.pkl'
-    pickle_path =  'results/single_experiment/clip_poison_TA/config2/embedding_plots/pca_alpha_60_figs.pkl'
-    # pickle_path =  'results/single_experiment/dino_poison_TA/config1/embedding_plots/pca_alpha_60_figs.pkl'
+    # pickle_path =  'results/single_experiment/clip_poison_TA/config2/embedding_plots/pca_alpha_60_figs.pkl'
+    # pickle_path =  'results/single_experiment/dino_poison_TA/config1/embedding_plots/pca_alpha_60_figs_centroids.pkl'
+    # pickle_path =  'results/single_experiment/dino_poison_TA/config1/embedding_plots/pca_alpha_60_figs_points.pkl'
     
     with open(pickle_path, 'rb') as f:
-    
         figs = pickle.load(f)
     for f in figs:
-            plt.close(f)
+        plt.close(f)
+        
     # figs = [figs[0], figs[3], figs[5], figs[10]]
-    # figs = figs[0:60:5]
+    figs = figs[0:60:2]
     
     # labels = [
     #     r"$\theta_{\text{mix}}$",
@@ -181,16 +420,89 @@ if __name__ == '__main__':
     # show_figure_grid(figs)
     
     
-    figures_to_gif(
-        figs,
-        # out_path='./visulaization_dir/pca_evol_gif_clip_noise_config28.gif',
-        # out_path='./visulaization_dir/pca_evol_gif_clip_noise_config41.gif',
-        # out_path='./visulaization_dir/pca_evol_gif_dino_noise_config1.gif',
-        # out_path='./visulaization_dir/pca_evol_gif_dino_noise_config3.gif',
-        # out_path='./visulaization_dir/pca_evol_gif_clip_poison_config1.gif',
-        out_path='./visulaization_dir/pca_evol_gif_clip_poison_config2.gif',
-        # out_path='./visulaization_dir/pca_evol_gif_dino_poison_config1.gif',
-        total_duration=10,
-        dpi=300,
-        strip_axes=False,
+    # figures_to_gif(
+    #     figs,
+    #     # out_path='./visulaization_dir/pca_evol_gif_clip_noise_config28.gif',
+    #     # out_path='./visulaization_dir/pca_evol_gif_clip_noise_config41.gif',
+    #     # out_path='./visulaization_dir/pca_evol_gif_dino_noise_config1.gif',
+    #     # out_path='./visulaization_dir/pca_evol_gif_dino_noise_config3.gif',
+    #     # out_path='./visulaization_dir/pca_evol_gif_clip_poison_config1.gif',
+    #     # out_path='./visulaization_dir/pca_evol_gif_clip_poison_config2.gif',
+    #     # out_path='./visulaization_dir/pca_evol_gif_dino_poison_config1_centroids.gif',
+    #     out_path='./visulaization_dir/pca_evol_gif_dino_poison_config1_points.gif',
+    #     total_duration=10,
+    #     dpi=300,
+    #     strip_axes=False,
+    # )
+    
+    # figures_to_frames(
+    #     figs,
+    #     out_dir='./visulaization_dir/pca_evol_gif_clip_noise_config28/',
+    #     # out_dir='./visulaization_dir/pca_evol_gif_clip_noise_config41.gif',
+    #     # out_dir='./visulaization_dir/pca_evol_gif_dino_noise_config1.gif',
+    #     # out_dir='./visulaization_dir/pca_evol_gif_dino_noise_config3.gif',
+    #     # out_dir='./visulaization_dir/pca_evol_gif_clip_poison_config1.gif',
+    #     # out_dir='./visulaization_dir/pca_evol_gif_clip_poison_config2.gif',
+    #     # out_dir='./visulaization_dir/pca_evol_gif_dino_poison_config1_centroids.gif',
+    #     # out_dir='./visulaization_dir/pca_evol_gif_dino_poison_config1/',
+    #     dpi=150,
+    #     strip_axes=True,
+    #     start_index=1
+    # )
+    
+    
+    ## CLIP NOISE
+    # pickle_path_1 = 'results/single_experiment/clip_noise_TA/config28/embedding_plots/pca_alpha_60_figs.pkl'
+    # alpha_1 = 2.0
+    # nums_1 = np.round(np.linspace(0.0, alpha_1, 30), 2)
+    # pickle_path_2 = 'results/single_experiment/clip_noise_TA/config41/embedding_plots/pca_alpha_60_figs.pkl'
+    # alpha_2 = 3.5
+    # nums_2 = np.round(np.linspace(0.0, alpha_2, 30), 2)
+    
+    ## CLIP POISON
+    # pickle_path_1 = 'results/single_experiment/clip_poison_TA/config1/embedding_plots/pca_alpha_60_figs.pkl'
+    # alpha_1 = 0.45
+    # nums_1 = np.round(np.linspace(0.0, alpha_1, 30), 2)
+    # pickle_path_2 = 'results/single_experiment/clip_poison_TA/config2/embedding_plots/pca_alpha_60_figs.pkl'
+    # alpha_2 = 1.0
+    # nums_2 = np.round(np.linspace(0.0, alpha_2, 30), 2)
+    
+    ## DINO NOISE
+    pickle_path_1 = 'results/single_experiment/dino_noise_TA/config1/embedding_plots/pca_alpha_60_figs.pkl'
+    alpha_1 = 0.45
+    nums_1 = np.round(np.linspace(0.0, alpha_1, 30), 2)
+    pickle_path_2 = 'results/single_experiment/dino_noise_TA/config3/embedding_plots/pca_alpha_60_figs.pkl'
+    alpha_2 = 1.0
+    nums_2 = np.round(np.linspace(0.0, alpha_2, 30), 2)
+
+    with open(pickle_path_1, 'rb') as f:
+        figs1 = pickle.load(f)
+    for f in figs1:
+        plt.close(f)
+    figs1 = figs1[0:60:2]
+    with open(pickle_path_2, 'rb') as f:
+        figs2 = pickle.load(f)
+    for f in figs2:
+        plt.close(f)
+    figs2 = figs2[0:60:2]
+    
+    
+    from matplotlib import font_manager
+    ttf = font_manager.findfont("DejaVu Sans")  
+    
+    figures_to_frames_dual(
+        figs_a=figs1,
+        figs_b=figs2,
+        nums_a=nums_1,
+        nums_b=nums_2,
+        number_fmt="α={:.2f}",
+        # out_dir='./visulaization_dir/pca_evol_gif_clip_noise_configs_28_41/',
+        out_dir='./visulaization_dir/pca_evol_gif_clip_poison_configs_1_2/',
+        dpi=150,
+        strip_axes=True,
+        start_index=1,
+        border_px=1,
+        text_margin=(15, 8),
+        font_size=40,
+        font_path=ttf
     )

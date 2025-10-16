@@ -505,14 +505,14 @@ def apply(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     print('mix', mix_vector.norm())
     print('noise', task_vectors['Average'].norm())
-    exit()
     model.load_state_dict(mix_weights, strict=False)
     
     # coef for 64:
     # dino cifar100: 0.56
     # clip mnist: 0.35
+    # clip cifar100 cfg47: -0.2
     # clip cifar100 cfg49: -0.315
-    task_vectors['Average'].apply_to(model, scaling_coef=-0.8, strict=False)
+    task_vectors['Average'].apply_to(model, scaling_coef=-0.23, strict=False)
     train_results, misclassified_cleans, misclassified_cleans_smp, misclassified_heals = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
     print(train_results)
     # test_results = evaluate_model(model, dataset.get_test_dataloader(), gpu)[0]
@@ -531,10 +531,10 @@ def apply(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     class_names = dict(enumerate(original_dataset.get_class_names()))
     vectorized_converter = np.vectorize(lambda x: class_names[x])
     
-    results_aum_check = overlap_mislabeled_detected_vs_aum(train_indices[misclassified_cleans], aum_mislabeled)
-    results_aum_check.pop('tp_list')
-    results_aum_check.pop('fp_list')
-    print(results_aum_check)
+    # results_aum_check = overlap_mislabeled_detected_vs_aum(train_indices[misclassified_cleans], aum_mislabeled)
+    # results_aum_check.pop('tp_list')
+    # results_aum_check.pop('fp_list')
+    # print(results_aum_check)
     # print(results_aum_check['TP'])
     # print(results_aum_check['tp_list'])
     # for idx, (key, (t, p)) in enumerate(misclassified_mapping.items()):
@@ -558,11 +558,28 @@ def apply(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         for (t, p) in misclassified_cleans_smp
     ]
         
-    if len(imgs) > 64:
-        # imgs = imgs[-64:]
-        # misclassified_strs = misclassified_strs[-64:]
-        imgs = imgs[:64]
-        misclassified_strs = misclassified_strs[:64]
+    # if len(imgs) > 64:
+    #     # imgs = imgs[-64:]
+    #     # misclassified_strs = misclassified_strs[-64:]
+    #     imgs = imgs[:64]
+    #     misclassified_strs = misclassified_strs[:64]
+        
+    # fig = show_image_grid(
+    #     images=imgs,
+    #     labels=misclassified_strs,
+    #     label_fontsize=9,
+    #     label_wrap=40,
+    #     hspace=0.07,
+    #     wspace=0.01,
+    #     image_height_frac=0.82,
+    #     label_band_frac=0.16
+    #     # max_images=32,
+    # )
+    
+    print(len(imgs))
+    if len(imgs) > 36:
+        imgs = imgs[-36:]
+        misclassified_strs = misclassified_strs[-36:]
         
     fig = show_image_grid(
         images=imgs,
@@ -572,9 +589,13 @@ def apply(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         hspace=0.07,
         wspace=0.01,
         image_height_frac=0.82,
-        label_band_frac=0.16
+        label_band_frac=0.16,
+        n_rows=6,
+        n_cols=6,
         # max_images=32,
     )
+    
+    
     plt.show()
     
 
