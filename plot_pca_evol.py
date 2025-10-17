@@ -468,11 +468,20 @@ if __name__ == '__main__':
     # nums_2 = np.round(np.linspace(0.0, alpha_2, 30), 2)
     
     ## DINO NOISE
-    pickle_path_1 = 'results/single_experiment/dino_noise_TA/config1/embedding_plots/pca_alpha_60_figs.pkl'
-    alpha_1 = 0.45
+    # pickle_path_1 = 'results/single_experiment/dino_noise_TA/config1/embedding_plots/pca_alpha_60_figs.pkl'
+    # alpha_1 = 1.35
+    # nums_1 = np.round(np.linspace(0.0, alpha_1, 30), 2)
+    # pickle_path_2 = 'results/single_experiment/dino_noise_TA/config3/embedding_plots/pca_alpha_60_figs.pkl'
+    # alpha_2 = 2.7
+    # nums_2 = np.round(np.linspace(0.0, alpha_2, 30), 2)
+    
+    
+    ## DINO NOISE POISON
+    pickle_path_1 = 'results/single_experiment/dino_noise_TA/config3/embedding_plots/pca_alpha_60_figs.pkl'
+    alpha_1 = 2.7
     nums_1 = np.round(np.linspace(0.0, alpha_1, 30), 2)
-    pickle_path_2 = 'results/single_experiment/dino_noise_TA/config3/embedding_plots/pca_alpha_60_figs.pkl'
-    alpha_2 = 1.0
+    pickle_path_2 = 'results/single_experiment/dino_poison_TA/config1/embedding_plots/pca_alpha_60_figs_centroids.pkl'
+    alpha_2 = 2.05
     nums_2 = np.round(np.linspace(0.0, alpha_2, 30), 2)
 
     with open(pickle_path_1, 'rb') as f:
@@ -497,7 +506,9 @@ if __name__ == '__main__':
         nums_b=nums_2,
         number_fmt="α={:.2f}",
         # out_dir='./visulaization_dir/pca_evol_gif_clip_noise_configs_28_41/',
-        out_dir='./visulaization_dir/pca_evol_gif_clip_poison_configs_1_2/',
+        # out_dir='./visulaization_dir/pca_evol_gif_clip_poison_configs_1_2/',
+        # out_dir='./visulaization_dir/pca_evol_gif_dino_noise_configs_1_3/',
+        out_dir='./visulaization_dir/pca_evol_gif_dino_noise_poison_configs_3_1/',
         dpi=150,
         strip_axes=True,
         start_index=1,
