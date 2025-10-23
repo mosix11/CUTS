@@ -2008,16 +2008,16 @@ if __name__ == "__main__":
     # generate_clip_noise_utlity_table(clip_noise_results_dir, clip_symmetric_cfgs)
     # generate_clip_noise_fr_dr_hr_table(clip_noise_results_dir, clip_symmetric_cfgs['CIFAR10'])
     # plot_alpha_interplay(clip_noise_results_dir, clip_symmetric_cfgs['CIFAR10'][60])
-    # plot_noise_alpha_interplay_dual(
-    #     clip_noise_results_dir,
-    #     clip_symmetric_cfgs['CIFAR10'][60],
-    #     clip_symmetric_cfgs['CIFAR100'][10],
-    #     dataset_name_A=r"CIFAR-10 ($\eta=60\%$)",
-    #     dataset_name_B=r"CIFAR-100 ($\eta=10\%$)",
-    #     forget_threshold_A=0.9,
-    #     forget_threshold_B=0.9,
-    #     save_path=Path("./visulaization_dir/clip_noise_sym_interplay_plot.png")
-    # )
+    plot_noise_alpha_interplay_dual(
+        clip_noise_results_dir,
+        clip_symmetric_cfgs['CIFAR10'][60],
+        clip_symmetric_cfgs['CIFAR100'][10],
+        dataset_name_A=r"CIFAR-10 ($\eta=60\%$)",
+        dataset_name_B=r"CIFAR-100 ($\eta=10\%$)",
+        forget_threshold_A=0.9,
+        forget_threshold_B=0.9,
+        save_path=Path("./visulaization_dir/clip_noise_sym_interplay_plot.png")
+    )
     
     
     # generate_clip_noise_utlity_table(
