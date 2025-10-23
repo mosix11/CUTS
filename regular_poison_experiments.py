@@ -146,13 +146,12 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
         model.load_state_dict(checkpoint)
         
         
-        poison_tv = strategy['poison']['finetuning'][0]
+        p_tv = copy.deepcopy(strategy['poison']['finetuning'][0])
         
-        poison_tv['set'] = 'Heldout'
-        dataset.inject_poison(**poison_tv)
-        clean_ho_ds, poinsoned_ho_ds = dataset.get_clean_noisy_subsets('Heldout')
-        dataset.switch_labels_to_clean(poinsoned_ho_ds)
-        dataset.set_trainset(poinsoned_ho_ds, shuffle=True)
+        p_tv['set'] = 'Heldout'
+        p_tv['rate'] = 0.0
+        dataset.inject_poison(**p_tv)
+        dataset.set_trainset(dataset.get_heldoutset(), shuffle=True)
             
         
         experiment_name = f"{cfg_name}/finetune_clean"

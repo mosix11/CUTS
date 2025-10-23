@@ -111,17 +111,17 @@ trainer:
 
 
     heldout:
-      max_iterations: 150
+      max_iterations: 100
       optimizer_cfg: 
         type: "adamw"
-        lr: 1.0e-5
+        lr: 5.0e-5
         betas: [0.9, 0.999]
       lr_schedule_cfg:
         type: 'cosann_warmup'
         update_on: 'gradient_step'
         warmup_steps: 30
-        hold_steps: 50
-        T_max: 150
+        hold_steps: 30
+        T_max: 100
         eta_min: 0
       early_stopping: False
       validation_freq: -1

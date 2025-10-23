@@ -114,7 +114,7 @@ trainer:
       max_iterations: 200
       optimizer_cfg: 
         type: "adamw"
-        lr: 1.0e-5
+        lr: 5.0e-5
         betas: [0.9, 0.999]
       lr_schedule_cfg:
         type: 'cosann_warmup'
