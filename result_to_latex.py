@@ -1005,7 +1005,6 @@ def generate_clip_poison_table(
     row_theta_clean = {ds: ["-"] * 4 for ds in dataset_order}
     row_tau_r       = {ds: ["-"] * 4 for ds in dataset_order}
     row_cf          = {ds: ["-"] * 4 for ds in dataset_order}
-    row_alpha_a     = {ds: ["-"] * 4 for ds in dataset_order}
     row_alpha_f     = {ds: ["-"] * 4 for ds in dataset_order}
     row_alpha_psn   = {ds: ["-"] * 4 for ds in dataset_order}
 
@@ -1048,8 +1047,7 @@ def generate_clip_poison_table(
         alpha_a = _get_alpha_star_utility(alpha_grid)
         alpha_f = _get_alpha_star_forgetting(alpha_grid, dataset_forget_trsh.get(ds, 0.9))
 
-        if alpha_a in alpha_grid:
-            row_alpha_a[ds] = _cells_fmt(alpha_grid[alpha_a])
+
         if alpha_f in alpha_grid:
             row_alpha_f[ds] = _cells_fmt(alpha_grid[alpha_f])
 
@@ -1067,13 +1065,7 @@ def generate_clip_poison_table(
             cells.extend(rows_by_ds[ds])
         return f"{label} & " + " & ".join(cells) + r" \\"
 
-    header = r"""\begin{table}[ht]
-\centering
-\caption{}
-\label{tab:}
-\scriptsize
-\renewcommand{\arraystretch}{1.3}
-\setlength{\tabcolsep}{5pt}
+    header = r"""
 \begin{tabular}{lcccccccccccc}
 \toprule
 & \multicolumn{4}{c}{MNIST} & \multicolumn{4}{c}{CIFAR-10} & \multicolumn{4}{c}{CIFAR-100} \\
@@ -1086,19 +1078,16 @@ Model & UT $\uparrow$  & FR $\uparrow$ & HR $\uparrow$ & DR $\downarrow$ & UT $\
         row_line(r"$\theta_{\text{mix}}$",   row_theta_mix),
         row_line(r"$\theta_{\text{clean}}$", row_theta_clean),
         r"\cmidrule(lr){1-13}",
-        row_line(r"$\tau_{r}$",              row_tau_r),
+        row_line(r"$\theta_{\text{mix}} {+} \tau_{r}$", row_tau_r),
         row_line(r"$\theta_{\text{CF}}$",     row_cf),
         r"\cmidrule(lr){1-13}",
-        row_line(r"$\alpha^\ast_a$",         row_alpha_a),
-        row_line(r"$\alpha^\ast_f$",         row_alpha_f),
-        r"\cmidrule(lr){1-13}",
-        row_line(r"$\hat{\alpha}^\ast_{\text{psn}}$", row_alpha_psn),
+        row_line(r"$\theta^{\ast}_u$",         row_alpha_f),
+        row_line(r"$\hat{\theta}^{\ast}_u$", row_alpha_psn),
     ]
 
     footer = r"""
 \bottomrule
 \end{tabular}
-\end{table}
 """
 
     table_tex = header + "\n".join(body_lines) + footer
@@ -2008,16 +1997,16 @@ if __name__ == "__main__":
     # generate_clip_noise_utlity_table(clip_noise_results_dir, clip_symmetric_cfgs)
     # generate_clip_noise_fr_dr_hr_table(clip_noise_results_dir, clip_symmetric_cfgs['CIFAR10'])
     # plot_alpha_interplay(clip_noise_results_dir, clip_symmetric_cfgs['CIFAR10'][60])
-    plot_noise_alpha_interplay_dual(
-        clip_noise_results_dir,
-        clip_symmetric_cfgs['CIFAR10'][60],
-        clip_symmetric_cfgs['CIFAR100'][10],
-        dataset_name_A=r"CIFAR-10 ($\eta=60\%$)",
-        dataset_name_B=r"CIFAR-100 ($\eta=10\%$)",
-        forget_threshold_A=0.9,
-        forget_threshold_B=0.9,
-        save_path=Path("./visulaization_dir/clip_noise_sym_interplay_plot.png")
-    )
+    # plot_noise_alpha_interplay_dual(
+    #     clip_noise_results_dir,
+    #     clip_symmetric_cfgs['CIFAR10'][60],
+    #     clip_symmetric_cfgs['CIFAR100'][10],
+    #     dataset_name_A=r"CIFAR-10 ($\eta=60\%$)",
+    #     dataset_name_B=r"CIFAR-100 ($\eta=10\%$)",
+    #     forget_threshold_A=0.9,
+    #     forget_threshold_B=0.9,
+    #     save_path=Path("./visulaization_dir/clip_noise_sym_interplay_plot.png")
+    # )
     
     
     # generate_clip_noise_utlity_table(
@@ -2138,12 +2127,12 @@ if __name__ == "__main__":
     #     outputfile_path= Path("./visulaization_dir/regular_asymmetric_noise_table.txt")
     # )
 
-    # generate_clip_poison_table(
-    #     regular_poison_results_dir,
-    #     regular_poison_cfgs,
-    #     dataset_order= ["MNIST", "CIFAR10", "CIFAR100"],
-    #     outputfile_path=Path("./visulaization_dir/regular_poison_trigger_table.txt")
-    # )
+    generate_clip_poison_table(
+        regular_poison_results_dir,
+        regular_poison_cfgs,
+        dataset_order= ["MNIST", "CIFAR10", "CIFAR100"],
+        outputfile_path=Path("./visulaization_dir/regular_poison_trigger_table.txt")
+    )
     
     # generate_regular_symmetric_comp_40pct_table(
     #     regular_noise_results_dir,

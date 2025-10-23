@@ -140,78 +140,9 @@ def figures_to_gif(figs, out_path, total_duration=6.0, dpi=150,
     return out_path
     
     
-def figures_to_frames(figs, out_dir, dpi=150,
-                      strip_axes=False, background=(255, 255, 255),
-                      prefix="frame", start_index=0, zero_pad=None,
-                      close_figs=False):
-    """
-    Render a list of Matplotlib Figure objects into PNG frames on disk.
-
-    Args:
-        figs: list[matplotlib.figure.Figure]
-        out_dir: str | Path, directory to write frames into (created if needed)
-        dpi: int, rasterization DPI for each figure
-        strip_axes: bool, remove ticks/labels/spines before rendering
-        background: RGB tuple used for padding when sizes differ
-        prefix: str, filename prefix (e.g., 'frame' -> frame000.png)
-        start_index: int, starting index for filenames
-        zero_pad: Optional[int], zero-padding width for index; if None uses len(figs)
-        close_figs: bool, if True, calls `plt.close(fig)` after saving each frame
-
-    Returns:
-        List[str]: absolute paths to saved PNG frames in order.
-    """
-    if not figs:
-        raise ValueError("No figures provided.")
-
-    os.makedirs(out_dir, exist_ok=True)
-
-    if strip_axes:
-        for f in figs:
-            for ax in f.axes:
-                ax.set_xlabel(''); ax.set_ylabel('')
-                ax.set_xticks([]); ax.set_yticks([])
-                for s in ax.spines.values():
-                    s.set_visible(False)
-
-    # Rasterize figs -> numpy arrays (H, W, 3)
-    frames = [_figure_to_rgb(f, dpi=dpi) for f in figs]
-
-    # Pad to common size so all frames share identical dimensions
-    h_max = max(fr.shape[0] for fr in frames)
-    w_max = max(fr.shape[1] for fr in frames)
-
-    # Decide zero padding (e.g., 3 -> 001)
-    if zero_pad is None:
-        zero_pad = max(2, len(str(start_index + len(frames) - 1)))
-
-    saved_paths = []
-    for i, arr in enumerate(frames):
-        h, w, _ = arr.shape
-        base = Image.new("RGB", (w_max, h_max), background)
-        im = Image.fromarray(arr)
-        x = (w_max - w) // 2
-        y = (h_max - h) // 2
-        base.paste(im, (x, y))
-
-        idx_str = str(start_index + i).zfill(zero_pad)
-        fname = f"{prefix}{idx_str}.png"
-        fpath = os.path.abspath(os.path.join(out_dir, fname))
-        base.save(fpath, format="PNG", optimize=True)
-        saved_paths.append(fpath)
-
-        if close_figs:
-            try:
-                import matplotlib.pyplot as plt
-                plt.close(figs[i])
-            except Exception:
-                pass
-
-    return saved_paths
 
 
-
-def figures_to_frames_dual(
+def figures_to_frames(
     figs_a: List,                         # list[matplotlib.figure.Figure]
     out_dir: Union[str, os.PathLike],
     figs_b: Optional[List] = None,        # optional second list; must match len(figs_a) if provided
@@ -477,38 +408,65 @@ if __name__ == '__main__':
     
     
     ## DINO NOISE POISON
-    pickle_path_1 = 'results/single_experiment/dino_noise_TA/config3/embedding_plots/pca_alpha_60_figs.pkl'
-    alpha_1 = 2.7
-    nums_1 = np.round(np.linspace(0.0, alpha_1, 30), 2)
-    pickle_path_2 = 'results/single_experiment/dino_poison_TA/config1/embedding_plots/pca_alpha_60_figs_centroids.pkl'
-    alpha_2 = 2.05
-    nums_2 = np.round(np.linspace(0.0, alpha_2, 30), 2)
+    # pickle_path_1 = 'results/single_experiment/dino_noise_TA/config3/embedding_plots/pca_alpha_60_figs.pkl'
+    # alpha_1 = 2.7
+    # nums_1 = np.round(np.linspace(0.0, alpha_1, 30), 2)
+    # pickle_path_2 = 'results/single_experiment/dino_poison_TA/config1/embedding_plots/pca_alpha_60_figs_centroids.pkl'
+    # alpha_2 = 2.05
+    # nums_2 = np.round(np.linspace(0.0, alpha_2, 30), 2)
 
-    with open(pickle_path_1, 'rb') as f:
-        figs1 = pickle.load(f)
-    for f in figs1:
-        plt.close(f)
-    figs1 = figs1[0:60:2]
-    with open(pickle_path_2, 'rb') as f:
-        figs2 = pickle.load(f)
-    for f in figs2:
-        plt.close(f)
-    figs2 = figs2[0:60:2]
+    # with open(pickle_path_1, 'rb') as f:
+    #     figs1 = pickle.load(f)
+    # for f in figs1:
+    #     plt.close(f)
+    # figs1 = figs1[0:60:2]
+    # with open(pickle_path_2, 'rb') as f:
+    #     figs2 = pickle.load(f)
+    # for f in figs2:
+    #     plt.close(f)
+    # figs2 = figs2[0:60:2]
     
     
     from matplotlib import font_manager
     ttf = font_manager.findfont("DejaVu Sans")  
     
-    figures_to_frames_dual(
+    # figures_to_frames(
+    #     figs_a=figs1,
+    #     figs_b=figs2,
+    #     nums_a=nums_1,
+    #     nums_b=nums_2,
+    #     number_fmt="α={:.2f}",
+    #     # out_dir='./visulaization_dir/pca_evol_gif_clip_noise_configs_28_41/',
+    #     # out_dir='./visulaization_dir/pca_evol_gif_clip_poison_configs_1_2/',
+    #     # out_dir='./visulaization_dir/pca_evol_gif_dino_noise_configs_1_3/',
+    #     out_dir='./visulaization_dir/pca_evol_gif_dino_noise_poison_configs_3_1/',
+    #     dpi=150,
+    #     strip_axes=True,
+    #     start_index=1,
+    #     border_px=1,
+    #     text_margin=(15, 8),
+    #     font_size=40,
+    #     font_path=ttf
+    # )
+    
+    
+    
+    pickle_path_1 = 'results/single_experiment/clip_noise_TA/config28/embedding_plots/pca_alpha_60_figs.pkl'
+    
+    with open(pickle_path_1, 'rb') as f:
+        figs1 = pickle.load(f)
+    for f in figs1:
+        plt.close(f)
+    figs1 = figs1[0:60:20]
+    
+    alpha_1 = 2.0
+    nums_1 = np.round(np.linspace(0.0, alpha_1, 4), 2)
+    
+    figures_to_frames(
         figs_a=figs1,
-        figs_b=figs2,
         nums_a=nums_1,
-        nums_b=nums_2,
         number_fmt="α={:.2f}",
-        # out_dir='./visulaization_dir/pca_evol_gif_clip_noise_configs_28_41/',
-        # out_dir='./visulaization_dir/pca_evol_gif_clip_poison_configs_1_2/',
-        # out_dir='./visulaization_dir/pca_evol_gif_dino_noise_configs_1_3/',
-        out_dir='./visulaization_dir/pca_evol_gif_dino_noise_poison_configs_3_1/',
+        out_dir='./visulaization_dir/pca_evol_gif_clip_noise_configs_28_4frames/',
         dpi=150,
         strip_axes=True,
         start_index=1,
@@ -517,3 +475,4 @@ if __name__ == '__main__':
         font_size=40,
         font_path=ttf
     )
+    

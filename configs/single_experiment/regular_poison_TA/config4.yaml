@@ -89,7 +89,7 @@ trainer:
 
 
   finetuning_cf:
-    max_epochs: 50
+    max_epochs: 30
     optimizer_cfg: 
       type: "adamw"
       lr: 5.0e-5
@@ -99,7 +99,7 @@ trainer:
       update_on: 'epoch'
       warmup_steps: 10
       hold_steps: 10
-      T_max: 50
+      T_max: 30
       eta_min: 0
     early_stopping: False
     validation_freq: -1

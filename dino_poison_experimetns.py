@@ -334,7 +334,8 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     #     filepath=results_dir / 'task_similarities.png',
     #     show=False
     # )
-
+    
+    
 
     results_dict = OrderedDict()
     if not results_dir.joinpath('metrics.json').exists():
