@@ -400,7 +400,7 @@ def apply(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     original_dataset.reset_train_dl(shuffle=False)
     
     
-    #     # alpha -1.35
+    # alpha -1.35
     # cifar10_cfg30_clean_forgotten_indices = {
     #     5019: (5, 3),
     #     11246: (5, 2),
@@ -409,7 +409,8 @@ def apply(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     #     32367: (5, 3),
     #     32426: (5, 7),
     #     36395: (3, 6),
-    #     36419: (7, 4)
+    #     36419: (7, 4),
+    #     36674: (3, 6)
     # }
     
     # # alpha -0.8
@@ -417,6 +418,7 @@ def apply(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     #     9981: (42, 88),
     #     15980: (60, 71),
     #     19370: (11, 2),
+    #     25041: (33, 90),
     #     25514: (88, 44),
     #     25318: (98, 46),
     #     31295: (51, 46),
@@ -424,52 +426,52 @@ def apply(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     #     44764: (33, 51),
     # }
     
-    # # alpha -0.8
-    # mnist_cfg37_clean_forgotten_indices = {
-    #     52341: (9, 4),
-    #     10777: (3, 9),
-    #     26057: (7, 1),
-    #     29483: (9, 5),
-    #     34638: (5, 6),
-    #     39366: (5, 3),
-    #     42606: (5, 3),
-    #     58724: (4, 7),
-    # }
+    # alpha -0.8
+    mnist_cfg37_clean_forgotten_indices = {
+        52341: (9, 4),
+        10777: (3, 9),
+        26057: (7, 1),
+        29483: (9, 5),
+        34638: (5, 6),
+        39366: (5, 3),
+        42606: (5, 3),
+        58724: (4, 7),
+        51853: (7, 2)
+    }
     
-    # imgs = []
-    
-    # print(train_indices[list(cifar100_cfg31_clean_forgotten_indices.keys())])
-    # exit()
-    # for idx in train_indices[list(mnist_cfg37_clean_forgotten_indices.keys())]:
-    #     img, lbl, dx = original_dataset.get_trainset()[idx]
-    #     imgs.append(img)
-    #     # lbls.append(lbl)
-    
-    
-    # class_names = dict(enumerate(original_dataset.get_class_names()))
-    # vectorized_converter = np.vectorize(lambda x: class_names[x])
-    # # labels_str = vectorized_converter(lbls)
-    # misclassified_strs = [
-    #     fr"{vectorized_converter(t)} $\rightarrow$ {vectorized_converter(p)}"
-    #     for (t, p) in list(mnist_cfg37_clean_forgotten_indices.values())
-    # ]
-        
-    # fig = show_image_grid(
-    #     images=imgs,
-    #     labels=misclassified_strs,
-    #     n_cols=2,
-    #     n_rows=4,
-    #     label_fontsize=12,
-    #     label_wrap=36,
-    #     hspace=0.05,
-    #     wspace=0.01
-    #     # max_images=32,
-    # )
-    # fig.savefig(fname=Path('./visulaization_dir')/ 'mnist_cfg37_clean_forgotten.png', bbox_inches="tight", dpi=300)
-    # plt.show()
+    imgs = []
     
 
-    # exit()
+    for idx in train_indices[list(mnist_cfg37_clean_forgotten_indices.keys())]:
+        img, lbl, dx = original_dataset.get_trainset()[idx]
+        imgs.append(img)
+        # lbls.append(lbl)
+    
+    
+    class_names = dict(enumerate(original_dataset.get_class_names()))
+    vectorized_converter = np.vectorize(lambda x: class_names[x])
+    # labels_str = vectorized_converter(lbls)
+    misclassified_strs = [
+        fr"{vectorized_converter(t)}$\rightarrow${vectorized_converter(p)}"
+        for (t, p) in list(mnist_cfg37_clean_forgotten_indices.values())
+    ]
+        
+    fig = show_image_grid(
+        images=imgs,
+        labels=misclassified_strs,
+        n_cols=3,
+        n_rows=3,
+        label_fontsize=16,
+        label_wrap=36,
+        hspace=0.05,
+        wspace=0.01
+        # max_images=32,
+    )
+    fig.savefig(fname=Path('./visulaization_dir')/ 'mnist_cfg37_clean_forgotten_indices.png', bbox_inches="tight", dpi=300)
+    plt.show()
+    
+
+    exit()
     
     # Load weights while removing classifier weights from the state dict for CLIP
     mix_weights = OrderedDict(
@@ -512,7 +514,7 @@ def apply(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # clip mnist: 0.35
     # clip cifar100 cfg47: -0.2
     # clip cifar100 cfg49: -0.315
-    task_vectors['Average'].apply_to(model, scaling_coef=-0.23, strict=False)
+    task_vectors['Average'].apply_to(model, scaling_coef=-1., strict=False)
     train_results, misclassified_cleans, misclassified_cleans_smp, misclassified_heals = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
     print(train_results)
     # test_results = evaluate_model(model, dataset.get_test_dataloader(), gpu)[0]
@@ -537,8 +539,8 @@ def apply(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # print(results_aum_check)
     # print(results_aum_check['TP'])
     # print(results_aum_check['tp_list'])
-    # for idx, (key, (t, p)) in enumerate(misclassified_mapping.items()):
-    #     # print(idx+1, key, f'({t}, {p})')
+    for idx, (key, (t, p)) in enumerate(misclassified_mapping.items()):
+        print(idx+1, key, f'({t}, {p})')
     #     # if cfg['dataset']['name'] == ''
     #     # print(idx+1, key, value, rank_of_sample(idx), consistency_scores[train_indices[idx]])
     #     print(idx+1, key, 'hit' if key in results_aum_check['tp_list'] else 'missed', f"{vectorized_converter(t)} -> {vectorized_converter(p)}")
@@ -550,36 +552,17 @@ def apply(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     for idx in train_indices[misclassified_cleans]:
         img, lbl, dx = original_dataset.get_trainset()[idx]
         imgs.append(img)
-        # lbls.append(lbl)
-    
-    # labels_str = vectorized_converter(lbls)
+
     misclassified_strs = [
         fr"{vectorized_converter(t)}$\rightarrow${vectorized_converter(p)}"
         for (t, p) in misclassified_cleans_smp
     ]
         
-    # if len(imgs) > 64:
-    #     # imgs = imgs[-64:]
-    #     # misclassified_strs = misclassified_strs[-64:]
-    #     imgs = imgs[:64]
-    #     misclassified_strs = misclassified_strs[:64]
-        
-    # fig = show_image_grid(
-    #     images=imgs,
-    #     labels=misclassified_strs,
-    #     label_fontsize=9,
-    #     label_wrap=40,
-    #     hspace=0.07,
-    #     wspace=0.01,
-    #     image_height_frac=0.82,
-    #     label_band_frac=0.16
-    #     # max_images=32,
-    # )
-    
-    print(len(imgs))
-    if len(imgs) > 36:
-        imgs = imgs[-36:]
-        misclassified_strs = misclassified_strs[-36:]
+    if len(imgs) > 64:
+        # imgs = imgs[-64:]
+        # misclassified_strs = misclassified_strs[-64:]
+        imgs = imgs[:64]
+        misclassified_strs = misclassified_strs[:64]
         
     fig = show_image_grid(
         images=imgs,
@@ -589,11 +572,28 @@ def apply(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         hspace=0.07,
         wspace=0.01,
         image_height_frac=0.82,
-        label_band_frac=0.16,
-        n_rows=6,
-        n_cols=6,
+        label_band_frac=0.16
         # max_images=32,
     )
+    
+    # print(len(imgs))
+    # if len(imgs) > 36:
+    #     imgs = imgs[-36:]
+    #     misclassified_strs = misclassified_strs[-36:]
+        
+    # fig = show_image_grid(
+    #     images=imgs,
+    #     labels=misclassified_strs,
+    #     label_fontsize=9,
+    #     label_wrap=40,
+    #     hspace=0.07,
+    #     wspace=0.01,
+    #     image_height_frac=0.82,
+    #     label_band_frac=0.16,
+    #     n_rows=6,
+    #     n_cols=6,
+    #     # max_images=32,
+    # )
     
     
     plt.show()

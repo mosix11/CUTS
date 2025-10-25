@@ -2,6 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 import matplotlib.patches as patches
+import matplotlib.image as mpimg
+from matplotlib.gridspec import GridSpec
 import pickle
 from PIL import Image, ImageDraw, ImageFont
 from typing import List, Optional, Sequence, Tuple, Union
@@ -80,6 +82,45 @@ def show_figure_grid(figs, rows=None, cols=None, dpi=150, strip_axes=True,
     return grid_fig
 
 
+
+def show_image_grid_with_borders(image_paths, output_path, dpi=300,
+                                 border_color="lightgray", border_width=1):
+    """
+    Show 8 images (2 rows × 4 columns) with light gray borders, touching edges horizontally,
+    and a small gap between the two rows.
+    """
+    n = len(image_paths)
+    if n != 8:
+        raise ValueError("This function expects exactly 8 images.")
+
+    rows, cols = 2, 4
+    fig, axes = plt.subplots(rows, cols, figsize=(cols * 3, rows * 3), dpi=dpi)
+
+    # Make sure we have a 2D array of axes
+    axes = np.array(axes).reshape(rows, cols)
+
+    for i, ax in enumerate(axes.flat):
+        ax.set_axis_off()
+        img = mpimg.imread(image_paths[i])
+        ax.imshow(img, aspect='auto')
+
+        # light gray border
+        rect = patches.Rectangle(
+            (0, 0), 1, 1,
+            linewidth=border_width,
+            edgecolor=border_color,
+            facecolor='none',
+            transform=ax.transAxes,
+            clip_on=False
+        )
+        ax.add_patch(rect)
+
+    # Tight layout with no gaps horizontally, small vertical margin
+    fig.subplots_adjust(left=0, right=1, bottom=0, top=1, wspace=0, hspace=0.05)
+
+    fig.savefig(output_path, dpi=dpi, bbox_inches=None, pad_inches=0)
+    plt.close(fig)
+    
 def figures_to_gif(figs, out_path, total_duration=6.0, dpi=150,
                    strip_axes=False, background=(255, 255, 255)):
     """
@@ -320,7 +361,7 @@ if __name__ == '__main__':
     # with open('results/single_experiment/clip_noise_TA/config42/embedding_plots/pca_alpha_4_figs.pkl', 'rb') as f:
     # with open('results/single_experiment/clip_noise_TA/config26/embedding_plots/pca_alpha_figs.pkl', 'rb') as f:
     
-    pickle_path =  'results/single_experiment/clip_noise_TA/config28/embedding_plots/pca_alpha_60_figs.pkl'
+    # pickle_path =  'results/single_experiment/clip_noise_TA/config28/embedding_plots/pca_alpha_60_figs.pkl'
     # pickle_path =  'results/single_experiment/clip_noise_TA/config41/embedding_plots/pca_alpha_60_figs.pkl'
     # pickle_path =  'results/single_experiment/dino_noise_TA/config1/embedding_plots/pca_alpha_60_figs.pkl'
     # pickle_path =  'results/single_experiment/dino_noise_TA/config3/embedding_plots/pca_alpha_60_figs.pkl'
@@ -330,13 +371,13 @@ if __name__ == '__main__':
     # pickle_path =  'results/single_experiment/dino_poison_TA/config1/embedding_plots/pca_alpha_60_figs_centroids.pkl'
     # pickle_path =  'results/single_experiment/dino_poison_TA/config1/embedding_plots/pca_alpha_60_figs_points.pkl'
     
-    with open(pickle_path, 'rb') as f:
-        figs = pickle.load(f)
-    for f in figs:
-        plt.close(f)
+    # with open(pickle_path, 'rb') as f:
+    #     figs = pickle.load(f)
+    # for f in figs:
+    #     plt.close(f)
         
     # figs = [figs[0], figs[3], figs[5], figs[10]]
-    figs = figs[0:60:2]
+    # figs = figs[0:60:2]
     
     # labels = [
     #     r"$\theta_{\text{mix}}$",
@@ -451,28 +492,50 @@ if __name__ == '__main__':
     
     
     
-    pickle_path_1 = 'results/single_experiment/clip_noise_TA/config28/embedding_plots/pca_alpha_60_figs.pkl'
+    # # pickle_path_1 = 'results/single_experiment/clip_noise_TA/config28/embedding_plots/pca_alpha_60_figs.pkl'
+    # # alpha_1 = 2.0
+    # # nums_1 = np.round(np.linspace(0.0, alpha_1, 4), 2)
     
-    with open(pickle_path_1, 'rb') as f:
-        figs1 = pickle.load(f)
-    for f in figs1:
-        plt.close(f)
-    figs1 = figs1[0:60:20]
+    # pickle_path_1 = 'results/single_experiment/clip_poison_TA/config2/embedding_plots/pca_alpha_60_figs.pkl'
+    # alpha_1 = 1.0
+    # nums_1 = np.round(np.linspace(0.0, alpha_1, 4), 2)
     
-    alpha_1 = 2.0
-    nums_1 = np.round(np.linspace(0.0, alpha_1, 4), 2)
+    # with open(pickle_path_1, 'rb') as f:
+    #     figs1 = pickle.load(f)
+    # for f in figs1:
+    #     plt.close(f)
+    # figs1 = [figs1[0], figs1[19], figs1[39], figs1[59]]
     
-    figures_to_frames(
-        figs_a=figs1,
-        nums_a=nums_1,
-        number_fmt="α={:.2f}",
-        out_dir='./visulaization_dir/pca_evol_gif_clip_noise_configs_28_4frames/',
-        dpi=150,
-        strip_axes=True,
-        start_index=1,
-        border_px=1,
-        text_margin=(15, 8),
-        font_size=40,
-        font_path=ttf
+    
+    
+    # figures_to_frames(
+    #     figs_a=figs1,
+    #     nums_a=nums_1,
+    #     number_fmt="α={:.2f}",
+    #     # out_dir='./visulaization_dir/pca_evol_gif_clip_noise_configs_28_4frames/',
+    #     out_dir='./visulaization_dir/pca_evol_gif_clip_poison_configs_2_4frames/',
+    #     dpi=300,
+    #     strip_axes=True,
+    #     start_index=1,
+    #     border_px=1,
+    #     text_margin=(40, 35),
+    #     font_size=150,
+    #     font_path=ttf
+    # )
+    
+    
+    
+    show_image_grid_with_borders(
+        image_paths=[
+            'visulaization_dir/pca_evol_gif_clip_noise_configs_28_4frames/frame01.png',
+            'visulaization_dir/pca_evol_gif_clip_noise_configs_28_4frames/frame02.png',
+            'visulaization_dir/pca_evol_gif_clip_noise_configs_28_4frames/frame03.png',
+            'visulaization_dir/pca_evol_gif_clip_noise_configs_28_4frames/frame04.png',
+            'visulaization_dir/pca_evol_gif_clip_poison_configs_2_4frames/frame01.png',
+            'visulaization_dir/pca_evol_gif_clip_poison_configs_2_4frames/frame02.png',
+            'visulaization_dir/pca_evol_gif_clip_poison_configs_2_4frames/frame03.png',
+            'visulaization_dir/pca_evol_gif_clip_poison_configs_2_4frames/frame04.png',
+        ],
+        output_path='visulaization_dir/pca_evol_paper_clip_noise_poison.png',
+        border_width=1        
     )
-    

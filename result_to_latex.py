@@ -1762,17 +1762,12 @@ def plot_recovery_bars_40pct(
 
     # ---- visual constants (mirroring the seaborn version) ----
     FS_XY_LABEL  = 8
-    FS_TICK      = 5.5
-    FS_LEGEND    = 9
-    FS_BARLABEL  = 6.5
+    FS_TICK      = 8
+    FS_LEGEND    = 7
+    FS_BARLABEL  = 7
 
     ZERO_EPS     = 1e-8
-    SHADE_FACE   = "0.92"
-    SHADE_EDGE   = "0.80"
-    SHADE_ALPHA  = 0.55
-    SHADE_HATCH  = "//"
 
-    ZERO_LINE_STYLE = dict(color="0.4", linewidth=0.9, linestyle=(0, (4, 3)), alpha=0.95, zorder=8)
 
     # Use seaborn-like colors explicitly to match the original look
     color_map = {
@@ -1782,7 +1777,7 @@ def plot_recovery_bars_40pct(
     }
 
     # ---- figure & axes (whitegrid-ish style) ----
-    fig, ax = plt.subplots(figsize=(4.6, 3.6), dpi=300)
+    fig, ax = plt.subplots(figsize=(4.6, 2.8), dpi=300)
     ax.set_facecolor("white")
     ax.grid(axis="y", linestyle=":", linewidth=0.6, alpha=0.75, zorder=0)
     for spine in ("top", "right"):
@@ -1838,46 +1833,54 @@ def plot_recovery_bars_40pct(
     ax.set_xticks(group_centers)
     ax.set_xticklabels(present_models, fontsize=FS_TICK)
     ax.set_xlabel("")
-    ax.set_ylabel("")
+    ax.set_ylabel("Recovery Rate (%)", fontsize=8)
 
-    # Vertical, compact y-label at left (below θ_mix), like your seaborn code
-    trans = mtransforms.blended_transform_factory(ax.transAxes, ax.transData)
-    y_text = ymin + 0.35 * (0 - ymin)  # 35% of way from ymin up to 0
-    ax.text(
-        -0.1, -1.5, "Recovery (RR) [%]",
-        rotation=90, va="bottom", ha="center",
-        fontsize=FS_XY_LABEL - 2, alpha=0.9, transform=trans
-    )
+    # # Vertical, compact y-label at left (below θ_mix), like your seaborn code
+    # trans = mtransforms.blended_transform_factory(ax.transAxes, ax.transData)
+    # y_text = ymin + 0.35 * (0 - ymin)  # 35% of way from ymin up to 0
+    # ax.text(
+    #     -0.1, -1.5, "Recovery (RR) [%]",
+    #     rotation=90, va="bottom", ha="center",
+    #     fontsize=FS_XY_LABEL - 2, alpha=0.9, transform=trans
+    # )
     
-    ax.text(
-        -0.135, -2, r'$\longrightarrow$',
-        rotation=90, va="bottom", ha="center",
-        alpha=0.7, transform=trans, fontsize=7
-    )
+    # ax.text(
+    #     -0.135, -2, r'$\longrightarrow$',
+    #     rotation=90, va="bottom", ha="center",
+    #     alpha=0.7, transform=trans, fontsize=7
+    # )
 
 
-    # θ_mix dashed line on top of bars
-    x0, x1 = ax.get_xlim()
-    # ax.plot([x0, x1], [0, 0], **ZERO_LINE_STYLE)
 
     # θ_clean reference line (subtle, behind)
     ax.axhline(100, color="black", linewidth=0.9, linestyle="-", zorder=1)
 
-    # Shaded region below θ_mix (overlay, including bars)
-    # ax.axhspan(
-    #     ymin, 0, facecolor=SHADE_FACE, alpha=SHADE_ALPHA,
-    #     hatch=SHADE_HATCH, edgecolor=SHADE_EDGE, zorder=6
-    # )
 
     # Legend (only for inits that actually appear)
     present_inits = [i for i in init_order if (df["Init"] == i).any()]
     handles = [mpatches.Patch(facecolor=color_map[i], edgecolor="black", linewidth=0.6, label=i)
                for i in present_inits]
+    # leg = ax.legend(
+    #     handles=handles, title=None, ncol=3, loc="upper center",
+    #     bbox_to_anchor=(0.5, 1.20), frameon=False, handlelength=1.2, columnspacing=1.0,
+    #     prop={"size": FS_LEGEND}
+    # )
+
     leg = ax.legend(
-        handles=handles, title=None, ncol=3, loc="upper center",
-        bbox_to_anchor=(0.5, 1.20), frameon=False, handlelength=1.2, columnspacing=1.0,
-        prop={"size": FS_LEGEND}
+        handles=handles, title=None, ncol=1, loc="upper right",
+        bbox_to_anchor=(0.98, 0.98),
+        frameon=True,                 # turn the frame on
+        handlelength=1.2, columnspacing=0.8,
+        prop={"size": FS_LEGEND},
     )
+
+    # Style the legend frame (rounded, subtle background)
+    frame = leg.get_frame()
+    frame.set_facecolor("white")      # or a light grey like "#f8f8f8"
+    frame.set_edgecolor("black")
+    frame.set_linewidth(0.6)
+    frame.set_alpha(0.85)             # semi-transparent
+    frame.set_boxstyle("round,pad=0.3,rounding_size=0.8")
 
     # Annotate bars with values, suppress near-zero
     if annotate:
@@ -2127,12 +2130,12 @@ if __name__ == "__main__":
     #     outputfile_path= Path("./visulaization_dir/regular_asymmetric_noise_table.txt")
     # )
 
-    generate_clip_poison_table(
-        regular_poison_results_dir,
-        regular_poison_cfgs,
-        dataset_order= ["MNIST", "CIFAR10", "CIFAR100"],
-        outputfile_path=Path("./visulaization_dir/regular_poison_trigger_table.txt")
-    )
+    # generate_clip_poison_table(
+    #     regular_poison_results_dir,
+    #     regular_poison_cfgs,
+    #     dataset_order= ["MNIST", "CIFAR10", "CIFAR100"],
+    #     outputfile_path=Path("./visulaization_dir/regular_poison_trigger_table.txt")
+    # )
     
     # generate_regular_symmetric_comp_40pct_table(
     #     regular_noise_results_dir,
@@ -2140,7 +2143,8 @@ if __name__ == "__main__":
     #     outputfile_path= Path("./visulaization_dir/regular_symmetric_noise_comp_pt_rnd_table.txt")
     # )
     
-    # plot_recovery_bars_40pct(
-    #     regular_noise_results_dir,
-    #     regular_symmetric_comp_cfgs
-    # )
+    plot_recovery_bars_40pct(
+        regular_noise_results_dir,
+        regular_symmetric_comp_cfgs,
+        save_path=Path("./visulaization_dir/regular_symmetric_40_comp_bars_paper.png")
+    )
