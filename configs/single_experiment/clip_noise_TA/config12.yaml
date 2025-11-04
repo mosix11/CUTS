@@ -22,15 +22,15 @@ strategy:
 
 
 
-datasets:
-  - name: "cifar100"
-    num_classes: 100
-    img_size: [224, 224]
-    batch_size: 256
-    heldout_conf: 0.1
-    valset_ratio: 0.0
-    num_workers: 12
-    seed: *dataset_seed
+dataset:
+  name: "cifar100"
+  num_classes: 100
+  img_size: [224, 224]
+  batch_size: 256
+  heldout_conf: 0.1
+  valset_ratio: 0.0
+  num_workers: 12
+  seed: *dataset_seed
 
 
 model:

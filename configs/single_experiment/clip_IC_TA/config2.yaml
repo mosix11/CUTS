@@ -19,15 +19,15 @@ strategy:
         seed: 12
 
 
-datasets:
-  - name: "mnist"
-    num_classes: 10
-    img_size: [224, 224]
-    batch_size: 256
-    heldout_conf: 0.02
-    valset_ratio: 0.0
-    num_workers: 12
-    seed: *dataset_seed
+dataset:
+  name: "mnist"
+  num_classes: 10
+  img_size: [224, 224]
+  batch_size: 256
+  heldout_conf: 0.02
+  valset_ratio: 0.0
+  num_workers: 12
+  seed: *dataset_seed
 
 
 model:

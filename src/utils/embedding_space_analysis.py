@@ -373,8 +373,7 @@ def umap_plot(
         n_neighbors=n_neighbors,
         min_dist=min_dist,
         device=device,
-        backend="keops",
-        # backend=None,
+        backend=None,
         random_state=random_state
     ).fit_transform(features)
     z = z.detach().cpu().numpy()
@@ -473,7 +472,6 @@ def tsne_plot(
         perplexity=perplexity,
         device=device,
         max_iter=max_iter,
-        backend="keops",
         random_state=random_state
     ).fit_transform(features)
     z = z.detach().cpu().numpy()
@@ -513,14 +511,12 @@ def all_plot_comp(
         
     umap = torchdr.UMAP(
         device=device,
-        backend="keops",
         random_state=random_state
     ).fit_transform(features)
     z_umap = umap.detach().cpu().numpy()
         
     itsne = torchdr.InfoTSNE(
         device=device,
-        backend="keops",
         random_state=random_state
     ).fit_transform(features)
     z_infotsne = itsne.detach().cpu().numpy()
@@ -528,14 +524,12 @@ def all_plot_comp(
     
     largevis = torchdr.LargeVis(
         device=device,
-        backend="keops",
         random_state=random_state
     ).fit_transform(features)
     z_largevis = largevis.detach().cpu().numpy()
     
     pca = torchdr.PCA(
         device=device,
-        backend="keops",
         random_state=random_state
     ).fit_transform(features)
     z_pca = pca.detach().cpu().numpy()

@@ -42,13 +42,89 @@ from src.utils import weight_norm_analysis
 from WD_analysis import apply_WD_analysis, apply_WD_antitask_analysis, apply_WD_antitask_analysis_acc
 
 
+def initialize_model_dataset(experiment_type:str, architecture:str, cfg: dict):
+    dataset_cfg = cfg['dataset']
+    
+    
+    if architecture == 'clip':
+        cfg['trainer']['finetuning']['comet_api_key'] = os.getenv("COMET_API_KEY")
+        base_dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
+        cfg['model']['datasets_cfgs'] = {dataset_cfg['name']: base_dataset.get_class_names()} 
+        base_model = model_factory.create_model(cfg['model'])
+        base_model.freeze_all_heads()
+        
+        dataset_cfg['train_transforms'] = base_model.get_train_transforms()
+        dataset_cfg['val_transforms'] = base_model.get_val_transforms()
+        base_dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
+        
+    elif architecture == 'dino':
+        cfg['trainer']['finetuning']['comet_api_key'] = os.getenv("COMET_API_KEY")
+        base_model = model_factory.create_model(cfg['model'])
+        dataset_cfg['train_transforms'] = base_model.get_train_transforms()
+        dataset_cfg['val_transforms'] = base_model.get_val_transforms()
+        base_dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
+    elif architecture == 'regular':
+        cfg['trainer']['pretraining']['comet_api_key'] = os.getenv("COMET_API_KEY")
+        cfg['trainer']['finetuning']['comet_api_key'] = os.getenv("COMET_API_KEY")
+        cfg['trainer']['finetuning_cf']['comet_api_key'] = os.getenv("COMET_API_KEY")
+        augmentations = None
+        if cfg['dataset']['name'] == 'cifar10':
+            augmentations = [
+                transformsv2.RandomCrop(224, padding=4),
+            ]
+            # augmentations = [
+            #     transformsv2.RandomCrop(32, padding=4),
+            #     transformsv2.RandomHorizontalFlip(),
+            # ]
+        elif cfg['dataset']['name'] == 'cifar100':
+            augmentations = [
+                transformsv2.RandomCrop(224, padding=4),
+            ]
+            # augmentations = [
+            #     transformsv2.RandomCrop(32, padding=4),
+            #     transformsv2.RandomHorizontalFlip(),
+            # ]
+        elif cfg['dataset']['name'] == 'mnist':
+            pass
+        base_dataset, num_classes = dataset_factory.create_dataset(cfg['dataset'], augmentations)
+        base_model = model_factory.create_model(cfg['model'], num_classes)
+
+
+    # if experiment_type == 'noise':
+    #     if architecture == 'clip':
+    #         base_model = model_factory.create_model(cfg['model'])
+    #         base_model.freeze_all_heads()
+            
+    #         dataset_cfg['train_transforms'] = base_model.get_train_transforms()
+    #         dataset_cfg['val_transforms'] = base_model.get_val_transforms()
+    #         base_dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
+            
+    #     elif architecture == 'dino':
+    #         pass
+    #     elif architecture == 'regular':
+    #         pass
+    # elif experiment_type == 'IC':
+    #     if architecture == 'clip':
+    #         base_model = model_factory.create_model(cfg['model'])
+    #         base_model.freeze_all_heads()
+            
+    #     else: raise NotImplementedError()
+    # elif experiment_type == 'poison':
+    #     if architecture == 'clip':
+    #         base_model = model_factory.create_model(cfg['model'])
+    #         base_model.freeze_all_heads()
+            
+    #     elif architecture == 'dino':
+    #         pass
+    #     elif architecture == 'regular':
+    #         pass
 
     
-def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
+def finetune_models(experiment_type:str, architecture:str, outputs_dir: Path, cfg: dict, cfg_name:str):
     cfg['trainer']['finetuning']['comet_api_key'] = os.getenv("COMET_API_KEY")
     
     
-    dataset_cfg = cfg['datasets'][0]
+    dataset_cfg = cfg['datasets']
     base_dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
     
 
@@ -223,7 +299,7 @@ def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:st
 
 
 
-def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
+def apply_tv(experiment_type:str, architecture:str, outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     training_seed = cfg['training_seed']
     dataset_seed = cfg['dataset_seed']
     if training_seed:
@@ -630,6 +706,23 @@ def main():
 
 
     parser = argparse.ArgumentParser()
+    
+    parser.add_argument(
+        "-e",
+        "--experiment",
+        help="Which experiment to run.",
+        type=str,
+        choices=['noise', 'IC', 'poison']
+    )
+    
+    parser.add_argument(
+        "-a",
+        "--arch",
+        help="Model architecture.",
+        type=str,
+        choices=['clip', 'dino', 'regular']
+    )
+    
     parser.add_argument(
         "-c",
         "--config",
@@ -646,12 +739,6 @@ def main():
         action="store_true",
     )
     
-    parser.add_argument(
-        "-g",
-        "--groundtruth",
-        help="Finetune the image encoder with forzen heads on noisy datasets using ground truth noise.",
-        action="store_true",
-    )
     
     parser.add_argument(
         "-t",
@@ -660,29 +747,36 @@ def main():
         action="store_true",
     )
     
+    
+    
     args = parser.parse_args()
 
     dotenv.load_dotenv(".env")
     
-    cfg_path = Path('configs/single_experiment/clip_noise_TA') / f"{args.config}.yaml"
-
+    
+    expr_arch = Path(f"single_experiment/{args.arch}_{args.experiment}_TA")
+    
+    
+    cfg_path = Path("configs").absolute() / expr_arch / f"{args.config}.yaml"
+    
     if not cfg_path.exists(): raise RuntimeError('The specified config file does not exist.')
     with open(cfg_path, 'r') as file:
         cfg = yaml.full_load(file)
 
-    outputs_dir = Path("outputs/single_experiment/clip_noise_TA").absolute()
-    results_dir = Path("results/single_experiment/clip_noise_TA").absolute()
+    outputs_dir = Path("outputs/").absolute() / expr_arch
+    results_dir = Path("results/").absolute() / expr_arch
     results_dir.mkdir(exist_ok=True, parents=True)
+    
     
     global_seed = cfg['global_seed']
     trainer_utils.seed_everything(base_seed=global_seed, rank=ranks['rank'])
 
         
     if args.finetune:
-        finetune_models(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)
+        finetune_models(args.experiment, args.arch, outputs_dir, cfg, cfg_name=cfg_path.stem)
 
     if args.tv:
-        apply_tv(outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)
+        apply_tv(args.experiment, args.arch, outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)
 
 if __name__ == "__main__":
     main()
