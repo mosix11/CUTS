@@ -19,6 +19,5 @@ einops
 openxlab
 open_clip_torch
 umap-learn[plot]
-pykeops
 torchdr
 datamapplot

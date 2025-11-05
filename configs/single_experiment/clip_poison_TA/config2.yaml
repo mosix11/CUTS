@@ -3,16 +3,16 @@ training_seed: &training_seed 11
 dataset_seed: &dataset_seed 11
 
 strategy:
-  finetuning_set: &finetuning_set 'Heldout'
-  poison:
-    pretraining:
+  proxy_set: &proxy_set 'Heldout'
+  corruption:
+    mix:
       set: 'Train'
       rate: 0.02
       target_class: 0
       trigger_percent: 0.03
       margin: [10,6]
       seed: 8
-    finetuning:
+    proxy:
       - set: 'Train'
         rate: 1.0
         target_class: 0

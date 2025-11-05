@@ -43,16 +43,14 @@ from WD_analysis import apply_WD_analysis, apply_WD_antitask_analysis, apply_WD_
 
 
 
-def setup_comet_key(architecture:str, cfg: dict):
     
 
 def initialize_model_dataset(experiment_type:str, architecture:str, cfg: dict):
     dataset_cfg = cfg['dataset']
     
     if architecture == 'clip':
-        cfg['trainer']['finetuning']['comet_api_key'] = os.getenv("COMET_API_KEY")
+        
         base_dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
-        cfg['model']['datasets_cfgs'] = {dataset_cfg['name']: base_dataset.get_class_names()} 
         base_model = model_factory.create_model(cfg['model'])
         base_model.freeze_all_heads()
         
@@ -61,15 +59,11 @@ def initialize_model_dataset(experiment_type:str, architecture:str, cfg: dict):
         base_dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
         
     elif architecture == 'dino':
-        cfg['trainer']['finetuning']['comet_api_key'] = os.getenv("COMET_API_KEY")
         base_model = model_factory.create_model(cfg['model'])
         dataset_cfg['train_transforms'] = base_model.get_train_transforms()
         dataset_cfg['val_transforms'] = base_model.get_val_transforms()
         base_dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
     elif architecture == 'regular':
-        cfg['trainer']['pretraining']['comet_api_key'] = os.getenv("COMET_API_KEY")
-        cfg['trainer']['finetuning']['comet_api_key'] = os.getenv("COMET_API_KEY")
-        cfg['trainer']['finetuning_cf']['comet_api_key'] = os.getenv("COMET_API_KEY")
         augmentations = None
         if cfg['dataset']['name'] == 'cifar10':
             augmentations = [
@@ -91,6 +85,12 @@ def initialize_model_dataset(experiment_type:str, architecture:str, cfg: dict):
             pass
         base_dataset, num_classes = dataset_factory.create_dataset(cfg['dataset'], augmentations)
         base_model = model_factory.create_model(cfg['model'], num_classes)
+
+
+    cfg['trainer']['mix']['comet_api_key'] = os.getenv("COMET_API_KEY")
+    cfg['trainer']['oracle']['comet_api_key'] = os.getenv("COMET_API_KEY")
+    cfg['trainer']['proxy']['comet_api_key'] = os.getenv("COMET_API_KEY")
+    cfg['trainer']['CF']['comet_api_key'] = os.getenv("COMET_API_KEY")
 
     return base_model, base_dataset, cfg
 

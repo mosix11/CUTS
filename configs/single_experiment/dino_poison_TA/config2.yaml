@@ -3,16 +3,16 @@ training_seed: &training_seed 11
 dataset_seed: &dataset_seed 11
 
 strategy:
-  finetuning_set: &finetuning_set 'Heldout'
-  poison:
-    pretraining:
+  proxy_set: &proxy_set 'Heldout'
+  corruption:
+    mix:
       set: 'Train'
       rate: 0.02
       target_class: 0
       trigger_percent: 0.03
       margin: [10,6]
       seed: 8
-    finetuning:
+    proxy:
       - set: 'Train'
         rate: 1.0
         target_class: 0
@@ -42,115 +42,114 @@ model:
   metrics: ['ACC', 'F1']
 
 trainer:
-  finetuning:
-    mix:
-      max_iterations: 4000
-      optimizer_cfg: 
-        type: "adamw"
-        lr: 1.0e-5
-        betas: [0.9, 0.999]
-      lr_schedule_cfg:
-        type: 'cosann_warmup'
-        update_on: 'gradient_step'
-        warmup_steps: 300
-        hold_steps: 1700
-        T_max: 4000
-        eta_min: 0
-      early_stopping: False
-      validation_freq: -1
-      save_best_model: False
-      checkpoint_freq: -1
-      run_on_gpu: True
-      use_amp: True
-      log_comet: True
-      comet_project_name: 'dino-poison-TA'
-      seed: *training_seed
-    proxy:
-      max_iterations: 100
-      optimizer_cfg: 
-        type: "adamw"
-        lr: 1.0e-5
-        betas: [0.9, 0.999]
-      lr_schedule_cfg:
-        type: 'cosann_warmup'
-        update_on: 'gradient_step'
-        warmup_steps: 30
-        hold_steps: 20
-        T_max: 100
-        eta_min: 0
-      early_stopping: False
-      validation_freq: -1
-      save_best_model: False
-      checkpoint_freq: -1
-      run_on_gpu: True
-      use_amp: True
-      log_comet: True
-      comet_project_name: 'dino-poison-TA'
-      seed: *training_seed
-    oracle:
-      max_iterations: 4000
-      optimizer_cfg: 
-        type: "adamw"
-        lr: 1.0e-5
-        betas: [0.9, 0.999]
-      lr_schedule_cfg:
-        type: 'cosann_warmup'
-        update_on: 'gradient_step'
-        warmup_steps: 300
-        hold_steps: 1700
-        T_max: 4000
-        eta_min: 0
-      early_stopping: False
-      validation_freq: -1
-      save_best_model: False
-      checkpoint_freq: -1
-      run_on_gpu: True
-      use_amp: True
-      log_comet: True
-      comet_project_name: 'dino-poison-TA'
-      seed: *training_seed
+  mix:
+    max_iterations: 4000
+    optimizer_cfg: 
+      type: "adamw"
+      lr: 1.0e-5
+      betas: [0.9, 0.999]
+    lr_schedule_cfg:
+      type: 'cosann_warmup'
+      update_on: 'gradient_step'
+      warmup_steps: 300
+      hold_steps: 1700
+      T_max: 4000
+      eta_min: 0
+    early_stopping: False
+    validation_freq: -1
+    save_best_model: False
+    checkpoint_freq: -1
+    run_on_gpu: True
+    use_amp: True
+    log_comet: True
+    comet_project_name: 'dino-poison-TA'
+    seed: *training_seed
+  proxy:
+    max_iterations: 100
+    optimizer_cfg: 
+      type: "adamw"
+      lr: 1.0e-5
+      betas: [0.9, 0.999]
+    lr_schedule_cfg:
+      type: 'cosann_warmup'
+      update_on: 'gradient_step'
+      warmup_steps: 30
+      hold_steps: 20
+      T_max: 100
+      eta_min: 0
+    early_stopping: False
+    validation_freq: -1
+    save_best_model: False
+    checkpoint_freq: -1
+    run_on_gpu: True
+    use_amp: True
+    log_comet: True
+    comet_project_name: 'dino-poison-TA'
+    seed: *training_seed
+  oracle:
+    max_iterations: 4000
+    optimizer_cfg: 
+      type: "adamw"
+      lr: 1.0e-5
+      betas: [0.9, 0.999]
+    lr_schedule_cfg:
+      type: 'cosann_warmup'
+      update_on: 'gradient_step'
+      warmup_steps: 300
+      hold_steps: 1700
+      T_max: 4000
+      eta_min: 0
+    early_stopping: False
+    validation_freq: -1
+    save_best_model: False
+    checkpoint_freq: -1
+    run_on_gpu: True
+    use_amp: True
+    log_comet: True
+    comet_project_name: 'dino-poison-TA'
+    seed: *training_seed
 
-    CF:
-      max_iterations: 100
-      optimizer_cfg: 
-        type: "adamw"
-        lr: 1.0e-5
-        betas: [0.9, 0.999]
-      lr_schedule_cfg:
-        type: 'cosann_warmup'
-        update_on: 'gradient_step'
-        warmup_steps: 30
-        hold_steps: 30
-        T_max: 100
-        eta_min: 0
-      early_stopping: False
-      validation_freq: -1
-      save_best_model: False
-      checkpoint_freq: -1
-      run_on_gpu: True
-      use_amp: True
-      log_comet: True
-      comet_project_name: 'dino-poison-TA'
-      seed: *training_seed
-    # gradient_ascent:
-    #   max_iterations: 1000
-    #   optimizer_cfg: 
-    #     type: "adamw"
-    #     lr: 1.0e-5
-    #     betas: [0.9, 0.999]
-    #   lr_schedule_cfg:
-    #     type: 'cosann_warmup'
-    #     update_on: 'gradient_step'
-    #     warmup_steps: 100
-    #     hold_steps: 0
-    #     T_max: 1000
-    #     eta_min: 1.0e-7
-    #   early_stopping: False
-    #   validation_freq: -1
-    #   save_best_model: False
-    #   checkpoint_freq: -1
-    #   run_on_gpu: True
-    #   use_amp: True
-    #   log_comet: True
-    #   comet_project_name: 'clip-noise-TA'
-    #   seed: *training_seed
+  CF:
+    max_iterations: 100
+    optimizer_cfg: 
+      type: "adamw"
+      lr: 1.0e-5
+      betas: [0.9, 0.999]
+    lr_schedule_cfg:
+      type: 'cosann_warmup'
+      update_on: 'gradient_step'
+      warmup_steps: 30
+      hold_steps: 30
+      T_max: 100
+      eta_min: 0
+    early_stopping: False
+    validation_freq: -1
+    save_best_model: False
+    checkpoint_freq: -1
+    run_on_gpu: True
+    use_amp: True
+    log_comet: True
+    comet_project_name: 'dino-poison-TA'
+    seed: *training_seed
+  # gradient_ascent:
+  #   max_iterations: 1000
+  #   optimizer_cfg: 
+  #     type: "adamw"
+  #     lr: 1.0e-5
+  #     betas: [0.9, 0.999]
+  #   lr_schedule_cfg:
+  #     type: 'cosann_warmup'
+  #     update_on: 'gradient_step'
+  #     warmup_steps: 100
+  #     hold_steps: 0
+  #     T_max: 1000
+  #     eta_min: 1.0e-7
+  #   early_stopping: False
+  #   validation_freq: -1
+  #   save_best_model: False
+  #   checkpoint_freq: -1
+  #   run_on_gpu: True
+  #   use_amp: True
+  #   log_comet: True
+  #   comet_project_name: 'clip-noise-TA'
+  #   seed: *training_seed

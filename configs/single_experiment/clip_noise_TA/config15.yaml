@@ -3,14 +3,14 @@ training_seed: &training_seed 11
 dataset_seed: &dataset_seed 11
 
 strategy:
-  finetuning_set: &finetuning_set 'Heldout'
-  noise:
-    pretraining:
+  proxy_set: &proxy_set 'Heldout'
+  corruption:
+    mix:
       set: 'Train'
       noise_rate: 0.2
       noise_type: 'symmetric'
       seed: 8
-    finetuning:
+    proxy:
     - set: 'Train'
       noise_rate: 1.0
       noise_type: 'symmetric'

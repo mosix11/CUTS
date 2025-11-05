@@ -3,14 +3,14 @@ training_seed: &training_seed 11
 dataset_seed: &dataset_seed 11
 
 strategy:
-  finetuning_set: &finetuning_set 'Heldout'
-  noise:
-    pretraining:
+  proxy_set: &proxy_set 'Heldout'
+  corruption:
+    mix:
       set: 'Train'
       noise_rate: 0.4
       noise_type: 'asymmetric'
       seed: 8
-    finetuning:
+    proxy:
       - set: 'Train'
         noise_rate: 1.0
         noise_type: 'asymmetric'
@@ -38,93 +38,92 @@ model:
   metrics: ['ACC', 'F1']
 
 trainer:
-  finetuning:
-    mix:
-      max_iterations: 12000
-      optimizer_cfg: 
-        type: "adamw"
-        lr: 5.0e-5
-        betas: [0.9, 0.999]
-      lr_schedule_cfg:
-        type: 'cosann_warmup'
-        update_on: 'gradient_step'
-        warmup_steps: 300
-        hold_steps: 8000
-        T_max: 12000
-        eta_min: 0
-      early_stopping: False
-      validation_freq: -1
-      save_best_model: False
-      checkpoint_freq: -1
-      run_on_gpu: True
-      use_amp: True
-      log_comet: True
-      comet_project_name: 'dino-noise-TA'
-      seed: *training_seed
-    proxy:
-      max_iterations: 600
-      optimizer_cfg: 
-        type: "adamw"
-        lr: 1.0e-5
-        betas: [0.9, 0.999]
-      lr_schedule_cfg:
-        type: 'cosann_warmup'
-        update_on: 'gradient_step'
-        warmup_steps: 100
-        hold_steps: 300
-        T_max: 600
-        eta_min: 0
-      early_stopping: False
-      validation_freq: -1
-      save_best_model: False
-      checkpoint_freq: -1
-      run_on_gpu: True
-      use_amp: True
-      log_comet: True
-      comet_project_name: 'dino-noise-TA'
-      seed: *training_seed
-    oracle:
-      max_iterations: 4000
-      optimizer_cfg: 
-        type: "adamw"
-        lr: 5.0e-5
-        betas: [0.9, 0.999]
-      lr_schedule_cfg:
-        type: 'cosann_warmup'
-        update_on: 'gradient_step'
-        warmup_steps: 300
-        hold_steps: 2000
-        T_max: 4000
-        eta_min: 1.0e-7
-      early_stopping: False
-      validation_freq: -1
-      save_best_model: False
-      checkpoint_freq: -1
-      run_on_gpu: True
-      use_amp: True
-      log_comet: True
-      comet_project_name: 'dino-noise-TA'
-      seed: *training_seed
+  mix:
+    max_iterations: 12000
+    optimizer_cfg: 
+      type: "adamw"
+      lr: 5.0e-5
+      betas: [0.9, 0.999]
+    lr_schedule_cfg:
+      type: 'cosann_warmup'
+      update_on: 'gradient_step'
+      warmup_steps: 300
+      hold_steps: 8000
+      T_max: 12000
+      eta_min: 0
+    early_stopping: False
+    validation_freq: -1
+    save_best_model: False
+    checkpoint_freq: -1
+    run_on_gpu: True
+    use_amp: True
+    log_comet: True
+    comet_project_name: 'dino-noise-TA'
+    seed: *training_seed
+  proxy:
+    max_iterations: 600
+    optimizer_cfg: 
+      type: "adamw"
+      lr: 1.0e-5
+      betas: [0.9, 0.999]
+    lr_schedule_cfg:
+      type: 'cosann_warmup'
+      update_on: 'gradient_step'
+      warmup_steps: 100
+      hold_steps: 300
+      T_max: 600
+      eta_min: 0
+    early_stopping: False
+    validation_freq: -1
+    save_best_model: False
+    checkpoint_freq: -1
+    run_on_gpu: True
+    use_amp: True
+    log_comet: True
+    comet_project_name: 'dino-noise-TA'
+    seed: *training_seed
+  oracle:
+    max_iterations: 4000
+    optimizer_cfg: 
+      type: "adamw"
+      lr: 5.0e-5
+      betas: [0.9, 0.999]
+    lr_schedule_cfg:
+      type: 'cosann_warmup'
+      update_on: 'gradient_step'
+      warmup_steps: 300
+      hold_steps: 2000
+      T_max: 4000
+      eta_min: 1.0e-7
+    early_stopping: False
+    validation_freq: -1
+    save_best_model: False
+    checkpoint_freq: -1
+    run_on_gpu: True
+    use_amp: True
+    log_comet: True
+    comet_project_name: 'dino-noise-TA'
+    seed: *training_seed
 
-    CF:
-      max_iterations: 500
-      optimizer_cfg: 
-        type: "adamw" 
-        lr: 1.0e-5
-        betas: [0.9, 0.999]
-      lr_schedule_cfg:
-        type: 'cosann_warmup'
-        update_on: 'gradient_step'
-        warmup_steps: 100
-        hold_steps: 200
-        T_max: 500
-        eta_min: 1.0e-7
-      early_stopping: False
-      validation_freq: -1
-      save_best_model: False
-      checkpoint_freq: -1
-      run_on_gpu: True
-      use_amp: True
-      log_comet: True
-      comet_project_name: 'dino-noise-TA'
-      seed: *training_seed
+  CF:
+    max_iterations: 500
+    optimizer_cfg: 
+      type: "adamw" 
+      lr: 1.0e-5
+      betas: [0.9, 0.999]
+    lr_schedule_cfg:
+      type: 'cosann_warmup'
+      update_on: 'gradient_step'
+      warmup_steps: 100
+      hold_steps: 200
+      T_max: 500
+      eta_min: 1.0e-7
+    early_stopping: False
+    validation_freq: -1
+    save_best_model: False
+    checkpoint_freq: -1
+    run_on_gpu: True
+    use_amp: True
+    log_comet: True
+    comet_project_name: 'dino-noise-TA'
+    seed: *training_seed
