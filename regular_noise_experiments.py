@@ -42,7 +42,7 @@ import imageio.v2 as imageio
 from src.utils import embedding_space_analysis
 from helper_funcs import evaluate_model, eval_model_on_clean_noise_splits, recalibrate_batchnorm, get_confusion_matrix, row_normalize
 from src.utils import weight_norm_analysis
-from WD_analysis import apply_WD_antitask_analysis_acc
+
 
     
 def finetune_models(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
@@ -532,20 +532,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     
     
     
-    model.load_state_dict(pt_weights, strict=False)
-    wd_results = apply_WD_antitask_analysis_acc(
-        model=model,
-        taskvector1=estimated_clean_vector,
-        taskvector2=estimated_noise_vector,
-        shared_support=test_subset,
-        calibration_dl=dataset.get_train_dataloader() if cfg['model']['type'] != 'fc1' else None,
-        alpha_range=(0.0, 2.5),
-        step=0.1,
-        batch_size=512,
-        device=gpu,
-    )
-    with open(results_dir / "WD2.pkl", "wb") as f:
-        pickle.dump(wd_results, f)
+
 
 from torch.distributed.elastic.multiprocessing.errors import record
 

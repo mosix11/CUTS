@@ -12,7 +12,7 @@ strategy:
       trigger_percent: 0.03
       margin: [10,6]
       seed: 8
-    proxy_set:
+    proxy:
       - set: 'Train'
         rate: 1.0
         target_class: 0

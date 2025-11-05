@@ -1,13 +1,11 @@
 import torch
 import torchmetrics
 from torchmetrics.classification import BinaryAccuracy, MulticlassAccuracy, BinaryF1Score, MulticlassF1Score
-from . import FC1, FCN, CNN5
+from . import FC1
 from . import PreActResNet9, PreActResNet18, PreActResNet34, PreActResNet50, PreActResNet101, PreActResNet152
 from . import PostActResNet9, PostActResNet18, PostActResNet34, PostActResNet50, PostActResNet101, PostActResNet152
-from . import PostActResNet9_ETD
-from . import CNN5_ETD
-from . import ViT_Small
-from . import TorchvisionModels, TimmModels, DinoV3Classifier
+
+from . import TorchvisionModels, TorchvisionModelsSAP, DinoV3Classifier
 from . import OpenClipImageEncoder, OpenClipMultiHeadImageClassifier
 
 from .loss_functions import SupervisedContrastiveLoss, CompoundLoss
@@ -68,13 +66,7 @@ def create_model(cfg_orig, num_classes=None):
 
     if model_type == 'fc1':
         model = FC1(**cfg)
-    elif model_type == 'fcN':
-        model = FCN(**cfg)
-        
-        
-    elif model_type == 'cnn5':
-        model = CNN5(**cfg)
-        
+
         
     elif model_type == 'resnet9v2':
         model = PreActResNet9(**cfg)
@@ -103,16 +95,17 @@ def create_model(cfg_orig, num_classes=None):
     elif model_type == 'resnet152v1':
         model = PostActResNet152(**cfg)
         
-    elif model_type == 'vit_small':
-        model = ViT_Small(**cfg)
         
     elif model_type == 'dinov3':
         model = DinoV3Classifier(**cfg)
+
         
-    elif model_type == 'resnet9v1_etd':
-        model = PostActResNet9_ETD(**cfg)
-    elif model_type == 'cnn5_etd':
-        model = CNN5_ETD(**cfg)
+    elif model_type.startswith('torchvisionsap'): 
+        model_type = model_type.removeprefix('torchvisionsap_')
+        model = TorchvisionModelsSAP(
+            model_type=model_type,
+            **cfg
+        )
         
     elif model_type.startswith('torchvision'): 
         model_type = model_type.removeprefix('torchvision_')
@@ -120,14 +113,8 @@ def create_model(cfg_orig, num_classes=None):
             model_type=model_type,
             **cfg
         )
-    elif model_type.startswith('timm'):
-        model_type = model_type.removeprefix('timm_')
-        model = TimmModels(
-            model_type=model_type,
-            **cfg
-        )
-        
     
+        
         
     elif model_type.startswith('open_clip'):
         model_type = model_type.removeprefix('open_clip_')

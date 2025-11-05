@@ -39,11 +39,6 @@ import math
 from src.utils import embedding_space_analysis
 from helper_funcs import evaluate_model, eval_model_on_clean_noise_splits, search_optimal_coefficient, get_confusion_matrix, row_normalize
 from src.utils import weight_norm_analysis
-from WD_analysis import apply_WD_analysis, apply_WD_antitask_analysis, apply_WD_antitask_analysis_acc
-
-
-
-    
 
 def initialize_model_dataset(experiment_type:str, architecture:str, cfg: dict):
     dataset_cfg = cfg['dataset']
@@ -99,35 +94,24 @@ def initialize_model_dataset(experiment_type:str, architecture:str, cfg: dict):
 def inject_corruption(experiment_type:str, base_dataset, cfg: dict):
     strategy = cfg['strategy']
     if experiment_type == 'noise':
-        base_dataset.inject_noise(**strategy['noise']['pretraining'])
+        base_dataset.inject_noise(**strategy['corruption']['mix'])
     elif experiment_type == 'IC':
-        base_dataset.inject_noise(**strategy['noise']['pretraining'])
+        base_dataset.inject_noise(**strategy['corruption']['mix'])
     elif experiment_type == 'poison':
-        base_dataset.inject_poison(**strategy['poison']['pretraining'])
+        base_dataset.inject_poison(**strategy['corruption']['mix'])
     
+    return base_dataset
     
 def finetune_models(experiment_type:str, architecture:str, outputs_dir: Path, cfg: dict, cfg_name:str):
-    cfg['trainer']['finetuning']['comet_api_key'] = os.getenv("COMET_API_KEY")
     
-    
-    dataset_cfg = cfg['datasets']
-    base_dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
-    
-
-    cfg['model']['datasets_cfgs'] = {dataset_cfg['name']: base_dataset.get_class_names()} 
-    base_model = model_factory.create_model(cfg['model'])
-    base_model.freeze_all_heads()
-    
-    dataset_cfg['train_transforms'] = base_model.get_train_transforms()
-    dataset_cfg['val_transforms'] = base_model.get_val_transforms()
-    base_dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
+    base_model, base_dataset, cfg = initialize_model_dataset(experiment_type, architecture, cfg)
     
     strategy = cfg['strategy']
-    base_dataset.inject_noise(**strategy['noise']['pretraining'])
+    base_dataset = inject_corruption(experiment_type, base_dataset, cfg)
     
 
     
-    if not outputs_dir.joinpath(f"{cfg_name}/mix/weights/ft_weights.pth").exists():
+    if not outputs_dir.joinpath(f"{cfg_name}/mix/weights/weights.pth").exists():
         dataset = copy.deepcopy(base_dataset)
         model = copy.deepcopy(base_model)
             
@@ -141,30 +125,25 @@ def finetune_models(experiment_type:str, architecture:str, outputs_dir: Path, cf
         plots_dir.mkdir(exist_ok=True, parents=True)
         
         
-        finetuning_cfg = None
-        if 'mix' in cfg['trainer']['finetuning']:
-            finetuning_cfg = cfg['trainer']['finetuning']['mix']
-            finetuning_cfg['comet_api_key'] =  os.getenv("COMET_API_KEY")
-        else: finetuning_cfg = cfg['trainer']['finetuning']
         trainer = StandardTrainer(
             outputs_dir=outputs_dir,
-            **finetuning_cfg,
+            **cfg['trainer']['mix'],
             exp_name=experiment_name,
             exp_tags=None,
         )
         
         results = trainer.fit(model, dataset, resume=False)
-        torch.save(model.state_dict(), weights_dir / Path("ft_weights.pth"))
+        torch.save(model.state_dict(), weights_dir / Path("weights.pth"))
         
       
-    if not outputs_dir.joinpath(f"{cfg_name}/clean/weights/ft_weights.pth").exists():
+    if not outputs_dir.joinpath(f"{cfg_name}/oracle/weights/weights.pth").exists():
         dataset = copy.deepcopy(base_dataset)
         model = copy.deepcopy(base_model)
         
         clean_set, noisy_set = dataset.get_clean_noisy_subsets(set='Train')
         dataset.set_trainset(clean_set, shuffle=True)
             
-        experiment_name = f"{cfg_name}/clean"
+        experiment_name = f"{cfg_name}/oracle"
         experiment_dir = outputs_dir / Path(experiment_name)
 
         weights_dir = experiment_dir / Path("weights")
@@ -173,45 +152,27 @@ def finetune_models(experiment_type:str, architecture:str, outputs_dir: Path, cf
         plots_dir = experiment_dir / Path("plots")
         plots_dir.mkdir(exist_ok=True, parents=True)
         
-        finetuning_cfg = None
-        if 'clean' in cfg['trainer']['finetuning']:
-            finetuning_cfg = cfg['trainer']['finetuning']['clean']
-            finetuning_cfg['comet_api_key'] =  os.getenv("COMET_API_KEY")
-        else: finetuning_cfg = cfg['trainer']['finetuning']
         trainer = StandardTrainer(
             outputs_dir=outputs_dir,
-            **finetuning_cfg,
+            **cfg['trainer']['oracle'],
             exp_name=experiment_name,
             exp_tags=None,
         )
         
         results = trainer.fit(model, dataset, resume=False)
-        torch.save(model.state_dict(), weights_dir / Path("ft_weights.pth"))
+        torch.save(model.state_dict(), weights_dir / Path("weights.pth"))
         
         
-    # Finetune on the set we use for noise vectors but with uncorrupted labels.
-    if not outputs_dir.joinpath(f"{cfg_name}/finetune_clean/weights/ft_weights.pth").exists() and strategy['finetuning_set'] == 'Heldout':
+    # Catastrophic Forgetting baseline
+    if not outputs_dir.joinpath(f"{cfg_name}/CF/weights/weights.pth").exists():
         dataset = copy.deepcopy(base_dataset)
         model = copy.deepcopy(base_model)
         
-        mix_model_ckp_path = outputs_dir/ Path(f"{cfg_name}/mix") / Path('weights/ft_weights.pth')
+        mix_model_ckp_path = outputs_dir/ Path(f"{cfg_name}/mix") / Path('weights/weights.pth')
         checkpoint = torch.load(mix_model_ckp_path)
         model.load_state_dict(checkpoint)
         
-        
-        noise_tv = strategy['noise']['finetuning'][0]
-        # For asymmetric noise, we only consider the noisy samples (only a subset of classes are swapped.)
-        if noise_tv['noise_type'] == 'asymmetric':
-            noise_tv['set'] = 'Heldout'
-            dataset.inject_noise(**noise_tv)
-            hs_clean, hs_noisy = dataset.get_clean_noisy_subsets(set='Heldout')
-            dataset.switch_labels_to_clean(hs_noisy)
-            
-            dataset.set_trainset(hs_noisy, shuffle=True)
-        else:
-            dataset.set_trainset(dataset.get_heldoutset(), shuffle=True)
-        
-        experiment_name = f"{cfg_name}/finetune_clean"
+        experiment_name = f"{cfg_name}/CF"
         experiment_dir = outputs_dir / Path(experiment_name)
 
         weights_dir = experiment_dir / Path("weights")
@@ -220,34 +181,56 @@ def finetune_models(experiment_type:str, architecture:str, outputs_dir: Path, cf
         plots_dir = experiment_dir / Path("plots")
         plots_dir.mkdir(exist_ok=True, parents=True)
         
-        finetuning_cfg = None
-        if 'heldout' in cfg['trainer']['finetuning']:
-            finetuning_cfg = cfg['trainer']['finetuning']['heldout']
-            finetuning_cfg['comet_api_key'] =  os.getenv("COMET_API_KEY")
-        else: finetuning_cfg = cfg['trainer']['finetuning']
+        
+        # For asymmetric label noise and IC we only finetune on samples that actually are corrupted with corruption kernel
+        # using their clean labels.
+        if experiment_type == 'poison': 
+            dataset.set_trainset(dataset.get_heldoutset(), shuffle=True)
+        elif experiment_type == 'noise':
+            proxy_conf = strategy['corruption']['proxy'][0]
+            
+            if proxy_conf['noise_type'] == 'symmetric':
+                dataset.set_trainset(dataset.get_heldoutset(), shuffle=True)
+            elif proxy_conf['noise_type'] == 'asymmetric':
+                proxy_conf['set'] = 'Heldout'
+                dataset.inject_noise(**proxy_conf)
+                hs_clean, hs_noisy = dataset.get_clean_noisy_subsets(set='Heldout')
+                dataset.switch_labels_to_clean(hs_noisy)
+                dataset.set_trainset(hs_noisy, shuffle=True)
+                 
+        elif experiment_type == 'IC':
+            proxy_conf = strategy['corruption']['proxy'][0]
+            proxy_conf['set'] = 'Heldout'
+            dataset.inject_noise(**proxy_conf)
+            hs_clean, hs_noisy = dataset.get_clean_noisy_subsets(set='Heldout')
+            dataset.switch_labels_to_clean(hs_noisy)
+            dataset.set_trainset(hs_noisy, shuffle=True)
+        
+        
         
         trainer = StandardTrainer(
             outputs_dir=outputs_dir,
-            **finetuning_cfg,
+            **cfg['trainer']['CF'],
             exp_name=experiment_name,
             exp_tags=None,
         )
         
         results = trainer.fit(model, dataset, resume=False)
-        torch.save(model.state_dict(), weights_dir / Path("ft_weights.pth"))
+        torch.save(model.state_dict(), weights_dir / Path("weights.pth"))
         
 
         
-    for idx, noise_tv in enumerate(strategy['noise']['finetuning']):
-        if not outputs_dir.joinpath(f"{cfg_name}/finetune_{noise_tv['noise_rate']}_{noise_tv['seed']}/weights/ft_weights.pth").exists():
+    
+    for idx, proxy_conf in enumerate(strategy['corruption']['proxy']):
+        if not outputs_dir.joinpath(f"{cfg_name}/proxy_{proxy_conf['seed']}/weights/weights.pth").exists():
             dataset = copy.deepcopy(base_dataset)
             model = copy.deepcopy(base_model)
             
-            mix_model_ckp_path = outputs_dir/ Path(f"{cfg_name}/mix") / Path('weights/ft_weights.pth')
+            mix_model_ckp_path = outputs_dir/ Path(f"{cfg_name}/mix") / Path('weights/weights.pth')
             checkpoint = torch.load(mix_model_ckp_path)
             model.load_state_dict(checkpoint)
             
-            experiment_name = f"{cfg_name}/finetune_{noise_tv['noise_rate']}_{noise_tv['seed']}"
+            experiment_name = f"{cfg_name}/proxy_{proxy_conf['seed']}"
             experiment_dir = outputs_dir / Path(experiment_name)
 
             weights_dir = experiment_dir / Path("weights")
@@ -256,31 +239,43 @@ def finetune_models(experiment_type:str, architecture:str, outputs_dir: Path, cf
             plots_dir = experiment_dir / Path("plots")
             plots_dir.mkdir(exist_ok=True, parents=True)
             
-
-            # For asymmetric noise, we only consider the noisy samples (only a subset of classes are swapped.)
-            if noise_tv['noise_type'] == 'asymmetric':
-                noise_tv['set'] = 'Heldout'
-                dataset.inject_noise(**noise_tv)
+            
+            if experiment_type == 'poison': 
+                # Exclude clean samples from target class
+                proxy_conf['set'] = 'Heldout'
+                dataset.inject_poison(**proxy_conf)
+                clean_ho_ds, poinsoned_ho_ds = dataset.get_clean_noisy_subsets('Heldout')
+                dataset.set_trainset(poinsoned_ho_ds, shuffle=True)
+                
+            elif experiment_type == 'noise':
+                if proxy_conf['noise_type'] == 'symmetric':
+                    dataset.set_trainset(dataset.get_heldoutset(), shuffle=True)
+                    dataset.inject_noise(**proxy_conf)
+                # For asymmetric noise, we only consider the noisy samples (only a subset of classes are swapped.)
+                elif proxy_conf['noise_type'] == 'asymmetric':
+                    proxy_conf['set'] = 'Heldout'
+                    dataset.inject_noise(**proxy_conf)
+                    hs_clean, hs_noisy = dataset.get_clean_noisy_subsets(set='Heldout')
+                    dataset.set_trainset(hs_noisy, shuffle=True)
+                    
+            elif experiment_type == 'IC':
+                # For IC, we only consider the noisy samples (only the pair of classes swapped.)
+                proxy_conf['set'] = 'Heldout'
+                dataset.inject_noise(**proxy_conf)
                 hs_clean, hs_noisy = dataset.get_clean_noisy_subsets(set='Heldout')
                 dataset.set_trainset(hs_noisy, shuffle=True)
-            else:
-                dataset.set_trainset(dataset.get_heldoutset(), shuffle=True)
-                dataset.inject_noise(**noise_tv)
                 
-            finetuning_cfg = None
-            if 'noise' in cfg['trainer']['finetuning']:
-                finetuning_cfg = cfg['trainer']['finetuning']['noise']
-                finetuning_cfg['comet_api_key'] =  os.getenv("COMET_API_KEY")
-            else: finetuning_cfg = cfg['trainer']['finetuning']
+
+                
             trainer = StandardTrainer(
                 outputs_dir=outputs_dir,
-                **finetuning_cfg,
+                **cfg['trainer']['proxy'],
                 exp_name=experiment_name,
                 exp_tags=None,
             )
             
             results = trainer.fit(model, dataset, resume=False)
-            torch.save(model.state_dict(), weights_dir / Path("ft_weights.pth"))  
+            torch.save(model.state_dict(), weights_dir / Path("weights.pth"))  
             
 
 
