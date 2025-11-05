@@ -42,9 +42,12 @@ from src.utils import weight_norm_analysis
 from WD_analysis import apply_WD_analysis, apply_WD_antitask_analysis, apply_WD_antitask_analysis_acc
 
 
+
+def setup_comet_key(architecture:str, cfg: dict):
+    
+
 def initialize_model_dataset(experiment_type:str, architecture:str, cfg: dict):
     dataset_cfg = cfg['dataset']
-    
     
     if architecture == 'clip':
         cfg['trainer']['finetuning']['comet_api_key'] = os.getenv("COMET_API_KEY")
@@ -89,36 +92,19 @@ def initialize_model_dataset(experiment_type:str, architecture:str, cfg: dict):
         base_dataset, num_classes = dataset_factory.create_dataset(cfg['dataset'], augmentations)
         base_model = model_factory.create_model(cfg['model'], num_classes)
 
+    return base_model, base_dataset, cfg
 
-    # if experiment_type == 'noise':
-    #     if architecture == 'clip':
-    #         base_model = model_factory.create_model(cfg['model'])
-    #         base_model.freeze_all_heads()
-            
-    #         dataset_cfg['train_transforms'] = base_model.get_train_transforms()
-    #         dataset_cfg['val_transforms'] = base_model.get_val_transforms()
-    #         base_dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
-            
-    #     elif architecture == 'dino':
-    #         pass
-    #     elif architecture == 'regular':
-    #         pass
-    # elif experiment_type == 'IC':
-    #     if architecture == 'clip':
-    #         base_model = model_factory.create_model(cfg['model'])
-    #         base_model.freeze_all_heads()
-            
-    #     else: raise NotImplementedError()
-    # elif experiment_type == 'poison':
-    #     if architecture == 'clip':
-    #         base_model = model_factory.create_model(cfg['model'])
-    #         base_model.freeze_all_heads()
-            
-    #     elif architecture == 'dino':
-    #         pass
-    #     elif architecture == 'regular':
-    #         pass
 
+
+def inject_corruption(experiment_type:str, base_dataset, cfg: dict):
+    strategy = cfg['strategy']
+    if experiment_type == 'noise':
+        base_dataset.inject_noise(**strategy['noise']['pretraining'])
+    elif experiment_type == 'IC':
+        base_dataset.inject_noise(**strategy['noise']['pretraining'])
+    elif experiment_type == 'poison':
+        base_dataset.inject_poison(**strategy['poison']['pretraining'])
+    
     
 def finetune_models(experiment_type:str, architecture:str, outputs_dir: Path, cfg: dict, cfg_name:str):
     cfg['trainer']['finetuning']['comet_api_key'] = os.getenv("COMET_API_KEY")

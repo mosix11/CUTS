@@ -65,7 +65,7 @@ trainer:
       log_comet: True
       comet_project_name: 'clip-noise-TA'
       seed: *training_seed
-    noise:
+    proxy:
       max_iterations: 800
       optimizer_cfg: 
         type: "adamw"
@@ -87,7 +87,7 @@ trainer:
       log_comet: True
       comet_project_name: 'clip-noise-TA'
       seed: *training_seed
-    clean:
+    oracle:
       max_iterations: 3000
       optimizer_cfg: 
         type: "adamw"
@@ -109,7 +109,7 @@ trainer:
       comet_project_name: 'clip-noise-TA'
       seed: *training_seed
 
-    heldout:
+    CF:
       max_iterations: 500
       optimizer_cfg: 
         type: "adamw"

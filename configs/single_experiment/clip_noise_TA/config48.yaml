@@ -65,7 +65,7 @@ trainer:
       log_comet: True
       comet_project_name: 'clip-noise-TA'
       seed: *training_seed
-    noise:
+    proxy:
       max_iterations: 2500
       optimizer_cfg: 
         type: "adamw"
