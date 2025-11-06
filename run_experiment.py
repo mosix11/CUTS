@@ -309,73 +309,92 @@ def apply_tv(experiment_type:str, architecture:str, outputs_dir: Path, results_d
         dir.mkdir(exist_ok=True, parents=True)
     
     
-    dataset_cfg = cfg['datasets'][0]
-    dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
+    model, base_dataset, cfg = initialize_model_dataset(experiment_type, architecture, cfg)
+    base_dataset.reset_train_dl(shuffle=False)
+    
+    strategy = cfg['strategy']
     
 
-    cfg['model']['datasets_cfgs'] = {dataset_cfg['name']: dataset.get_class_names()} 
-    model = model_factory.create_model(cfg['model'])
-    model.freeze_all_heads()
     
+    
+    if experiment_type == 'poison':
+        dataset_clean = copy.deepcopy(base_dataset)
+        dataset_corrupted = copy.deepcopy(base_dataset)
+        dataset_corrupted.inject_poison(**strategy['corruption']['mix'])
+        
+        proxy_conf = strategy['corruption']['proxy'][0]
+        proxy_conf['set'] = 'Heldout'
+        dataset_corrupted.inject_poison(**proxy_conf)
+        # Exclude clean samples from target class
+        clean_ho_ds, poinsoned_ho_ds = dataset_corrupted.get_clean_noisy_subsets('Heldout')
+        dataset_corrupted.set_heldoutset(poinsoned_ho_ds)
+        
+    elif experiment_type == 'noise':
+        dataset_clean = copy.deepcopy(base_dataset)
+        dataset_corrupted = copy.deepcopy(base_dataset)
+        dataset_corrupted.inject_noise(**strategy['corruption']['mix'])
+        
+        proxy_conf = strategy['corruption']['proxy'][0]
+        proxy_conf['set'] = 'Heldout'
+        if proxy_conf['noise_type'] == 'symmetric':
+            dataset_corrupted.inject_noise(**proxy_conf)
+        elif proxy_conf['noise_type'] == 'asymmetric':
+            dataset_corrupted.inject_noise(**proxy_conf)
+            hs_clean, hs_noisy = dataset_corrupted.get_clean_noisy_subsets(set='Heldout')
+            dataset_corrupted.switch_labels_to_clean(hs_noisy)
+            dataset_clean.set_heldoutset(copy.deepcopy(hs_noisy), shuffle=False)
+            dataset_corrupted.switch_labels_to_noisy(hs_noisy)
+            dataset_corrupted.set_heldoutset(hs_noisy, shuffle=False)
+                
+    elif experiment_type == 'IC':
+        dataset_clean = copy.deepcopy(base_dataset)
+        dataset_corrupted = copy.deepcopy(base_dataset)
+        dataset_corrupted.inject_noise(**strategy['corruption']['mix'])
+        
+        proxy_conf = strategy['corruption']['proxy'][0]
+        proxy_conf['set'] = 'Heldout'
+        
+        dataset_corrupted.inject_noise(**proxy_conf)
+        hs_clean, hs_noisy = dataset_corrupted.get_clean_noisy_subsets(set='Heldout')
+        dataset_corrupted.switch_labels_to_clean(hs_noisy)
+        dataset_clean.set_heldoutset(copy.deepcopy(hs_noisy), shuffle=False)
+        dataset_corrupted.switch_labels_to_noisy(hs_noisy)
+        dataset_corrupted.set_heldoutset(hs_noisy, shuffle=False)
+        
+        
+
     pt_weights = copy.deepcopy(model.state_dict())
     pt_weights = OrderedDict((k, v) for k, v in pt_weights.items() if "classifier_heads" not in k)
     
-    dataset_cfg['train_transforms'] = model.get_val_transforms()
-    dataset_cfg['val_transforms'] = model.get_val_transforms()
-    dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
-    
-    dataset.reset_train_dl(shuffle=False)
-    
-    
-    strategy = cfg['strategy']
-    noise_tv = strategy['noise']['finetuning'][0]
-    noise_tv['set'] = 'Heldout'
-    # For asymmetric noise, we only consider the noisy samples (only a subset of classes are swapped.)
-    if noise_tv['noise_type'] == 'asymmetric':
-        dataset.inject_noise(**noise_tv)
-        hs_clean, hs_noisy = dataset.get_clean_noisy_subsets(set='Heldout')
-        dataset.switch_labels_to_clean(hs_noisy)
         
-        dataset.set_heldoutset(hs_noisy, shuffle=False)
-    
-        dataset_clean = copy.deepcopy(dataset)
-    
-        dataset.inject_noise(**strategy['noise']['pretraining'])
-        ho_set = dataset.get_heldoutset()
-        dataset.switch_labels_to_noisy(ho_set)
-        dataset.set_heldoutset(ho_set)
-    else:
-        dataset_clean = copy.deepcopy(dataset)
-        dataset.inject_noise(**strategy['noise']['pretraining'])
-        dataset.inject_noise(**noise_tv)
 
-    # Load weights while removing classifier weights from the state dict
+    # Load weights while removing classifier head's weights from the state dict for CLIP
     mix_weights = OrderedDict(
     (k, v) for k, v in torch.load(
-        outputs_dir.joinpath(f"mix/weights/ft_weights.pth"),
+        outputs_dir.joinpath(f"mix/weights/weights.pth"),
         map_location='cpu'
     ).items() if "classifier_heads" not in k)
     
-    gold_weights = OrderedDict(
+    oracle_weights = OrderedDict(
     (k, v) for k, v in torch.load(
-        outputs_dir.joinpath(f"clean/weights/ft_weights.pth"),
+        outputs_dir.joinpath(f"oracle/weights/weights.pth"),
         map_location='cpu'
     ).items() if "classifier_heads" not in k)
     
-    ft_ho_clean_weights = OrderedDict(
+    CF_weights = OrderedDict(
     (k, v) for k, v in torch.load(
-        outputs_dir.joinpath(f"finetune_clean/weights/ft_weights.pth"),
+        outputs_dir.joinpath(f"CF/weights/weights.pth"),
         map_location='cpu'
     ).items() if "classifier_heads" not in k)
     
     
-    noise_weights = OrderedDict()
+    proxy_weights = OrderedDict()
     
-    for noise_tv in strategy['noise']['finetuning']:
-        ft_expr_dir = outputs_dir / f"finetune_{noise_tv['noise_rate']}_{noise_tv['seed']}"
+    for proxy_conf in strategy['corruption']['proxy']:
+        ft_expr_dir = outputs_dir / f"proxy_{proxy_conf['seed']}"
         n_weights = OrderedDict(
         (k, v) for k, v in torch.load(
-            ft_expr_dir.joinpath(f"weights/ft_weights.pth"),
+            ft_expr_dir.joinpath(f"weights/weights.pth"),
             map_location='cpu'
         ).items() if "classifier_heads" not in k)
         noise_weights[f"Seed {noise_tv['seed']}"] = n_weights
