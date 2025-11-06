@@ -184,7 +184,11 @@ def finetune_models(experiment_type:str, architecture:str, outputs_dir: Path, cf
         
         # For asymmetric label noise and IC we only finetune on samples that actually are corrupted with corruption kernel
         # using their clean labels.
-        if experiment_type == 'poison': 
+        if experiment_type == 'poison':
+            proxy_conf = copy.deepcopy(strategy['corruption']['proxy'][0])
+            proxy_conf['set'] = 'Heldout'
+            proxy_conf['rate'] = 0.0
+            dataset.inject_poison(**proxy_conf)
             dataset.set_trainset(dataset.get_heldoutset(), shuffle=True)
         elif experiment_type == 'noise':
             proxy_conf = strategy['corruption']['proxy'][0]
