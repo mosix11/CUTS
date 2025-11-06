@@ -6,6 +6,7 @@ import torch.nn.functional as F
 from collections import OrderedDict
 from copy import deepcopy
 import torch 
+import copy
 
 def compute_conv_output_size(Lin,kernel_size,stride=1,padding=0,dilation=1):
     return int(np.floor((Lin[0]+2*padding[0]-dilation[0]*(kernel_size[0]-1)-1)/float(stride[0])+1)), int(np.floor((Lin[1]+2*padding[1]-dilation[1]*(kernel_size[1]-1)-1)/float(stride[1])+1))
@@ -104,3 +105,6 @@ def project_weights_layer(layer, layer_key, projection_mat_dict, post_projection
     
 
     
+
+
+

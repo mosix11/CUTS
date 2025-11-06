@@ -302,6 +302,8 @@ def apply_tv(experiment_type:str, architecture:str, outputs_dir: Path, results_d
     results_dir = results_dir / cfg_name
     results_dir.mkdir(exist_ok=True, parents=True)
     
+
+    
     results_dirs = {}
     results_dirs['cms'] = results_dir / 'confusion_mats'
     results_dirs['Ts'] = results_dir / 'transition_mats'
@@ -625,6 +627,64 @@ def apply_tv(experiment_type:str, architecture:str, outputs_dir: Path, results_d
     
 
 
+
+def apply_SAP(experiment_type:str, architecture:str, outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
+    training_seed = cfg['training_seed']
+    dataset_seed = cfg['dataset_seed']
+    if training_seed:
+        random.seed(training_seed)
+        np.random.seed(training_seed)
+        torch.manual_seed(training_seed)
+        torch.cuda.manual_seed_all(training_seed)
+    
+    cpu = trainer_utils.get_cpu_device()
+    gpu = trainer_utils.get_gpu_device()
+    
+    
+    outputs_dir = outputs_dir / cfg_name
+    
+    results_dir = results_dir / cfg_name
+    results_dir.mkdir(exist_ok=True, parents=True)
+    
+    results_dirs = {}
+    results_dirs['cms'] = results_dir / 'confusion_mats'
+    results_dirs['Ts'] = results_dir / 'transition_mats'
+    results_dirs['W_norms'] = results_dir / 'weight_norms'
+    results_dirs['TV_norms'] = results_dir / 'TV_norms'
+    results_dirs['embed_plots'] = results_dir / 'embedding_plots'
+    results_dirs['metrics'] = results_dir / 'metrics'
+    for dir in results_dirs.values():
+        dir.mkdir(exist_ok=True, parents=True)
+    
+    
+    base_model, base_dataset, cfg = initialize_model_dataset(experiment_type, architecture, cfg)
+    base_dataset.reset_train_dl(shuffle=False)
+    
+    # Load weights while removing classifier head's weights from the state dict for CLIP
+    mix_weights = OrderedDict(
+    (k, v) for k, v in torch.load(
+        outputs_dir.joinpath(f"mix/weights/weights.pth"),
+        map_location='cpu'
+    ).items() if "classifier_heads" not in k)
+    
+    
+    base_model.load_state_dict(mix_weights)
+    
+    sap_model = copy.deepcopy(base_model)
+    
+    
+    from src.trainers import sap_unlearner
+    
+    sap_unlearner.activation_projection_based_unlearning(
+        model=sap_model,
+        clean_samples_dl=base_dataset.get_heldout_dataloader(),
+        project_classifier_head=True,
+        device=gpu
+    )
+
+    
+    
+
 from torch.distributed.elastic.multiprocessing.errors import record
 
 @record
@@ -675,6 +735,14 @@ def main():
     )
     
     
+    parser.add_argument(
+        "-s",
+        "--sap",
+        help="Apply SAP unlearning.",
+        action="store_true",
+    )
+    
+    
     
     args = parser.parse_args()
 
@@ -704,6 +772,10 @@ def main():
 
     if args.tv:
         apply_tv(args.experiment, args.arch, outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)
+    
+    if args.sap:
+        apply_SAP(args.experiment, args.arch, outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)
+
 
 if __name__ == "__main__":
     main()

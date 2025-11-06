@@ -34,17 +34,17 @@ class TorchvisionModelsSAP(BaseModel):
         
         model_func = None
         if model_type.startswith('resnet18'):
-            model_func = torchvision.models.resnet18
+            model_func = resnet18
         elif model_type.startswith('resnet34'):
-            model_func = torchvision.models.resnet34
+            model_func = resnet34
         elif model_type.startswith('resnet50'):
-            model_func = torchvision.models.resnet50
+            model_func = resnet50
         elif model_type.startswith('resnet101'):
-            model_func = torchvision.models.resnet101
+            model_func = resnet101
         elif model_type.startswith('vit_b_16'):
-            model_func = torchvision.models.vit_b_16
+            model_func = vit_b_16
         elif model_type.startswith('vit_b_32'):
-            model_func = torchvision.models.vit_b_32
+            model_func = vit_b_32
         else:
             raise ValueError(f"The model type {model_type} is not valid.")    
 
