@@ -145,7 +145,7 @@ def get_representation_matrix(net, device, data_loader, set_name="Heldout Set"):
     Args:
         net: model with .get_activations(batch) method
         device: torch device
-        data_loader: DataLoader containing clean samples
+        data_loader: DataLoader containing trusted samples
         set_name: just for printing/debugging
     Returns:
         mat_dict: dict["pre"|"post"] -> dict[layer_name] = activation_matrix (d x n)
@@ -191,12 +191,12 @@ def get_representation_matrix(net, device, data_loader, set_name="Heldout Set"):
 
 
 
-def activation_projection_based_unlearning(
+def SAP_unlearning_noise(
         model,
         clean_samples_dl,
         device,
         project_classifier_head = True,
-        scale_coff_list=[10000, 30000, 100000, 300000, 1000000],
+        scale_coff_list = [1000, 5000, 10000, 30000, 100000, 300000, 1000000],
         ):
     """
     Applies the SAP algorithm using a clean held-out dataset to compute activation projections.
@@ -214,8 +214,10 @@ def activation_projection_based_unlearning(
 
     model.to(device)
     model.eval()
-    # projected_models = {}
-    # proj_mats = {}
+    
+    best_alpha = None
+    best_model = None
+    best_ACC = -np.inf
 
     # Step 1: Collect activation representations on the clean dataset
     print("\nCollecting activation representations on clean set...")
@@ -250,9 +252,89 @@ def activation_projection_based_unlearning(
         # projected_models[alpha] = model_projected
         
         metrics, _, _ = evaluate_model(model_projected, clean_samples_dl, device)
+        if metrics['ACC'] > best_ACC:
+            best_alpha = alpha
+            best_model = copy.deepcopy(model_projected)
+            best_ACC = metrics['ACC']
         print(metrics)
 
     print("\nSAP projection completed.")
-    # return projected_models, proj_mats
+    return best_alpha, best_model, best_ACC
+
+
+
+def SAP_unlearning_poison(
+        model,
+        clean_samples_dl,
+        triggered_samples_dl,
+        device,
+        project_classifier_head = True,
+        scale_coff_list = [1000, 5000, 10000, 30000, 100000, 300000, 1000000],
+        ):
+    """
+    Applies the SAP algorithm using a clean held-out dataset to compute activation projections.
+
+    Args:
+        model: trained (possibly noisy) model
+        clean_samples_dl: DataLoader of clean / trusted samples
+        device: torch device
+        scale_coff_list: list of alpha values for SAP scaling
+        prev_recur_proj_mat: optional previous round projectors (for recurrent SAP)
+    Returns:
+        projected_models: dict { alpha : model_copy_with_projection }
+        proj_mats: dict { alpha : projector_matrices_per_layer }
+    """
+
+    model.to(device)
+    model.eval()
+    
+    best_alpha = None
+    best_model = None
+    best_ASR = np.inf
+
+    # Step 1: Collect activation representations on the clean dataset
+    print("\nCollecting activation representations on clean set...")
+    mat_retain_dict = get_representation_matrix(
+        model, device, clean_samples_dl, set_name="Clean Set"
+    )
+
+    # Step 2: Compute SVDs (U, S) per layer
+    print("\nComputing SVDs for each layer...")
+    full_feature_retain_dict, full_s_retain_dict = get_SVD(
+        mat_retain_dict, set_name="SVD Clean Set"
+    )
+
+    # Step 3: Loop over alphas to build projectors and update weights
+    print("\nRunning SAP projection...")
+    for alpha in scale_coff_list:
+        print(f"  α = {alpha}")
+
+        # Build scaled feature matrices (U Λ^{1/2})
+        scaled_feature_dict = get_scaled_feature_mat(
+            full_feature_retain_dict, full_s_retain_dict,
+            alpha=alpha, device=device
+        )
+
+        # Compute projection matrices Mr = U Λ Uᵀ (Eq.8)
+        proj_dict = get_projections(scaled_feature_dict, device)
+        # proj_mats[alpha] = proj_dict
+
+        # Apply projection to model weights
+        model_projected = copy.deepcopy(model).to(device)
+        model_projected.project_weights(proj_dict, project_classifier_head)
+        # projected_models[alpha] = model_projected
+        
+        metrics, _, _ = evaluate_model(model_projected, triggered_samples_dl, device)
+        if metrics['ACC'] < best_ASR:
+            best_alpha = alpha
+            best_model = copy.deepcopy(model_projected)
+            best_ASR = best_ASR['ACC']
+        print(metrics)
+
+    print("\nSAP projection completed.")
+    return best_alpha, best_model, best_ASR
+
+
+
 
 

@@ -660,6 +660,56 @@ def apply_SAP(experiment_type:str, architecture:str, outputs_dir: Path, results_
     base_model, base_dataset, cfg = initialize_model_dataset(experiment_type, architecture, cfg)
     base_dataset.reset_train_dl(shuffle=False)
     
+    strategy = cfg['strategy']
+    
+    if experiment_type == 'poison':
+        dataset_clean = copy.deepcopy(base_dataset)
+        dataset_corrupted = copy.deepcopy(base_dataset)
+        dataset_corrupted.inject_poison(**strategy['corruption']['mix'])
+        
+        proxy_conf = strategy['corruption']['proxy'][0]
+        proxy_conf['set'] = 'Heldout'
+        dataset_corrupted.inject_poison(**proxy_conf)
+        # Exclude clean samples from target class
+        clean_ho_ds, poinsoned_ho_ds = dataset_corrupted.get_clean_noisy_subsets('Heldout')
+        dataset_corrupted.set_heldoutset(poinsoned_ho_ds)
+        
+    elif experiment_type == 'noise':
+        dataset_clean = copy.deepcopy(base_dataset)
+        dataset_corrupted = copy.deepcopy(base_dataset)
+        dataset_corrupted.inject_noise(**strategy['corruption']['mix'])
+        
+        proxy_conf = strategy['corruption']['proxy'][0]
+        proxy_conf['set'] = 'Heldout'
+        if proxy_conf['noise_type'] == 'symmetric':
+            dataset_corrupted.inject_noise(**proxy_conf)
+        elif proxy_conf['noise_type'] == 'asymmetric':
+            dataset_corrupted.inject_noise(**proxy_conf)
+            hs_clean, hs_noisy = dataset_corrupted.get_clean_noisy_subsets(set='Heldout')
+            dataset_corrupted.switch_labels_to_clean(hs_noisy)
+            dataset_clean.set_heldoutset(copy.deepcopy(hs_noisy), shuffle=False)
+            dataset_corrupted.switch_labels_to_noisy(hs_noisy)
+            dataset_corrupted.set_heldoutset(hs_noisy, shuffle=False)
+                
+    elif experiment_type == 'IC':
+        dataset_clean = copy.deepcopy(base_dataset)
+        dataset_corrupted = copy.deepcopy(base_dataset)
+        dataset_corrupted.inject_noise(**strategy['corruption']['mix'])
+        
+        proxy_conf = strategy['corruption']['proxy'][0]
+        proxy_conf['set'] = 'Heldout'
+        
+        dataset_corrupted.inject_noise(**proxy_conf)
+        hs_clean, hs_noisy = dataset_corrupted.get_clean_noisy_subsets(set='Heldout')
+        dataset_corrupted.switch_labels_to_clean(hs_noisy)
+        dataset_clean.set_heldoutset(copy.deepcopy(hs_noisy), shuffle=False)
+        dataset_corrupted.switch_labels_to_noisy(hs_noisy)
+        dataset_corrupted.set_heldoutset(hs_noisy, shuffle=False)
+    
+    
+    
+    
+    
     # Load weights while removing classifier head's weights from the state dict for CLIP
     mix_weights = OrderedDict(
     (k, v) for k, v in torch.load(
@@ -675,12 +725,24 @@ def apply_SAP(experiment_type:str, architecture:str, outputs_dir: Path, results_
     
     from src.trainers import sap_unlearner
     
-    sap_unlearner.activation_projection_based_unlearning(
-        model=sap_model,
-        clean_samples_dl=base_dataset.get_heldout_dataloader(),
-        project_classifier_head=True,
-        device=gpu
-    )
+    
+    
+    if experiment_type == 'noise':
+        sap_unlearner.SAP_unlearning_noise(
+            model=sap_model,
+            clean_samples_dl=dataset_clean.get_heldout_dataloader(),
+            project_classifier_head=True,
+            device=gpu
+        )
+    elif experiment_type == 'poison':
+        sap_unlearner.SAP_unlearning_poison(
+            model=sap_model,
+            clean_samples_dl=dataset_clean.get_heldout_dataloader(),
+            triggered_samples_dl=dataset_corrupted.get_heldout_dataloader(),
+            project_classifier_head=True,
+            device=gpu
+        )
+    
 
     
     
