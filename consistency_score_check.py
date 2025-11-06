@@ -236,7 +236,7 @@ def evaluate_model(
         misclassified_samples,
     )
 
-def eval_model_on_clean_noise_splits(
+def eval_model_on_clean_corrupted_splits(
     model:torch.nn.Module,
     cfg:dict,
     dataset:BaseClassificationDataset,
@@ -515,7 +515,7 @@ def apply(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # clip cifar100 cfg47: -0.2
     # clip cifar100 cfg49: -0.315
     task_vectors['Average'].apply_to(model, scaling_coef=-1., strict=False)
-    train_results, misclassified_cleans, misclassified_cleans_smp, misclassified_heals = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+    train_results, misclassified_cleans, misclassified_cleans_smp, misclassified_heals = eval_model_on_clean_corrupted_splits(model, None, dataset, gpu)
     print(train_results)
     # test_results = evaluate_model(model, dataset.get_test_dataloader(), gpu)[0]
     # print(test_results)

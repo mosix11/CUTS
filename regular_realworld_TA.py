@@ -39,7 +39,7 @@ import math
 import imageio.v2 as imageio
 
 from src.utils import embedding_space_analysis
-from helper_funcs import evaluate_model, eval_model_on_clean_noise_splits, get_confusion_matrix, row_normalize
+from helper_funcs import evaluate_model, get_confusion_matrix, row_normalize
 from src.utils import weight_norm_analysis
 
 

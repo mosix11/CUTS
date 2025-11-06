@@ -37,7 +37,7 @@ import math
 
 
 from src.utils import embedding_space_analysis
-from helper_funcs import evaluate_model, eval_model_on_clean_noise_splits
+from helper_funcs import evaluate_model, eval_model_on_clean_corrupted_splits
 
 
 def apply_tv(outputs_dir: Path, results_dir: Path, cfg1: dict, cfg2: dict, cfg1_name:str, cfg2_name:str):

@@ -36,7 +36,7 @@ import re
 
 
 from src.utils import embedding_space_analysis
-from helper_funcs import evaluate_model, eval_model_on_clean_noise_splits, search_optimal_coefficient, get_confusion_matrix, row_normalize
+from helper_funcs import evaluate_model, eval_model_on_clean_corrupted_splits, search_optimal_coefficient, get_confusion_matrix, row_normalize
 from src.utils import weight_norm_analysis
 from WD_analysis import apply_WD_analysis, apply_WD_antitask_analysis, apply_WD_antitask_analysis_acc
 

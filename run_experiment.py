@@ -37,7 +37,7 @@ import math
 
 
 from src.utils import embedding_space_analysis
-from helper_funcs import evaluate_model, eval_model_on_clean_noise_splits, search_optimal_coefficient, get_confusion_matrix, row_normalize
+from helper_funcs import evaluate_model, eval_model_on_clean_corrupted_splits, search_optimal_coefficient, get_confusion_matrix, row_normalize
 from src.utils import weight_norm_analysis
 
 def initialize_model_dataset(experiment_type:str, architecture:str, cfg: dict):
@@ -401,31 +401,26 @@ def apply_tv(experiment_type:str, architecture:str, outputs_dir: Path, results_d
             ft_expr_dir.joinpath(f"weights/weights.pth"),
             map_location='cpu'
         ).items() if "classifier_heads" not in k)
-        noise_weights[f"Seed {noise_tv['seed']}"] = n_weights
+        proxy_weights[f"Proxy Seed {proxy_conf['seed']}"] = n_weights
     
             
     task_vectors = OrderedDict()
-    for task_name, finetuend_weights in noise_weights.items():
+    for task_name, finetuend_weights in proxy_weights.items():
         task_vectors[task_name] = TaskVector(mix_weights, finetuend_weights)
         
     if len(task_vectors) == 1:
         only_tv = task_vectors.popitem(last=False)[1]
-        task_vectors['Average'] = only_tv
+        task_vectors['Proxy'] = only_tv
     else:
-        task_vectors['Average'] = TaskVector.mean(task_vectors)
+        task_vectors['Proxy'] = TaskVector.mean(task_vectors)
         
     
-    task_vectors['CF'] = TaskVector(mix_weights, ft_ho_clean_weights)
+    task_vectors['CF'] = TaskVector(mix_weights, CF_weights)
     
-    # task_vectors['Gold'] = TaskVector(pt_weights, gold_weights)
-    task_vectors['Random Vector'] = task_vectors['Average'].generate_random_vector_with_same_layer_norms(seed=20)
+    
+    task_vectors['Random Vector'] = task_vectors['Proxy'].generate_random_vector_with_same_layer_norms(seed=20)
     task_vectors['Mix'] = TaskVector(pt_weights, mix_weights)
-    
-    # with open(results_dir / "metrics.json", "r") as json_file:
-    #     results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
-    # estimated_noise_vector =  task_vectors['Average'] * (-1 * results_dict['alpha_KNN'])
-    # estimated_clean_vector = task_vectors['Mix'] - estimated_noise_vector
-    # task_vectors['Clean'] = estimated_clean_vector
+    task_vectors['Oracle'] = TaskVector(pt_weights, oracle_weights)
 
 
     TV_norms = OrderedDict()
@@ -467,53 +462,48 @@ def apply_tv(experiment_type:str, architecture:str, outputs_dir: Path, results_d
 
 
 
-    # results_mtl_dict = OrderedDict()
-    # if not results_dir.joinpath('metrics_mtl.json').exists():
-    #     alphas = tqdm(np.round(np.linspace(0.0, 1.0, 21), 2))
-        
-    #     for alpha in alphas:
-    #         model.load_state_dict(pt_weights, strict=False)
-    #         task_vectors['Mix'].apply_to(model, scaling_coef=alpha, strict=False)
-    #         tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-    #         tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
-
-    #         results_mtl_dict[alpha] = {'test_results': tv_test_results, 'train_results': tv_train_results}
-    #     with open(results_dir / 'metrics_mtl.json' , 'w') as json_file:
-    #         json.dump(results_mtl_dict, json_file, indent=4)
-    
-
     results_dict = OrderedDict()
     if not results_dir.joinpath('metrics.json').exists():
 
         model.load_state_dict(mix_weights, strict=False)
-        mix_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-        mix_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+        mix_test_results, _, _ = evaluate_model(model, dataset_clean.get_test_dataloader(), gpu)
+        mix_train_results = eval_model_on_clean_corrupted_splits(model, None, dataset_corrupted, gpu)
         
         
-        model.load_state_dict(gold_weights, strict=False)
-        gold_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-        gold_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+        model.load_state_dict(oracle_weights, strict=False)
+        oracle_test_results, _, _ = evaluate_model(model, dataset_clean.get_test_dataloader(), gpu)
+        oracle_train_results = eval_model_on_clean_corrupted_splits(model, None, dataset_corrupted, gpu)
         
-        model.load_state_dict(ft_ho_clean_weights, strict=False)
-        ft_ho_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-        ft_ho_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+        model.load_state_dict(CF_weights, strict=False)
+        CF_test_results, _, _ = evaluate_model(model, dataset_clean.get_test_dataloader(), gpu)
+        CF_train_results = eval_model_on_clean_corrupted_splits(model, None, dataset_corrupted, gpu)
         
         results_dict['Mix'] = {'test_results': mix_test_results, 'train_results': mix_train_results}
-        results_dict['Gold'] = {'test_results': gold_test_results, 'train_results': gold_train_results}
-        results_dict['FT HO Clean'] = {'test_results': ft_ho_test_results, 'train_results': ft_ho_train_results}
+        results_dict['Oracle'] = {'test_results': oracle_test_results, 'train_results': oracle_train_results}
+        results_dict['CF'] = {'test_results': CF_test_results, 'train_results': CF_train_results}
         
-        if strategy['noise']['finetuning'][0]['noise_type'] == 'asymmetric':
+        
+        if experiment_type == 'poison':
             alphas = tqdm(np.round(np.linspace(-0.05, -2.0, 40), 2))
-        else:
+        elif experiment_type == 'noise':
             alphas = tqdm(np.round(np.linspace(-0.05, -3.0, 60), 2))
+        elif experiment_type == 'IC':
+            alphas = tqdm(np.round(np.linspace(-0.05, -1.5, 30), 2))
         for alpha in alphas:
             
             model.load_state_dict(mix_weights, strict=False)
-            task_vectors['Average'].apply_to(model, scaling_coef=alpha, strict=False)
-            tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-            tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
-
-            results_dict[alpha] = {'test_results': tv_test_results, 'train_results': tv_train_results}
+            task_vectors['Proxy'].apply_to(model, scaling_coef=alpha, strict=False)
+            tv_test_results, _, _ = evaluate_model(model, dataset_clean.get_test_dataloader(), gpu)
+            tv_train_results = eval_model_on_clean_corrupted_splits(model, None, dataset_corrupted, gpu)
+            
+            if experiment_type == 'poison':
+                tv_ho_resutls, _, _ = evaluate_model(model, dataset_corrupted.get_heldout_dataloader(), gpu)
+                results_dict[alpha] = {'test_results': tv_test_results, 'ho_results': tv_ho_resutls, 'train_results': tv_train_results}
+            elif experiment_type == 'IC':
+                tv_ho_resutls, _, _ = evaluate_model(model, dataset_clean.get_heldout_dataloader(), gpu)
+                results_dict[alpha] = {'test_results': tv_test_results, 'ho_results': tv_ho_resutls, 'train_results': tv_train_results}
+            else:
+                results_dict[alpha] = {'test_results': tv_test_results, 'train_results': tv_train_results}
         with open(results_dir / 'metrics.json' , 'w') as json_file:
             json.dump(results_dict, json_file, indent=4)
     else:
@@ -521,184 +511,117 @@ def apply_tv(experiment_type:str, architecture:str, outputs_dir: Path, results_d
             results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
             
             
-    if 'alpha_KNN' not in results_dict:        
-        num_clusters = dataset_clean.get_num_classes()
-        alpha_est_support_dl = dataset_clean.get_heldout_dataloader()
-        alpha_est_support_size = len(dataset_clean.get_heldoutset())
-        ideal_cluster_balance = alpha_est_support_size / num_clusters
-        num_neighbor_agr_check = math.floor(ideal_cluster_balance / 2)
-        if dataset.dataset_name == 'MNIST':
-            coverage_rate = 1.0
-        elif dataset.dataset_name == 'CIFAR10':
-            coverage_rate = 1.0
-        elif dataset.dataset_name == 'CIFAR100':
-            coverage_rate = 0.95
+    
+            
+    if 'alpha_hat' not in results_dict: 
+        if experiment_type == 'noise':  
+            proxy_conf = strategy['corruption']['proxy'][0]
+            if dataset_clean.dataset_name == 'MNIST':
+                if proxy_conf['noise_type'] == 'asymmetric':
+                    coverage_rate = 0.5
+                else:
+                    coverage_rate = 1.0
+            elif dataset_clean.dataset_name == 'CIFAR10':
+                if proxy_conf['noise_type'] == 'asymmetric':
+                    coverage_rate = 0.5
+                else:
+                    coverage_rate = 1.0
+            elif dataset_clean.dataset_name == 'CIFAR100':
+                coverage_rate = 0.95
+            
+            num_clusters = dataset_clean.get_num_classes()
+            alpha_est_support_dl = dataset_clean.get_heldout_dataloader()
+            alpha_est_support_size = len(dataset_clean.get_heldoutset())
+            ideal_cluster_balance = alpha_est_support_size / num_clusters
+            num_neighbor_agr_check = math.floor(ideal_cluster_balance / 2)
+            
 
-        from estimate_alpha import select_alpha_by_knn_self_agreement
-        alpha_kNN = select_alpha_by_knn_self_agreement(
-            model=model,
-            feature_extractor=model.get_feature_extractor(),
-            classifier=model.get_active_head(),
-            state0=mix_weights,
-            taskvector=task_vectors['Average'],
-            unlabeled_loader=alpha_est_support_dl,
-            num_clusters=num_clusters,
-            k=num_neighbor_agr_check,
-            coverage_rate=coverage_rate,
-            alphas=np.round(np.linspace(-0.0, -2.0, 41), 2),
-            device=gpu
-        )
+            from estimate_alpha import select_alpha_by_knn_self_agreement
+            alpha_hat = select_alpha_by_knn_self_agreement(
+                model=model,
+                feature_extractor=model.get_feature_extractor(),
+                classifier=model.get_active_head(),
+                state0=mix_weights,
+                taskvector=task_vectors['Proxy'],
+                unlabeled_loader=alpha_est_support_dl,
+                num_clusters=num_clusters,
+                k=num_neighbor_agr_check,
+                coverage_rate=coverage_rate,
+                alphas=np.round(np.linspace(-0.0, -2.0, 41), 2),
+                device=gpu
+            )
+            results_dict['alpha_hat'] = alpha_hat
+            
+        elif experiment_type == 'poison':
+            forget_rate_thrsh = {
+                'MNIST': 0.01,
+                'CIFAR10': 0.01,
+                'CIFAR100': 0.01
+            }
+            alphas = np.round(np.linspace(-0.05, -2.0, 40), 2)
+            alpha_hat = 0.0
+            for alpha in alphas:
+                metrics = results_dict.get(alpha, None)
+                if not metrics: metrics = results_dict.get(str(alpha), None)
+                if not metrics: print('alpha not found', alpha)
+                if round(metrics['ho_results']['ACC'], 2) <= forget_rate_thrsh[dataset_clean.dataset_name]:
+                    alpha_hat = alpha
+                    break
+            results_dict['alpha_hat'] = alpha_hat
         
-        results_dict['alpha_KNN'] = alpha_kNN
+        
+        elif experiment_type == 'IC':
+            alphas = np.round(np.linspace(-0.05, -1.5, 30), 2)
+            base_IC_acc = results_dict['Mix']['ho_results']['ACC']
+            alpha_hat = 0.0
+            for alpha in alphas:
+                metrics = results_dict.get(alpha, None)
+                if not metrics: metrics = results_dict.get(str(alpha), None)
+                if not metrics: print('alpha not found', alpha)
+                if metrics['ho_results']['ACC'] >= base_IC_acc:
+                    alpha_hat = alpha
+                    base_IC_acc = metrics['ho_results']['ACC'] 
+            
+            results_dict['alpha_hat'] = alpha_hat
+        
         with open(results_dir / 'metrics.json' , 'w') as json_file:
             json.dump(results_dict, json_file, indent=4)
-    
+        
 
     if 'Random Vector' not in results_dict:
         model.load_state_dict(mix_weights, strict=False)
-        alpha_kNN = results_dict['alpha_KNN']
-        task_vectors['Random Vector'].apply_to(model, scaling_coef=alpha_kNN, strict=False)
-        random_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-        random_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
-        results_dict['Random Vector'] = {'test_results': random_test_results, 'train_results': random_train_results}
+        alpha_hat = results_dict['alpha_hat']
+        task_vectors['Random Vector'].apply_to(model, scaling_coef=alpha_hat, strict=False)
+        random_test_results, _, _ = evaluate_model(model, dataset_clean.get_test_dataloader(), gpu)
+        random_train_results = eval_model_on_clean_corrupted_splits(model, None, dataset_corrupted, gpu)
+        
+        if experiment_type == 'poison':
+            random_ho_resutls, _, _ = evaluate_model(model, dataset_corrupted.get_heldout_dataloader(), gpu)
+            results_dict['Random Vector'] = {'test_results': random_test_results, 'ho_results': random_ho_resutls, 'train_results': random_train_results}
+        elif experiment_type == 'IC':
+            random_ho_resutls, _, _ = evaluate_model(model, dataset_clean.get_heldout_dataloader(), gpu)
+            results_dict['Random Vector'] = {'test_results': random_test_results, 'ho_results': random_ho_resutls, 'train_results': random_train_results}
+        else:
+            results_dict['Random Vector'] = {'test_results': random_test_results, 'train_results': random_train_results}
+        
         with open(results_dir / 'metrics.json' , 'w') as json_file:
             json.dump(results_dict, json_file, indent=4)
         
         
 
     
-    figs_alpha, fig_gold = embedding_space_analysis.pca_evolution_plot(
-        model=model,
-        base_weights=mix_weights,
-        gold_weights=None,
-        dataset=dataset_clean,
-        task_vector=task_vectors['Average'],
-        split='Test',
-        # alpha_range=np.round(np.linspace(0.0, results_dict['alpha_KNN'], 4) / 0.05) * 0.05,
-        alpha_range=np.linspace(0.0, results_dict['alpha_KNN'], 60),
-        device=gpu,
-        saving_dir=results_dirs['embed_plots']
-    )
-    
-    exit()
-
-    # Weight Space Disentanglemet Analysis
-    # clean_train_ds, noisy_train_ds = dataset.get_clean_noisy_subsets('Train')
-    # subset_size  = 2048
-    # def random_subset(ds, k, seed: int):
-    #     k = min(k, len(ds))
-    #     g = torch.Generator().manual_seed(seed)
-    #     idx = torch.randperm(len(ds), generator=g)[:k].tolist()
-    #     return Subset(ds, idx)
-
-    # clean_subset = random_subset(clean_train_ds, subset_size, dataset_seed)
-    # noisy_subset = random_subset(noisy_train_ds, subset_size, dataset_seed + 1)
-    
-    # with open(results_dir / "metrics_seed.json", "r") as json_file:
-    #     results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
-    
-    # records = []
-    # for a_str, res in results_dict['Seed 10'].items():
-    #     if a_str in ['Mix', 'Gold', 'FT HO Clean']: continue
-    #     a = float(a_str) if not isinstance(a_str, (int, float)) else a_str
-    #     test_acc  = res["test_results"]["ACC"]
-    #     test_loss = res["test_results"]["Loss"]
-    #     noisy_acc = res["train_results"]["noisy_set"]["ACC"]
-    #     records.append((a, test_acc, test_loss, noisy_acc))
-    # alpha_max_test_acc = max(records, key=lambda x: x[1])[0]
-    # alpha_min_test_loss = min(records, key=lambda x: x[2])[0]
-
-    # forgetting_threshold = 0.09
-    # alpha_forgetting_thrsh = None
-    # for a, _, _, noisy_acc in sorted(records, key=lambda x: x[0], reverse=True):
-    #     if noisy_acc <= forgetting_threshold:
-    #         alpha_forgetting_thrsh = a
-    #         break
-        
-    # print(
-    #     'Alpha Max Test ACC:', alpha_max_test_acc,
-    #     'Apha Min Test Loss:', alpha_min_test_loss,
-    #     'Alpha Forget Threshold:', alpha_forgetting_thrsh
-    #     )
-
-    # estimated_noise_vector = task_vectors['Seed 10'] * alpha_forgetting_thrsh * -1 # alpha is negative
-    # estimated_clean_vector = task_vectors['Mix'] - estimated_noise_vector
-    estimated_noise_vector =  task_vectors['Average'] * (-1 * results_dict['alpha_KNN'])
-    estimated_clean_vector = task_vectors['Mix'] - estimated_noise_vector
-
-    
-    # exit()
-    
-    # model.load_state_dict(pt_weights, strict=False)
-    # wd_results = apply_WD_analysis(
+    # figs_alpha, fig_gold = embedding_space_analysis.pca_evolution_plot(
     #     model=model,
-    #     taskvector1=clean_vector,
-    #     support_tv1=clean_subset,
-    #     taskvector2=noise_vector,
-    #     support_tv2=noisy_subset,
-    #     alhpa_range=(-3.0, 3.0),
-    #     step=0.3,
-    #     batch_size=512,
-    #     device=gpu
-    # )
-    # with open(results_dir / "WD.pkl", "wb") as f:
-    #     pickle.dump(wd_results, f)
-    
-    subset_size  = 4096
-    def random_subset(ds, k, seed: int):
-        k = min(k, len(ds))
-        g = torch.Generator().manual_seed(seed)
-        idx = torch.randperm(len(ds), generator=g)[:k].tolist()
-        return Subset(ds, idx)
-
-    test_subset = random_subset(dataset.get_testset(), subset_size, dataset_seed)
-    
-
-    # model.load_state_dict(pt_weights, strict=False)
-    # wd_results = apply_WD_antitask_analysis(
-    #     model=model,
-    #     clean_tv=clean_vector,
-    #     noise_tv=noise_vector,
-    #     testset=test_subset,
-    #     alpha_range=(0, 2),
-    #     step=0.1,
-    #     batch_size=512,
+    #     base_weights=mix_weights,
+    #     gold_weights=None,
+    #     dataset=dataset_clean,
+    #     task_vector=task_vectors['Average'],
+    #     split='Test',
+    #     # alpha_range=np.round(np.linspace(0.0, results_dict['alpha_KNN'], 4) / 0.05) * 0.05,
+    #     alpha_range=np.linspace(0.0, results_dict['alpha_KNN'], 60),
     #     device=gpu,
-    #     metric='loss',
+    #     saving_dir=results_dirs['embed_plots']
     # )
-    # with open(results_dir / "WD_AT2_acc.pkl", "wb") as f:
-    #     pickle.dump(wd_results, f)
-    
-    
-    # model.load_state_dict(pt_weights, strict=False)
-    # wd_results = apply_WD_antitask_analysis_acc(
-        # model=model,
-        # taskvector1=estimated_clean_vector,
-        # taskvector2=estimated_noise_vector,
-        # shared_support=test_subset,
-        # calibration_dl=None,
-        # alpha_range=(0.0, 2.5),
-        # step=0.1,
-        # batch_size=512,
-        # device=gpu,
-    # )
-    # with open(results_dir / "WD2.pkl", "wb") as f:
-    #     pickle.dump(wd_results, f)
-    
-    from alignemnt_score import compute_task_vector_alignment
-    
-    alingment_score = compute_task_vector_alignment(
-        model=model,
-        clean_tv=estimated_clean_vector,
-        corruption_tv=estimated_noise_vector,
-        testset_tv1=test_subset,
-        testset_tv2=None,
-        dataset_name=dataset.dataset_name,
-        corruption_type='sym',
-        batch_size=512,
-        device=gpu,
-    )
-    print(alingment_score)
     
 
 

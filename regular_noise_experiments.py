@@ -40,7 +40,7 @@ import math
 import imageio.v2 as imageio
 
 from src.utils import embedding_space_analysis
-from helper_funcs import evaluate_model, eval_model_on_clean_noise_splits, recalibrate_batchnorm, get_confusion_matrix, row_normalize
+from helper_funcs import evaluate_model, eval_model_on_clean_corrupted_splits, recalibrate_batchnorm, get_confusion_matrix, row_normalize
 from src.utils import weight_norm_analysis
 
 
@@ -357,25 +357,25 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     # mix_vector = TaskVector(pt_weights, mix_weights, include_bn=False)
     # model.load_state_dict(pt_weights, strict=True)
     # tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-    # tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+    # tv_train_results = eval_model_on_clean_corrupted_splits(model, None, dataset, gpu)
     # print(tv_test_results)
     # print(tv_train_results)
     # model.load_state_dict(pt_weights, strict=True)
     # recalibrate_batchnorm(model, dataset.get_train_dataloader(), gpu)
     # tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-    # tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+    # tv_train_results = eval_model_on_clean_corrupted_splits(model, None, dataset, gpu)
     # print(tv_test_results)
     # print(tv_train_results)
     
     # model.load_state_dict(mix_weights, strict=True)
     # tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-    # tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+    # tv_train_results = eval_model_on_clean_corrupted_splits(model, None, dataset, gpu)
     # print(tv_test_results)
     # print(tv_train_results)
     # model.load_state_dict(mix_weights, strict=True)
     # recalibrate_batchnorm(model, dataset.get_train_dataloader(), gpu)
     # tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-    # tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+    # tv_train_results = eval_model_on_clean_corrupted_splits(model, None, dataset, gpu)
     # print(tv_test_results)
     # print(tv_train_results)
     # exit()
@@ -388,7 +388,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     #         mix_vector.apply_to(model, scaling_coef=alpha, strict=True)
     #         recalibrate_batchnorm(model, dataset.get_train_dataloader(), gpu)
     #         tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-    #         tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+    #         tv_train_results = eval_model_on_clean_corrupted_splits(model, None, dataset, gpu)
     #         mix_intp_metircs[alpha] = {'test_results': tv_test_results, 'train_results': tv_train_results}
 
     #     with open(results_dir / 'metrics_mix_interpolation_bn_cal.json' , 'w') as json_file:
@@ -402,7 +402,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     #         task_vectors['Mix'].apply_to(model, scaling_coef=-1.0, strict=True)
     #         task_vectors['Mix'].apply_to(model, scaling_coef=alpha, strict=True)
     #         tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-    #         tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+    #         tv_train_results = eval_model_on_clean_corrupted_splits(model, None, dataset, gpu)
     #         mix_intp_metircs[alpha] = {'test_results': tv_test_results, 'train_results': tv_train_results}
 
     #     with open(results_dir / 'metrics_mix_interpolation.json' , 'w') as json_file:
@@ -413,7 +413,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     #     results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
     # model.load_state_dict(ft_ho_clean_weights, strict=False)
     # ft_ho_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-    # ft_ho_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+    # ft_ho_train_results = eval_model_on_clean_corrupted_splits(model, None, dataset, gpu)
     # results_dict['FT HO Clean'] = {'test_results': ft_ho_test_results, 'train_results': ft_ho_train_results}
     # with open(results_dir / 'metrics.json' , 'w') as json_file:
     #     json.dump(results_dict, json_file, indent=4)
@@ -424,16 +424,16 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
 
         model.load_state_dict(mix_weights, strict=False)
         mix_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-        mix_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+        mix_train_results = eval_model_on_clean_corrupted_splits(model, None, dataset, gpu)
         
         
         model.load_state_dict(gold_weights, strict=False)
         gold_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-        gold_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+        gold_train_results = eval_model_on_clean_corrupted_splits(model, None, dataset, gpu)
         
         model.load_state_dict(ft_ho_clean_weights, strict=False)
         ft_ho_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-        ft_ho_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+        ft_ho_train_results = eval_model_on_clean_corrupted_splits(model, None, dataset, gpu)
         
 
         
@@ -450,7 +450,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             model.load_state_dict(mix_weights, strict=False)
             task_vectors['Average'].apply_to(model, scaling_coef=alpha, strict=False)
             tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-            tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+            tv_train_results = eval_model_on_clean_corrupted_splits(model, None, dataset, gpu)
 
             results_dict[alpha] = {'test_results': tv_test_results, 'train_results': tv_train_results}
         with open(results_dir / 'metrics.json' , 'w') as json_file:
@@ -509,7 +509,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         alpha_kNN = results_dict['alpha_KNN']
         task_vectors['Random Vector'].apply_to(model, scaling_coef=alpha_kNN, strict=False)
         random_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-        random_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+        random_train_results = eval_model_on_clean_corrupted_splits(model, None, dataset, gpu)
         results_dict['Random Vector'] = {'test_results': random_test_results, 'train_results': random_train_results}
         with open(results_dir / 'metrics.json' , 'w') as json_file:
             json.dump(results_dict, json_file, indent=4)

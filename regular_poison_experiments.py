@@ -39,7 +39,7 @@ import re
 import imageio.v2 as imageio
 
 from src.utils import embedding_space_analysis
-from helper_funcs import evaluate_model, eval_model_on_clean_noise_splits, search_optimal_coefficient, get_confusion_matrix, row_normalize
+from helper_funcs import evaluate_model, eval_model_on_clean_corrupted_splits, search_optimal_coefficient, get_confusion_matrix, row_normalize
 from src.utils import weight_norm_analysis
 
 
@@ -337,17 +337,17 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         model.load_state_dict(mix_weights, strict=False)
         mix_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
         mix_ho_results, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
-        mix_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+        mix_train_results = eval_model_on_clean_corrupted_splits(model, None, dataset, gpu)
 
         model.load_state_dict(gold_weights, strict=False)
         gold_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
         gold_ho_results, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
-        gold_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+        gold_train_results = eval_model_on_clean_corrupted_splits(model, None, dataset, gpu)
         
         model.load_state_dict(ft_ho_clean_weights, strict=False)
         ft_ho_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
         ft_ho_ho_results, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
-        ft_ho_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+        ft_ho_train_results = eval_model_on_clean_corrupted_splits(model, None, dataset, gpu)
 
         results_dict['Mix'] = {'test_results': mix_test_results, 'ho_results': mix_ho_results, 'train_results': mix_train_results}
         results_dict['Gold'] = {'test_results': gold_test_results, 'ho_results': gold_ho_results, 'train_results': gold_train_results}
@@ -360,7 +360,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
             task_vectors['Average'].apply_to(model, scaling_coef=alpha, strict=False)
             tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
             tv_ho_resutls, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
-            tv_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+            tv_train_results = eval_model_on_clean_corrupted_splits(model, None, dataset, gpu)
 
             results_dict[alpha] = {'test_results': tv_test_results, 'ho_results': tv_ho_resutls, 'train_results': tv_train_results}
         
@@ -397,7 +397,7 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
         task_vectors['Random Vector'].apply_to(model, scaling_coef=alpha_psn, strict=False)
         random_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
         random_ho_resutls, _, _ = evaluate_model(model, dataset.get_heldout_dataloader(), gpu)
-        random_train_results = eval_model_on_clean_noise_splits(model, None, dataset, gpu)
+        random_train_results = eval_model_on_clean_corrupted_splits(model, None, dataset, gpu)
         results_dict['Random Vector'] = {'test_results': random_test_results, 'ho_results':random_ho_resutls, 'train_results': random_train_results}
         with open(results_dir / 'metrics.json' , 'w') as json_file:
             json.dump(results_dict, json_file, indent=4)
@@ -418,21 +418,6 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     clean_support = random_subset(dataset.get_testset(), k=subset_size, seed=dataset_seed)
     
     
-    model.load_state_dict(pt_weights, strict=False)
-    wd_results = apply_WD_analysis(
-        model=model,
-        taskvector1=estimated_clean_vector,
-        support_tv1=clean_support,
-        taskvector2=estimated_poison_vector,
-        support_tv2=poisoned_support,
-        calibration_dl=dataset.get_train_dataloader(),
-        alhpa_range=(0.0, 2.0),
-        step=0.1,
-        batch_size=512,
-        device=gpu
-    )
-    with open(results_dir / "WD2.pkl", "wb") as f:
-        pickle.dump(wd_results, f)
 
 
 from torch.distributed.elastic.multiprocessing.errors import record

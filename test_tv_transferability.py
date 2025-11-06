@@ -28,7 +28,7 @@ from collections import OrderedDict
 
 
 
-from helper_funcs import evaluate_model, eval_model_on_clean_noise_splits, search_optimal_coefficient
+from helper_funcs import evaluate_model, eval_model_on_clean_corrupted_splits, search_optimal_coefficient
     
     
 def eval_model_on_tvs(model, taskvectors, results_dict, cfg, dataset, num_classes, device):
@@ -44,7 +44,7 @@ def eval_model_on_tvs(model, taskvectors, results_dict, cfg, dataset, num_classe
         results[tv_name][base_alpha] = OrderedDict()
         tv.apply_to(base_model, scaling_coef=base_alpha)
         base_test_results, _, _ = evaluate_model(base_model, dataset.get_test_dataloader(), device)
-        base_train_split_results = eval_model_on_clean_noise_splits(base_model, cfg, dataset, device)
+        base_train_split_results = eval_model_on_clean_corrupted_splits(base_model, cfg, dataset, device)
         results[tv_name][base_alpha]['test_results'] = base_test_results
         results[tv_name][base_alpha]['train_results'] = base_train_split_results
         
@@ -64,7 +64,7 @@ def eval_model_on_tvs(model, taskvectors, results_dict, cfg, dataset, num_classe
         
         tv.apply_to(base_model, scaling_coef=best_coef)
         
-        after_tv_metrics = eval_model_on_clean_noise_splits(base_model, cfg, dataset, device)
+        after_tv_metrics = eval_model_on_clean_corrupted_splits(base_model, cfg, dataset, device)
         results[tv_name][best_coef]['train_results'] = after_tv_metrics
         
     

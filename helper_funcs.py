@@ -74,7 +74,7 @@ def evaluate_model(
     return metric_results, torch.tensor(all_preds), torch.tensor(all_targets) 
 
 
-def eval_model_on_clean_noise_splits(
+def eval_model_on_clean_corrupted_splits(
     model:torch.nn.Module,
     cfg:dict,
     dataset:BaseClassificationDataset,
