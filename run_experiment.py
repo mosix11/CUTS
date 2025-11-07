@@ -731,6 +731,7 @@ def apply_SAP(experiment_type:str, architecture:str, outputs_dir: Path, results_
         sap_unlearner.SAP_unlearning_noise(
             model=sap_model,
             clean_samples_dl=dataset_clean.get_heldout_dataloader(),
+            test_dl=dataset_clean.get_test_dataloader(),
             project_classifier_head=True,
             device=gpu
         )
@@ -739,6 +740,7 @@ def apply_SAP(experiment_type:str, architecture:str, outputs_dir: Path, results_
             model=sap_model,
             clean_samples_dl=dataset_clean.get_heldout_dataloader(),
             triggered_samples_dl=dataset_corrupted.get_heldout_dataloader(),
+            test_dl=dataset_clean.get_test_dataloader(),
             project_classifier_head=True,
             device=gpu
         )
