@@ -194,6 +194,7 @@ def get_representation_matrix(net, device, data_loader, set_name="Heldout Set"):
 def SAP_unlearning_noise(
         model,
         clean_samples_dl,
+        test_dl,
         device,
         project_classifier_head = True,
         scale_coff_list = [1000, 5000, 10000, 30000, 100000, 300000, 1000000],
@@ -251,12 +252,15 @@ def SAP_unlearning_noise(
         model_projected.project_weights(proj_dict, project_classifier_head)
         # projected_models[alpha] = model_projected
         
-        metrics, _, _ = evaluate_model(model_projected, clean_samples_dl, device)
-        if metrics['ACC'] > best_ACC:
+        metrics_val, _, _ = evaluate_model(model_projected, clean_samples_dl, device)
+        if metrics_val['ACC'] > best_ACC:
             best_alpha = alpha
             best_model = copy.deepcopy(model_projected)
-            best_ACC = metrics['ACC']
-        print(metrics)
+            best_ACC = metrics_val['ACC']
+        print("Val: ", metrics_val)
+        
+        metrics_test, _, _ = evaluate_model(model_projected, test_dl, device)
+        print("Test:", metrics_test)
 
     print("\nSAP projection completed.")
     return best_alpha, best_model, best_ACC
@@ -267,6 +271,7 @@ def SAP_unlearning_poison(
         model,
         clean_samples_dl,
         triggered_samples_dl,
+        test_dl,
         device,
         project_classifier_head = True,
         scale_coff_list = [1000, 5000, 10000, 30000, 100000, 300000, 1000000],
@@ -324,12 +329,15 @@ def SAP_unlearning_poison(
         model_projected.project_weights(proj_dict, project_classifier_head)
         # projected_models[alpha] = model_projected
         
-        metrics, _, _ = evaluate_model(model_projected, triggered_samples_dl, device)
-        if metrics['ACC'] < best_ASR:
+        metrics_val, _, _ = evaluate_model(model_projected, triggered_samples_dl, device)
+        if metrics_val['ACC'] < best_ASR:
             best_alpha = alpha
             best_model = copy.deepcopy(model_projected)
-            best_ASR = best_ASR['ACC']
-        print(metrics)
+            best_ASR = metrics_val['ACC']
+        print("Val: ", metrics_val)
+        
+        metrics_test, _, _ = evaluate_model(model_projected, test_dl, device)
+        print("Test: ", metrics_test)
 
     print("\nSAP projection completed.")
     return best_alpha, best_model, best_ASR
