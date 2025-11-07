@@ -8,7 +8,7 @@ strategy:
   corruption:
     mix:
       set: 'Train'
-      noise_rate: 0.2
+      noise_rate: 0.4
       noise_type: 'symmetric'
       seed: 8
     proxy:
@@ -23,8 +23,8 @@ strategy:
 
 
 dataset:
-  name: "cifar10"
-  num_classes: &num_classes 10
+  name: "cifar100"
+  num_classes: &num_classes 100
   img_size: [224, 224]
   batch_size: 256
   heldout_conf: 0.02
