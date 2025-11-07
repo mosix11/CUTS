@@ -840,6 +840,8 @@ def apply_potion(experiment_type:str, architecture:str, outputs_dir: Path, resul
     metrics, _, _ = evaluate_model(corrected_model, dataset_corrupted.get_heldout_dataloader(), gpu)
     print(metrics)
     
+    metrics = eval_model_on_clean_corrupted_splits(corrected_model, None, dataset_corrupted, gpu)
+    print(metrics)
 
 
 from torch.distributed.elastic.multiprocessing.errors import record
