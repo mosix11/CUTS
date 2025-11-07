@@ -4,13 +4,11 @@
 """
 
 import torch, torchmetrics, tqdm, copy, time
-from potion_utils import (
+from .potion_utils import (
     LinearLR,
     unlearn_func,
-    ssd_tuning,
     distill_kl_loss,
     compute_accuracy,
-    assd_tuning,
     alfssd_tuning,
 )
 from torch.amp import autocast, GradScaler
@@ -596,6 +594,7 @@ class XALFSSD:
       min_acc = min_acc_val  # MIN_ACC
       # calculate the accuracy of the model on the train_loader
       org_model_acc = evaluate_model(original_model, forget_loader, self.device)[0]['ACC']
+      print("Original Corrupted Model Proxy Set Accuracy: ", org_model_acc)
       # Remove the old files
       try:
         os.remove(file_name_1)
@@ -622,6 +621,7 @@ class XALFSSD:
         )
         # calculate the accuracy of the model on the train_loader
         new_model_acc = evaluate_model(self.model, forget_loader, self.device)[0]['ACC']
+        print("Attempted Corrected Model Proxy Set Accuracy: ", new_model_acc)
         # train_new_model_acc = self.get_acc(self.model, train_loader)
         # print(f"Poison: {new_model_acc}, Train: {train_new_model_acc}")
         # check if minimum acc reached
@@ -652,4 +652,4 @@ class XALFSSD:
       )
     
     
-    return
+    return self.best_model

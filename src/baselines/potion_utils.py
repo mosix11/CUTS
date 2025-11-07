@@ -45,127 +45,9 @@ _LRScheduler = lr_scheduler.LRScheduler
 partial = functools.partial
 
 
-
-# Reference: https://github.com/if-loops/selective-synaptic-dampening/
-# blob/main/src/forget_random_strategies.py
-class ParameterPerturberOld:
-  """Perturbs model parameters based on calculated importances.
-
-  This class implements a Hessian-based method, more efficient than Fisher, to
-  perturb model parameters. It's adapted from the selective synaptic dampening
-  work. (Note: Old as it is the version used in the original SSD paper and not
-  follow on works such as LFSSD or Potion)
-  """
-
-  def __init__(
-      self,
-      model,
-      opt,
-      device_,
-      parameters=None,
-  ):
-    self.model = model
-    self.opt = opt
-    self.device = device_
-    self.alpha = None
-    self.xmin = None
-    print(parameters)
-    self.lower_bound = parameters["lower_bound"]
-    self.exponent = parameters["exponent"]
-    self.magnitude_diff = parameters["magnitude_diff"]  # unused
-    self.min_layer = parameters["min_layer"]
-    self.max_layer = parameters["max_layer"]
-    self.forget_threshold = parameters["forget_threshold"]  # unused
-    self.dampening_constant = parameters["dampening_constant"]  # lambda
-    self.selection_weighting = parameters["selection_weighting"]  # alpha
-
-  def zerolike_params_dict(self, model: torch.nn) -> Dict[str, torch.Tensor]:
-    """Taken from: Avalanche: an End-to-End Library for Continual Learning.
-
-    https://github.com/ContinualAI/avalanche Returns a dict like
-    named_parameters(), with zeroed-out parameter valuse
-
-    Args:
-      model (torch.nn): model to get param dict from
-
-    Returns:
-      dict(str,torch.Tensor): dict of zero-like params
-    """
-    return dict([
-        (k, torch.zeros_like(p, device=p.device))
-        for k, p in model.named_parameters()
-    ])
-
-  def calc_importance(self, dataloader: DataLoader) -> Dict[str, torch.Tensor]:
-    """Adapated from: Avalanche: an End-to-End Library for Continual Learning.
-
-    https://github.com/ContinualAI/avalanche Calculate per-parameter, importance
-
-        returns a dictionary [param_name: list(importance per parameter)]
-    Args:
-      dataloader (DataLoader): DataLoader to be iterated over
-
-    Returns:
-      importances (dict(str, torch.Tensor([]))): named_parameters
-      like dictionary containing list of importances for each param
-    """
-    criterion = nn.CrossEntropyLoss()
-    importances = self.zerolike_params_dict(self.model)
-    for x, y, idx in tqdm.tqdm(dataloader):
-      x, y = x.to(self.device), y.to(self.device)
-      self.opt.zero_grad()
-      out = self.model(x, idx)
-      loss = criterion(out, y)
-      # override with ALFSSD loss
-      # loss = torch.norm(out, p="fro", dim=1).abs().mean()
-      loss.backward()
-      for (_, p), (_, imp) in zip(
-          self.model.named_parameters(), importances.items()
-      ):
-        if p.grad is not None:
-          imp.data += p.grad.data.clone().pow(2)  # original
-          # imp.data += p.grad.data.clone().abs()
-    # average over mini batch length
-    for _, imp in importances.items():
-      imp.data /= float(len(dataloader))
-    return importances
-
-  def modify_weight(
-      self,
-      original_importance: Dict[str, torch.Tensor],
-      forget_importance: Dict[str, torch.Tensor],
-  ) -> None:
-    """Perturb weights based on the SSD equations given in the paper.
-
-    Args:
-      original_importance (Dict[str, torch.Tensor]): dictionary of imps for
-        original dataset
-      forget_importance (Dict[str, torch.Tensor]): dictionary of importances for
-        forget sample
-
-    Returns:
-      None
-    """
-    with torch.no_grad():
-      for (_, p), (_, oimp), (_, fimp) in zip(
-          self.model.named_parameters(),
-          original_importance.items(),
-          forget_importance.items(),
-      ):
-        # Synapse Selection with parameter alpha
-        oimp_norm = oimp.mul(self.selection_weighting)
-        locations = torch.where(fimp > oimp_norm)
-        # Synapse Dampening with parameter lambda
-        weight = ((oimp.mul(self.dampening_constant)).div(fimp)).pow(
-            self.exponent
-        )
-        update = weight[locations]
-        # Bound by 1 to prevent parameter values to increase.
-        min_locs = torch.where(update > self.lower_bound)
-        update[min_locs] = self.lower_bound
-        p[locations] = p[locations].mul(update)
-
-
+def prepare_batch(batch, device):
+    batch = [tens.to(device) for tens in batch]
+    return batch
 
 class ParameterPerturber:
   """Perturbs model parameters based on calculated importances.
@@ -245,14 +127,15 @@ class ParameterPerturber:
     """
     criterion = nn.CrossEntropyLoss()
     importances = self.zerolike_params_dict(self.model)
-    for x, y, _, idx in dataloader:
-      x, y = x.to(self.device), y.to(self.device)
+    for batch in dataloader:
+      batch = prepare_batch(batch, self.device)
+      x, y = batch[0], batch[1]
       if extra_noise:
         print("NOISE IS ON")
         # add torch rand x% noise
         x += torch.randn_like(x) * 0.01
       self.opt.zero_grad()
-      out = self.model(x, idx)
+      out = self.model(x)
       if self.label_free:
         if self.x_d:
           # loss = torch.abs(out).sum(dim=1).mean() # L1
@@ -384,136 +267,6 @@ class ParameterPerturber:
           p[locations] = p[locations].mul(update)
 
 
-def ssd_tuning(
-    model,
-    forget_train_dl,
-    dampening_constant,
-    selection_weighting,
-    full_train_dl,
-    device_,
-):
-  """Performs SSD (Selective Synaptic Dampening) tuning on the model.
-
-  This function calculates importances for the forget set and the full training
-  set, and then modifies the model weights based on these importances using the
-  SSD method.
-
-  Args:
-    model: The PyTorch model to be tuned.
-    forget_train_dl: DataLoader for the forget set.
-    dampening_constant: The dampening constant (lambda) for SSD.
-    selection_weighting: The selection weighting (alpha) for SSD.
-    full_train_dl: DataLoader for the full training set.
-    device_: The device to run the computations on ('cuda' or 'mps').
-
-  Returns:
-    The modified PyTorch model.
-  """
-  parameters = {
-      "lower_bound": 1,
-      "exponent": 1,
-      "magnitude_diff": None,
-      "min_layer": -1,
-      "max_layer": -1,
-      "forget_threshold": 1,
-      "dampening_constant": dampening_constant,
-      "selection_weighting": selection_weighting,
-  }
-  # load the trained model
-  optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
-  pdr = ParameterPerturberOld(model, optimizer, device_, parameters)
-  model = model.eval()
-  sample_importances = pdr.calc_importance(forget_train_dl)
-  original_importances = pdr.calc_importance(full_train_dl)
-  pdr.modify_weight(original_importances, sample_importances)
-  return model
-
-
-def assd_tuning(
-    model,
-    forget_train_dl,
-    dampening_constant,
-    selection_weighting,
-    full_train_dl,
-    device_,
-    frac_dl,
-):
-  """Performs Adaptive SSD (ASSD) tuning on the model.
-
-  This function calculates importances for the forget set and a fraction of the
-  full training set, and then adaptively modifies the model weights based on
-  these importances using the ASSD method. It includes an option to load
-  pre-calculated importances for speedup.
-
-  Args:
-    model: The PyTorch model to be tuned.
-    forget_train_dl: DataLoader for the forget set.
-    dampening_constant: Placeholder for dampening constant (adaptive).
-    selection_weighting: Placeholder for selection weighting (adaptive).
-    full_train_dl: DataLoader for the full training set.
-    device_: The device to run the computations on ('cuda' or 'mps').
-    frac_dl: The frac of the dataset used for adaptive percentile calc.
-
-  Returns:
-    The modified PyTorch model.
-  """
-  _ = dampening_constant  # not used in adaptive
-  _ = selection_weighting
-  parameters = {
-      "lower_bound": 1,
-      "exponent": 1,
-      "magnitude_diff": None,
-      "min_layer": -1,
-      "max_layer": -1,
-      "forget_threshold": 1,
-      "dampening_constant": None,  # adaptive overwrites this
-      "selection_weighting": None,  # adaptive overwrites this
-  }
-  print("----- Using ASSD -----")
-  # Sweep loop (ASSD extension)
-  sweeps_n = 1
-  frac_dl = frac_dl * (1 / sweeps_n)
-  for _ in range(sweeps_n):
-    # load the trained model
-    optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
-    pdr = ParameterPerturber(
-        model, optimizer, device_, parameters, adaptive=True
-    )
-    model = model.eval()
-    ########################## SPEEDUP
-    file_name = "original_importances.pkl"
-    if os.path.exists(file_name):
-      print("##### LOADING IMPORTANCES")
-      with open("original_importances.pkl", "rb") as f:
-        original_importances = pickle.load(f)
-      with open("sample_importances.pkl", "rb") as f:
-        sample_importances = pickle.load(f)
-    else:
-      # ----
-      print("##### CALCULATING IMPORTANCES")
-      # Calculate the importances of D (see paper)
-      original_importances = pdr.calc_importance(full_train_dl)
-      # safe the importances locally for reuse
-      with open("original_importances.pkl", "wb") as f:
-        pickle.dump(original_importances, f)
-      # Calculation of the forget set importances
-      sample_importances = pdr.calc_importance(forget_train_dl)
-      with open("sample_importances.pkl", "wb") as f:
-        pickle.dump(sample_importances, f)
-    ########################## SPEEDUP
-    # auto select percentile
-    # len_all = len(full_train_dl.dataset) + len(forget_train_dl.dataset)
-    # len_forget = len(forget_train_dl.dataset)
-    # len_forget = len(forget_train_dl.dataset)
-    # len_all = len(full_train_dl.dataset) + len(forget_train_dl.dataset)
-    share_off = np.log(1 + frac_dl * 100)
-    percentile = 100 - share_off
-    print("###### ----- Length based percentile: ", percentile)
-    # Dampen selected parameters
-    _ = pdr.modify_weight(
-        original_importances, sample_importances, percentile_val=percentile
-    )
-  return model
 
 
 # placeholder for now reusing assd
@@ -671,66 +424,6 @@ class LinearLR(_LRScheduler):
 
 
 
-def rand_bbox(size, lam):
-  """Generates a random bounding box for CutMix.
-
-  Args:
-    size (tuple): The size of the input tensor.
-    lam (float): The mixing ratio from the Beta distribution.
-
-  Returns:
-    tuple: Coordinates of the bounding box (bbx1, bby1, bbx2, bby2).
-  """
-  w = size[2]
-  h = size[3]
-  cut_rat = np.sqrt(1.0 - lam)
-  cut_w = np.int32(w * cut_rat)
-  cut_h = np.int32(h * cut_rat)
-  # uniform
-  cx = np.random.randint(w)
-  cy = np.random.randint(h)
-  bbx1 = np.clip(cx - cut_w // 2, 0, w)
-  bby1 = np.clip(cy - cut_h // 2, 0, h)
-  bbx2 = np.clip(cx + cut_w // 2, 0, w)
-  bby2 = np.clip(cy + cut_h // 2, 0, h)
-  return bbx1, bby1, bbx2, bby2
-
-
-
-
-
-
-def get_targeted_classes(dataset):
-  """Returns a tuple of targeted class indices for given datasets.
-
-  Args:
-    dataset (str): The name of the dataset.
-
-  Returns:
-    tuple: A tuple containing the indices of the targeted classes.
-  Raises:
-    ValueError: If the dataset is not recognized.
-    AssertionError: If the dataset is "LFWPeople" or "CelebA", as these are
-      not yet implemented.
-  """
-  if dataset == "CIFAR10":
-    classes = (3, 5)
-  elif dataset == "tinyimagenet":
-    classes = (3, 5)
-  elif dataset == "Imagenette":
-    classes = (3, 5)
-  elif dataset == "CIFAR100":
-    classes = (47, 53)
-  elif dataset == "SVHN":
-    classes = (3, 5)
-  elif dataset in ["PCAM", "DermNet", "Pneumonia"]:
-    classes = (0, 1)
-  elif dataset in ["LFWPeople", "CelebA"]:
-    # Raise NotImplemented Error
-    assert False, "Not Implemented Yet"
-  else:
-    raise ValueError(f"Dataset '{dataset}' not recognized.")
-  return classes
 
 
 def unlearn_func(

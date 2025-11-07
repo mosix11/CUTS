@@ -46,6 +46,7 @@ def initialize_model_dataset(experiment_type:str, architecture:str, cfg: dict):
     if architecture == 'clip':
         
         base_dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
+        cfg['model']['datasets_cfgs'] = {dataset_cfg['name']: base_dataset.get_class_names()} 
         base_model = model_factory.create_model(cfg['model'])
         base_model.freeze_all_heads()
         
@@ -720,7 +721,7 @@ def apply_SAP(experiment_type:str, architecture:str, outputs_dir: Path, results_
     ).items() if "classifier_heads" not in k)
     
     
-    base_model.load_state_dict(mix_weights)
+    base_model.load_state_dict(mix_weights, strict=False)
     
     sap_model = copy.deepcopy(base_model)
     
@@ -809,7 +810,7 @@ def apply_potion(experiment_type:str, architecture:str, outputs_dir: Path, resul
     ).items() if "classifier_heads" not in k)
     
     
-    base_model.load_state_dict(mix_weights)
+    base_model.load_state_dict(mix_weights, strict=False)
     
     potion_model = copy.deepcopy(base_model)
     
@@ -829,8 +830,16 @@ def apply_potion(experiment_type:str, architecture:str, outputs_dir: Path, resul
     corrected_model = unlearner.unlearn(
         train_loader=dataset_corrupted.get_train_dataloader(),
         forget_loader=dataset_corrupted.get_heldout_dataloader(),
-        
+        frac_dl=0.02,
+        min_acc_val=0.01
     )
+    
+    metrics, _, _ = evaluate_model(corrected_model, dataset_clean.get_test_dataloader(), gpu)
+    print(metrics)
+    
+    metrics, _, _ = evaluate_model(corrected_model, dataset_corrupted.get_heldout_dataloader(), gpu)
+    print(metrics)
+    
 
 
 from torch.distributed.elastic.multiprocessing.errors import record
@@ -890,6 +899,13 @@ def main():
         action="store_true",
     )
     
+    parser.add_argument(
+        "-p",
+        "--potion",
+        help="Apply Potion unlearning.",
+        action="store_true",
+    )
+    
     
     
     args = parser.parse_args()
@@ -924,6 +940,9 @@ def main():
     if args.sap:
         apply_SAP(args.experiment, args.arch, outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)
 
+    
+    if args.potion:
+        apply_potion(args.experiment, args.arch, outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)
 
 if __name__ == "__main__":
     main()
