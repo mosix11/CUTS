@@ -542,7 +542,7 @@ def apply_tv(experiment_type:str, architecture:str, outputs_dir: Path, results_d
             alpha_hat = select_alpha_by_knn_self_agreement(
                 model=model,
                 feature_extractor=model.get_feature_extractor(),
-                classifier=model.get_active_head(),
+                classifier=model.get_active_head() if architecture == 'clip' else model.get_classifier_head(),
                 state0=mix_weights,
                 taskvector=task_vectors['Proxy'],
                 unlabeled_loader=alpha_est_support_dl,

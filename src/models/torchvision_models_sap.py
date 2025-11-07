@@ -99,19 +99,24 @@ class TorchvisionModelsSAP(BaseModel):
         elif self.model_type.startswith('vit'):
             # Mirror torchvision ViT forward up to heads (pre-classifier)
             class _ViTFeatureExtractor(nn.Module):
-                def __init__(self, vit):
+                def __init__(self, vit_model):
                     super().__init__()
-                    self.vit = vit  
+                    self.vit = vit_model  
+                
                 def forward(self, x):
+                    # 1. Process input (patching)
                     x = self.vit._process_input(x)                
                     n = x.shape[0]
-                    cls = self.vit.class_token.expand(n, -1, -1)  
-                    x = torch.cat((cls, x), dim=1)                
-                    x = self.vit.encoder(x)                      
-                    if self.vit._classifier == "token":
-                        x = x[:, 0]                               
-                    elif self.vit._classifier == "gap":
-                        x = x.mean(dim=1)                         
+
+                    # 2. Prepend class token
+                    batch_class_token = self.vit.class_token.expand(n, -1, -1)  
+                    x = torch.cat([batch_class_token, x], dim=1)                
+                    
+                    # 3. Run through encoder
+                    x = self.vit.encoder(x)
+                    
+                    # 4. Extract class token feature
+                    x = x[:, 0]        
                     return x
 
             return _ViTFeatureExtractor(self.net)
