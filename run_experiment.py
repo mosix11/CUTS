@@ -628,6 +628,8 @@ def apply_tv(experiment_type:str, architecture:str, outputs_dir: Path, results_d
 
 
 
+
+# SAP only works for label noise and fails for poison trigger
 def apply_SAP(experiment_type:str, architecture:str, outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     training_seed = cfg['training_seed']
     dataset_seed = cfg['dataset_seed']
@@ -723,12 +725,12 @@ def apply_SAP(experiment_type:str, architecture:str, outputs_dir: Path, results_
     sap_model = copy.deepcopy(base_model)
     
     
-    from src.trainers import sap_unlearner
+    from src.baselines import sap_unlearner
     
     
     
     if experiment_type == 'noise':
-        sap_unlearner.SAP_unlearning_noise(
+        results_dict, corrected_model = sap_unlearner.SAP_unlearning_noise(
             model=sap_model,
             clean_samples_dl=dataset_clean.get_heldout_dataloader(),
             test_dl=dataset_clean.get_test_dataloader(),
@@ -736,7 +738,7 @@ def apply_SAP(experiment_type:str, architecture:str, outputs_dir: Path, results_
             device=gpu
         )
     elif experiment_type == 'poison':
-        sap_unlearner.SAP_unlearning_poison(
+        results_dict, corrected_model = sap_unlearner.SAP_unlearning_poison(
             model=sap_model,
             clean_samples_dl=dataset_clean.get_heldout_dataloader(),
             triggered_samples_dl=dataset_corrupted.get_heldout_dataloader(),
@@ -746,8 +748,90 @@ def apply_SAP(experiment_type:str, architecture:str, outputs_dir: Path, results_
         )
     
 
+    with open(results_dir / 'metric_sap.json' , 'w') as json_file:
+        json.dump(results_dict, json_file, indent=4)
+    
+
+
+# Potion only works for poison triggers and fails for label noise
+def apply_potion(experiment_type:str, architecture:str, outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
+    training_seed = cfg['training_seed']
+    dataset_seed = cfg['dataset_seed']
+    if training_seed:
+        random.seed(training_seed)
+        np.random.seed(training_seed)
+        torch.manual_seed(training_seed)
+        torch.cuda.manual_seed_all(training_seed)
+    
+    cpu = trainer_utils.get_cpu_device()
+    gpu = trainer_utils.get_gpu_device()
     
     
+    outputs_dir = outputs_dir / cfg_name
+    
+    results_dir = results_dir / cfg_name
+    results_dir.mkdir(exist_ok=True, parents=True)
+    
+    results_dirs = {}
+    results_dirs['cms'] = results_dir / 'confusion_mats'
+    results_dirs['Ts'] = results_dir / 'transition_mats'
+    results_dirs['W_norms'] = results_dir / 'weight_norms'
+    results_dirs['TV_norms'] = results_dir / 'TV_norms'
+    results_dirs['embed_plots'] = results_dir / 'embedding_plots'
+    results_dirs['metrics'] = results_dir / 'metrics'
+    for dir in results_dirs.values():
+        dir.mkdir(exist_ok=True, parents=True)
+    
+    
+    base_model, base_dataset, cfg = initialize_model_dataset(experiment_type, architecture, cfg)
+    base_dataset.reset_train_dl(shuffle=False)
+    
+    strategy = cfg['strategy']
+    
+    
+    dataset_clean = copy.deepcopy(base_dataset)
+    dataset_corrupted = copy.deepcopy(base_dataset)
+    dataset_corrupted.inject_poison(**strategy['corruption']['mix'])
+    
+    proxy_conf = strategy['corruption']['proxy'][0]
+    proxy_conf['set'] = 'Heldout'
+    dataset_corrupted.inject_poison(**proxy_conf)
+    # Exclude clean samples from target class
+    clean_ho_ds, poinsoned_ho_ds = dataset_corrupted.get_clean_noisy_subsets('Heldout')
+    dataset_corrupted.set_heldoutset(poinsoned_ho_ds)
+        
+        
+    # Load weights while removing classifier head's weights from the state dict for CLIP
+    mix_weights = OrderedDict(
+    (k, v) for k, v in torch.load(
+        outputs_dir.joinpath(f"mix/weights/weights.pth"),
+        map_location='cpu'
+    ).items() if "classifier_heads" not in k)
+    
+    
+    base_model.load_state_dict(mix_weights)
+    
+    potion_model = copy.deepcopy(base_model)
+    
+    
+    from src.baselines import XALFSSD
+    
+    opt = OrderedDict({
+        
+    })
+    
+    unlearner = XALFSSD(
+        opt,
+        potion_model,
+        device=gpu
+    )
+    
+    corrected_model = unlearner.unlearn(
+        train_loader=dataset_corrupted.get_train_dataloader(),
+        forget_loader=dataset_corrupted.get_heldout_dataloader(),
+        
+    )
+
 
 from torch.distributed.elastic.multiprocessing.errors import record
 

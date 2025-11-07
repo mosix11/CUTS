@@ -232,6 +232,7 @@ def SAP_unlearning_noise(
         mat_retain_dict, set_name="SVD Clean Set"
     )
 
+    results_dict = OrderedDict()
     # Step 3: Loop over alphas to build projectors and update weights
     print("\nRunning SAP projection...")
     for alpha in scale_coff_list:
@@ -261,9 +262,14 @@ def SAP_unlearning_noise(
         
         metrics_test, _, _ = evaluate_model(model_projected, test_dl, device)
         print("Test:", metrics_test)
+        
+        results_dict[alpha] = OrderedDict()
+        results_dict[alpha]['Val'] = metrics_val
+        results_dict[alpha]['Test'] = metrics_test
 
+    results_dict['Best Alpha'] = best_alpha
     print("\nSAP projection completed.")
-    return best_alpha, best_model, best_ACC
+    return results_dict, best_model
 
 
 
@@ -309,6 +315,7 @@ def SAP_unlearning_poison(
         mat_retain_dict, set_name="SVD Clean Set"
     )
 
+    results_dict = OrderedDict()
     # Step 3: Loop over alphas to build projectors and update weights
     print("\nRunning SAP projection...")
     for alpha in scale_coff_list:
@@ -338,9 +345,14 @@ def SAP_unlearning_poison(
         
         metrics_test, _, _ = evaluate_model(model_projected, test_dl, device)
         print("Test: ", metrics_test)
+        
+        results_dict[alpha] = OrderedDict()
+        results_dict[alpha]['Val'] = metrics_val
+        results_dict[alpha]['Test'] = metrics_test
 
+    results_dict['Best Alpha'] = best_alpha
     print("\nSAP projection completed.")
-    return best_alpha, best_model, best_ASR
+    return results_dict, best_model
 
 
 
