@@ -749,7 +749,7 @@ def apply_SAP(experiment_type:str, architecture:str, outputs_dir: Path, results_
         )
     
 
-    with open(results_dir / 'metric_sap.json' , 'w') as json_file:
+    with open(results_dir / 'metrics_sap.json' , 'w') as json_file:
         json.dump(results_dict, json_file, indent=4)
     
 
@@ -830,7 +830,7 @@ def apply_potion(experiment_type:str, architecture:str, outputs_dir: Path, resul
     corrected_model = unlearner.unlearn(
         train_loader=dataset_corrupted.get_train_dataloader(),
         forget_loader=dataset_corrupted.get_heldout_dataloader(),
-        frac_dl=0.02,
+        frac_dl=0.05,
         min_acc_val=0.01
     )
     

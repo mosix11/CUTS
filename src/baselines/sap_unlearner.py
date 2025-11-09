@@ -197,7 +197,7 @@ def SAP_unlearning_noise(
         test_dl,
         device,
         project_classifier_head = True,
-        scale_coff_list = [1000, 5000, 10000, 30000, 100000, 300000, 1000000],
+        scale_coff_list = [1000, 5000, 10000, 30000, 50000, 100000, 300000, 500000, 1000000],
         ):
     """
     Applies the SAP algorithm using a clean held-out dataset to compute activation projections.
@@ -280,7 +280,7 @@ def SAP_unlearning_poison(
         test_dl,
         device,
         project_classifier_head = True,
-        scale_coff_list = [1000, 5000, 10000, 30000, 100000, 300000, 1000000],
+        scale_coff_list = [1000, 5000, 10000, 30000, 50000, 100000, 300000, 500000, 1000000],
         ):
     """
     Applies the SAP algorithm using a clean held-out dataset to compute activation projections.

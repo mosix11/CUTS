@@ -102,12 +102,13 @@ class BasicBlock(nn.Module):
     
     def get_activations(self, x, block_key, prev_recur_proj_mat = None, act = None):
         act, out = auto_get_activations(x, self.conv1, f"{block_key}.conv1", prev_recur_proj_mat, act)
-        out = F.relu(self.bn1(out))
+        out = self.relu(self.bn1(out))
         act, out = auto_get_activations(out, self.conv2, f"{block_key}.conv2", prev_recur_proj_mat, act)
-        out = self.bn2(out) 
-        act, x = auto_get_activations(x, self.downsample, f"{block_key}.downsample", prev_recur_proj_mat, act)
+        out = self.bn2(out)
+        if self.downsample is not None: 
+            act, x = auto_get_activations(x, self.downsample, f"{block_key}.downsample", prev_recur_proj_mat, act)
         out +=x
-        out = F.relu(out)
+        out = self.relu(out)
         return act, out
     
     def project_weights(self, block_key, projection_mat_dict):
@@ -175,14 +176,14 @@ class Bottleneck(nn.Module):
     
     def get_activations(self, x, block_key, prev_recur_proj_mat = None, act = None):
         act, out = auto_get_activations(x, self.conv1, f"{block_key}.conv1", prev_recur_proj_mat, act)
-        out = F.relu(self.bn1(out))
+        out = self.relu(self.bn1(out))
         act, out = auto_get_activations(out, self.conv2, f"{block_key}.conv2", prev_recur_proj_mat, act)
-        out = F.relu(self.bn2(out) )
+        out = self.relu(self.bn2(out) )
         act, out = auto_get_activations(out, self.conv3, f"{block_key}.conv3", prev_recur_proj_mat, act)
         out = self.bn3(out) 
         act, x = auto_get_activations(x, self.downsample, f"{block_key}.downsample", prev_recur_proj_mat, act)
         out +=x
-        out = F.relu(out)
+        out = self.relu(out)
         return act, out
 
 
@@ -320,13 +321,13 @@ class ResNet(nn.Module):
     def get_activations(self, x, prev_recur_proj_mat=None):   
         act={"pre":OrderedDict(), "post":OrderedDict()} 
         act, out = auto_get_activations(x, self.conv1, "conv1", prev_recur_proj_mat, act)
-        out =  self.maxpool(F.relu(self.bn1(out)))
+        out =  self.maxpool(self.relu(self.bn1(out)))
         act, out = auto_get_activations(out, self.layer1, "layer1", prev_recur_proj_mat, act)
         act, out = auto_get_activations(out, self.layer2, "layer2", prev_recur_proj_mat, act)
         act, out = auto_get_activations(out, self.layer3, "layer3", prev_recur_proj_mat, act)
         act, out = auto_get_activations(out, self.layer4, "layer4", prev_recur_proj_mat, act)
         out = self.avgpool(out)
-        out = out.view(out.size(0), -1)
+        out = torch.flatten(out, 1)
         act, out = auto_get_activations(out, self.fc, f"fc", prev_recur_proj_mat, act)
         return act
     

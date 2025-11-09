@@ -57,6 +57,8 @@ def forward_cache_activations(x, layer, key, prev_recur_proj_mat=None, act={"pre
 
 
 def auto_get_activations(x, layers, block_key, prev_recur_proj_mat, act):
+    if layers is None:
+        return act, x
     if isinstance(layers, nn.Sequential):
         layer_ind = 0
         for layer in layers:
@@ -77,6 +79,8 @@ def get_activations_layer(x, layer, layer_key, prev_recur_proj_mat, act):
         return forward_cache_activations(x, layer, layer_key, prev_recur_proj_mat, act) 
 
 def auto_project_weights(layers, block_key, projection_mat_dict, proj_classifier = True):
+    if layers is None:
+        return
     if isinstance(layers, nn.Sequential):
         layer_ind = 0
         for layer_number, layer in enumerate(layers):
