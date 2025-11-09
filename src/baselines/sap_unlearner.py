@@ -76,6 +76,8 @@ def get_SVD (mat_dict, set_name = "SVD"):
     for loc in mat_dict.keys():
         for act in tqdm(mat_dict[loc].keys(), desc=f"{loc}layer - SVD for {set_name}"):
             activation = torch.Tensor(mat_dict[loc][act]).to("cuda")
+            if torch.isnan(activation).any() or torch.isinf(activation).any():
+                raise ValueError("activation contains NaN or Inf values")
             U,S,Vh = torch.linalg.svd(activation, full_matrices=False)
             U = U.cpu().numpy()
             S = S.cpu().numpy()            
