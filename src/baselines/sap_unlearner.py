@@ -1,5 +1,6 @@
 import os
 import torch
+torch.backends.cuda.preferred_linalg_library("magma")
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
