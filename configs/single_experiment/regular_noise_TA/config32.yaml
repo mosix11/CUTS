@@ -32,7 +32,7 @@ dataset:
 
 
 model:
-  type: 'torchvision_resnet18'
+  type: 'torchvisionsap_resnet18'
   num_classes: *num_classes
   img_size: [224, 224]
   grayscale: False
@@ -44,14 +44,14 @@ model:
 
 trainer:
   mix:
-    max_epochs: &max_epochs 150
+    max_epochs: 150
     optimizer_cfg: 
       type: "adamw"
       lr: 1.0e-3
       betas: [0.9, 0.999]
     lr_schedule_cfg:
       type: 'cosann'
-      T_max: *max_epochs
+      T_max: 150
       eta_min: 5.0e-6
     early_stopping: False
     validation_freq: -1
@@ -64,14 +64,14 @@ trainer:
     seed: *training_seed
 
   oracle:
-    max_epochs: &max_epochs 150
+    max_epochs: 150
     optimizer_cfg: 
       type: "adamw"
       lr: 1.0e-3
       betas: [0.9, 0.999]
     lr_schedule_cfg:
       type: 'cosann'
-      T_max: *max_epochs
+      T_max: 150
       eta_min: 5.0e-6
     early_stopping: False
     validation_freq: -1

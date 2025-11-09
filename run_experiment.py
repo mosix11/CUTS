@@ -464,8 +464,6 @@ def apply_tv(experiment_type:str, architecture:str, outputs_dir: Path, results_d
         show=False
     )
 
-
-
     results_dict = OrderedDict()
     if not results_dir.joinpath('metrics.json').exists():
 
@@ -732,7 +730,14 @@ def apply_SAP(experiment_type:str, architecture:str, outputs_dir: Path, results_
     
     from src.baselines import sap_unlearner
     
-    
+    # def random_subset(ds, k, seed: int):
+    #     k = min(k, len(ds))
+    #     g = torch.Generator().manual_seed(seed)
+    #     idx = torch.randperm(len(ds), generator=g)[:k].tolist()
+    #     return Subset(ds, idx)
+    # ho_set = copy.deepcopy(dataset_clean.get_heldoutset())
+    # ho_set = random_subset(ho_set, 100, seed=55)
+    # dataset_clean.set_heldoutset(ho_set)
     
     if experiment_type == 'noise':
         results_dict, corrected_model = sap_unlearner.SAP_unlearning_noise(
@@ -830,6 +835,9 @@ def apply_potion(experiment_type:str, architecture:str, outputs_dir: Path, resul
         potion_model,
         device=gpu
     )
+    
+
+    
     
     corrected_model = unlearner.unlearn(
         train_loader=dataset_corrupted.get_train_dataloader(),
