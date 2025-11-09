@@ -1,6 +1,5 @@
 import os
 import torch
-torch.backends.cuda.preferred_linalg_library("magma")
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
@@ -79,8 +78,8 @@ def get_SVD (mat_dict, set_name = "SVD"):
             activation = torch.Tensor(mat_dict[loc][act]).to("cuda")
             if torch.isnan(activation).any() or torch.isinf(activation).any():
                 raise ValueError("activation contains NaN or Inf values")
-            U,S,Vh = torch.linalg.svd(activation, full_matrices=False)
-            # U, S, Vh = torch.linalg.svd(activation.cpu(), full_matrices=False)
+            # U,S,Vh = torch.linalg.svd(activation, full_matrices=False)
+            U, S, Vh = torch.linalg.svd(activation.cpu(), full_matrices=False)
             U = U.cpu().numpy()
             S = S.cpu().numpy()            
             feature_dict[loc][act] = U
