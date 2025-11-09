@@ -343,15 +343,16 @@ def apply_tv(experiment_type:str, architecture:str, outputs_dir: Path, results_d
         
         proxy_conf = strategy['corruption']['proxy'][0]
         proxy_conf['set'] = 'Heldout'
-        if proxy_conf['noise_type'] == 'symmetric':
-            dataset_corrupted.inject_noise(**proxy_conf)
-        elif proxy_conf['noise_type'] == 'asymmetric':
-            dataset_corrupted.inject_noise(**proxy_conf)
-            hs_clean, hs_noisy = dataset_corrupted.get_clean_noisy_subsets(set='Heldout')
-            dataset_corrupted.switch_labels_to_clean(hs_noisy)
-            dataset_clean.set_heldoutset(copy.deepcopy(hs_noisy), shuffle=False)
-            dataset_corrupted.switch_labels_to_noisy(hs_noisy)
-            dataset_corrupted.set_heldoutset(hs_noisy, shuffle=False)
+        dataset_corrupted.inject_noise(**proxy_conf)
+        # if proxy_conf['noise_type'] == 'symmetric':
+        #     dataset_corrupted.inject_noise(**proxy_conf)
+        # elif proxy_conf['noise_type'] == 'asymmetric':
+        #     dataset_corrupted.inject_noise(**proxy_conf)
+        #     hs_clean, hs_noisy = dataset_corrupted.get_clean_noisy_subsets(set='Heldout')
+        #     dataset_corrupted.switch_labels_to_clean(hs_noisy)
+        #     dataset_clean.set_heldoutset(copy.deepcopy(hs_noisy), shuffle=False)
+        #     dataset_corrupted.switch_labels_to_noisy(hs_noisy)
+        #     dataset_corrupted.set_heldoutset(hs_noisy, shuffle=False)
                 
     elif experiment_type == 'IC':
         dataset_clean = copy.deepcopy(base_dataset)
@@ -520,15 +521,17 @@ def apply_tv(experiment_type:str, architecture:str, outputs_dir: Path, results_d
         if experiment_type == 'noise':  
             proxy_conf = strategy['corruption']['proxy'][0]
             if dataset_clean.dataset_name == 'MNIST':
-                if proxy_conf['noise_type'] == 'asymmetric':
-                    coverage_rate = 0.5
-                else:
-                    coverage_rate = 1.0
+                coverage_rate = 1.0
+                # if proxy_conf['noise_type'] == 'asymmetric':
+                #     coverage_rate = 0.5
+                # else:
+                #     coverage_rate = 1.0
             elif dataset_clean.dataset_name == 'CIFAR10':
-                if proxy_conf['noise_type'] == 'asymmetric':
-                    coverage_rate = 0.5
-                else:
-                    coverage_rate = 1.0
+                coverage_rate = 1.0
+                # if proxy_conf['noise_type'] == 'asymmetric':
+                #     coverage_rate = 0.5
+                # else:
+                #     coverage_rate = 1.0
             elif dataset_clean.dataset_name == 'CIFAR100':
                 coverage_rate = 0.95
             
