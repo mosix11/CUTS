@@ -464,7 +464,25 @@ def apply_tv(experiment_type:str, architecture:str, outputs_dir: Path, results_d
         show=False
     )
     
+    # model.load_state_dict(mix_weights, strict=False)
+    # mix_test_results, _, _ = evaluate_model(model, dataset_clean.get_test_dataloader(), gpu)
+    # mix_train_results = eval_model_on_clean_corrupted_splits(model, None, dataset_corrupted, gpu)
     
+    
+    # model.load_state_dict(oracle_weights, strict=False)
+    # oracle_test_results, _, _ = evaluate_model(model, dataset_clean.get_test_dataloader(), gpu)
+    # oracle_train_results = eval_model_on_clean_corrupted_splits(model, None, dataset_corrupted, gpu)
+    
+    # model.load_state_dict(CF_weights, strict=False)
+    # CF_test_results, _, _ = evaluate_model(model, dataset_clean.get_test_dataloader(), gpu)
+    # CF_train_results = eval_model_on_clean_corrupted_splits(model, None, dataset_corrupted, gpu)
+    
+    # print('Mix', {'test_results': mix_test_results, 'train_results': mix_train_results})
+    # print('Oracle', {'test_results': oracle_test_results, 'train_results': oracle_train_results})
+    # print('CF', {'test_results': CF_test_results, 'train_results': CF_train_results})
+
+    # exit()
+
     results_dict = OrderedDict()
     if not results_dir.joinpath('metrics.json').exists():
 
@@ -745,7 +763,7 @@ def apply_SAP(experiment_type:str, architecture:str, outputs_dir: Path, results_
             model=sap_model,
             clean_samples_dl=dataset_clean.get_heldout_dataloader(),
             test_dl=dataset_clean.get_test_dataloader(),
-            project_classifier_head=True,
+            project_classifier_head=False if architecture == 'clip' else True,
             device=gpu
         )
     elif experiment_type == 'poison':
@@ -754,7 +772,7 @@ def apply_SAP(experiment_type:str, architecture:str, outputs_dir: Path, results_
             clean_samples_dl=dataset_clean.get_heldout_dataloader(),
             triggered_samples_dl=dataset_corrupted.get_heldout_dataloader(),
             test_dl=dataset_clean.get_test_dataloader(),
-            project_classifier_head=True,
+            project_classifier_head=False if architecture == 'clip' else True,
             device=gpu
         )
     
@@ -806,8 +824,6 @@ def apply_potion(experiment_type:str, architecture:str, outputs_dir: Path, resul
         map_location='cpu'
     ).items() if "classifier_heads" not in k)
     
-    print(mix_weights['image_encoder.model.logit_scale'])
-    exit()
     
     dataset_clean = copy.deepcopy(base_dataset)
     dataset_corrupted = copy.deepcopy(base_dataset)

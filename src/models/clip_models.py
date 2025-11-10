@@ -51,6 +51,17 @@ class CLIPImageEncoderModule(nn.Module):
 
     def forward(self, images):
         return self.model.encode_image(images)
+    
+    
+    # ------------------------------
+    # SAP related methods
+    def get_activations(self, x: torch.Tensor, prev_recur_proj_mat: dict = None):
+        return self.model.visual.get_activations(x, prev_recur_proj_mat)
+    
+    def project_weights(self, projection_mat_dict: dict):
+        return self.model.visual.project_weights(projection_mat_dict)
+    # ------------------------------
+    
 
     def remove_text_encoder(self):
         # remove or nullify text-related attributes (similar to your open_clip removal)
@@ -122,12 +133,23 @@ class CLIPMultiHeadImageClassifier(BaseModel):
         ftrs = self.image_encoder(x)
         logits = self.classifier_heads[self.active_head](ftrs)
         return logits
+    
+    # ------------------------------
+    # SAP related methods
+    def get_activations(self, x: torch.Tensor, prev_recur_proj_mat: dict = None):
+        return self.image_encoder.get_activations(x, prev_recur_proj_mat)
+    
+    def project_weights(self, projection_mat_dict: dict, project_classifier_head: bool = False):
+        # For CLIP we neglect the `project_classifier_head` since CLIP classification head is frozen and static.
+        return self.image_encoder.project_weights(projection_mat_dict)
 
+    # ------------------------------
     def activate_head(self, head_name: str):
         if head_name not in self.classifier_heads:
             raise ValueError('The specified head name is not in the classifier heads.')
         self.active_head = head_name
         self.metrics = self.head_metrics[self.active_head]
+    
 
     def get_active_head(self):
         return self.classifier_heads[self.active_head]
