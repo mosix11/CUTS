@@ -34,12 +34,10 @@ dataset:
 
 
 model:
-  type: 'open_clip_multihead_ViT-B-16'
-  pt_weights: 'openai'
+  type: 'clip_multihead_ViT-B/16'
   loss_fn:
     type: 'CE'
   metrics: ['ACC', 'F1']
-
 
 trainer:
   mix:
