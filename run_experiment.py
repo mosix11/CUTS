@@ -464,23 +464,6 @@ def apply_tv(experiment_type:str, architecture:str, outputs_dir: Path, results_d
         show=False
     )
     
-    model.load_state_dict(mix_weights, strict=False)
-    mix_test_results, _, _ = evaluate_model(model, dataset_clean.get_test_dataloader(), gpu)
-    mix_train_results = eval_model_on_clean_corrupted_splits(model, None, dataset_corrupted, gpu)
-    
-    
-    model.load_state_dict(oracle_weights, strict=False)
-    oracle_test_results, _, _ = evaluate_model(model, dataset_clean.get_test_dataloader(), gpu)
-    oracle_train_results = eval_model_on_clean_corrupted_splits(model, None, dataset_corrupted, gpu)
-    
-    model.load_state_dict(CF_weights, strict=False)
-    CF_test_results, _, _ = evaluate_model(model, dataset_clean.get_test_dataloader(), gpu)
-    CF_train_results = eval_model_on_clean_corrupted_splits(model, None, dataset_corrupted, gpu)
-    
-    print('MIX', {'test_results': mix_test_results, 'train_results': mix_train_results})
-    print('Oracle', {'test_results': oracle_test_results, 'train_results': oracle_train_results})
-    print('CF', {'test_results': CF_test_results, 'train_results': CF_train_results})
-    exit()
     
     results_dict = OrderedDict()
     if not results_dir.joinpath('metrics.json').exists():
@@ -569,7 +552,7 @@ def apply_tv(experiment_type:str, architecture:str, outputs_dir: Path, results_d
                 num_clusters=num_clusters,
                 k=num_neighbor_agr_check,
                 coverage_rate=coverage_rate,
-                alphas=np.round(np.linspace(-0.0, -2.0, 41), 2),
+                alphas=np.round(np.linspace(-0.0, -4.0, 81), 2),
                 device=gpu
             )
             results_dict['alpha_hat'] = alpha_hat

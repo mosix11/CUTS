@@ -426,7 +426,6 @@ class VisionTransformer(nn.Module):
         x = x[:, 0]
         
         x = self.heads(x)
-        # x = F.log_softmax(x, dim=1)
         return x
     
     def get_activations(self, x, prev_recur_proj_mat = None):      

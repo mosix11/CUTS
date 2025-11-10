@@ -40,7 +40,7 @@ dataset:
 #     type: 'CE'
 #   metrics: ['ACC', 'F1']
 model:
-  type: 'clip_multihead_ViT-B-16'
+  type: 'clip_multihead_ViT-B/16'
   loss_fn:
     type: 'CE'
   metrics: ['ACC', 'F1']

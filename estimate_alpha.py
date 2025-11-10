@@ -155,7 +155,7 @@ def select_alpha_by_knn_self_agreement(
     cov_penalty_weight: float = 1.0,
     hard_min_per_class: int | None = None,
     random_state: int = 0,
-    decrease_patience: int = 10,
+    decrease_patience: int = 5,
 ) -> float:
     """
     Select alpha that maximizes the adjusted, coverage-aware kNN self-agreement.
