@@ -6,7 +6,7 @@ from . import PreActResNet9, PreActResNet18, PreActResNet34, PreActResNet50, Pre
 from . import PostActResNet9, PostActResNet18, PostActResNet34, PostActResNet50, PostActResNet101, PostActResNet152
 
 from . import TorchvisionModels, TorchvisionModelsSAP, DinoV3Classifier
-from . import OpenClipImageEncoder, OpenClipMultiHeadImageClassifier
+from . import CLIPMultiHeadImageClassifier, OpenClipMultiHeadImageClassifier
 
 from .loss_functions import SupervisedContrastiveLoss, CompoundLoss
 
@@ -124,9 +124,11 @@ def create_model(cfg_orig, num_classes=None):
                 model_type=model_type,
                 **cfg
             )
-        elif model_type.startswith('encoder'):
-            model_type = model_type.removeprefix('encoder_')
-            model = OpenClipImageEncoder(
+    elif model_type.startswith('clip'):
+        model_type = model_type.removeprefix('clip_')
+        if model_type.startswith('multihead'):
+            model_type = model_type.removeprefix('multihead_')
+            model = CLIPMultiHeadImageClassifier(
                 model_type=model_type,
                 **cfg
             )

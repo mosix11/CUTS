@@ -6,7 +6,8 @@ from .resnet_v1 import PostActResNet9, PostActResNet18, PostActResNet34, PostAct
 from .torchvision_models import TorchvisionModels
 from .torchvision_models_sap import TorchvisionModelsSAP
 from .dinov3 import DinoV3Classifier
-from .open_clip_models import OpenClipImageEncoder, OpenClipMultiHeadImageClassifier
+from .open_clip_models import OpenClipMultiHeadImageClassifier
+from .clip_models import CLIPMultiHeadImageClassifier
 from .task_vectors import TaskVector
 
 

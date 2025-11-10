@@ -40,7 +40,7 @@ from src.utils import embedding_space_analysis
 from helper_funcs import evaluate_model, eval_model_on_clean_corrupted_splits, search_optimal_coefficient, get_confusion_matrix, row_normalize
 from src.utils import weight_norm_analysis
 
-def initialize_model_dataset(experiment_type:str, architecture:str, cfg: dict):
+def initialize_model_dataset(experiment_type:str, architecture:str, cfg: dict, train=True):
     dataset_cfg = cfg['dataset']
     
     if architecture == 'clip':
@@ -50,13 +50,13 @@ def initialize_model_dataset(experiment_type:str, architecture:str, cfg: dict):
         base_model = model_factory.create_model(cfg['model'])
         base_model.freeze_all_heads()
         
-        dataset_cfg['train_transforms'] = base_model.get_train_transforms()
+        dataset_cfg['train_transforms'] = base_model.get_train_transforms() if train else base_model.get_val_transforms()
         dataset_cfg['val_transforms'] = base_model.get_val_transforms()
         base_dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
         
     elif architecture == 'dino':
         base_model = model_factory.create_model(cfg['model'])
-        dataset_cfg['train_transforms'] = base_model.get_train_transforms()
+        dataset_cfg['train_transforms'] = base_model.get_train_transforms() if train else base_model.get_val_transforms()
         dataset_cfg['val_transforms'] = base_model.get_val_transforms()
         base_dataset, num_classes = dataset_factory.create_dataset(dataset_cfg)
     elif architecture == 'regular':
@@ -105,7 +105,7 @@ def inject_corruption(experiment_type:str, base_dataset, cfg: dict):
     
 def finetune_models(experiment_type:str, architecture:str, outputs_dir: Path, cfg: dict, cfg_name:str):
     
-    base_model, base_dataset, cfg = initialize_model_dataset(experiment_type, architecture, cfg)
+    base_model, base_dataset, cfg = initialize_model_dataset(experiment_type, architecture, cfg, train=True)
     
     strategy = cfg['strategy']
     base_dataset = inject_corruption(experiment_type, base_dataset, cfg)
@@ -316,7 +316,7 @@ def apply_tv(experiment_type:str, architecture:str, outputs_dir: Path, results_d
         dir.mkdir(exist_ok=True, parents=True)
     
     
-    model, base_dataset, cfg = initialize_model_dataset(experiment_type, architecture, cfg)
+    model, base_dataset, cfg = initialize_model_dataset(experiment_type, architecture, cfg, train=False)
     base_dataset.reset_train_dl(shuffle=False)
     
     strategy = cfg['strategy']
@@ -463,7 +463,25 @@ def apply_tv(experiment_type:str, architecture:str, outputs_dir: Path, results_d
         filepath=results_dir / 'task_similarities.png',
         show=False
     )
-
+    
+    model.load_state_dict(mix_weights, strict=False)
+    mix_test_results, _, _ = evaluate_model(model, dataset_clean.get_test_dataloader(), gpu)
+    mix_train_results = eval_model_on_clean_corrupted_splits(model, None, dataset_corrupted, gpu)
+    
+    
+    model.load_state_dict(oracle_weights, strict=False)
+    oracle_test_results, _, _ = evaluate_model(model, dataset_clean.get_test_dataloader(), gpu)
+    oracle_train_results = eval_model_on_clean_corrupted_splits(model, None, dataset_corrupted, gpu)
+    
+    model.load_state_dict(CF_weights, strict=False)
+    CF_test_results, _, _ = evaluate_model(model, dataset_clean.get_test_dataloader(), gpu)
+    CF_train_results = eval_model_on_clean_corrupted_splits(model, None, dataset_corrupted, gpu)
+    
+    print('MIX', {'test_results': mix_test_results, 'train_results': mix_train_results})
+    print('Oracle', {'test_results': oracle_test_results, 'train_results': oracle_train_results})
+    print('CF', {'test_results': CF_test_results, 'train_results': CF_train_results})
+    exit()
+    
     results_dict = OrderedDict()
     if not results_dir.joinpath('metrics.json').exists():
 
@@ -661,7 +679,7 @@ def apply_SAP(experiment_type:str, architecture:str, outputs_dir: Path, results_
         dir.mkdir(exist_ok=True, parents=True)
     
     
-    base_model, base_dataset, cfg = initialize_model_dataset(experiment_type, architecture, cfg)
+    base_model, base_dataset, cfg = initialize_model_dataset(experiment_type, architecture, cfg, train=False)
     base_dataset.reset_train_dl(shuffle=False)
     
     strategy = cfg['strategy']
@@ -793,11 +811,20 @@ def apply_potion(experiment_type:str, architecture:str, outputs_dir: Path, resul
         dir.mkdir(exist_ok=True, parents=True)
     
     
-    base_model, base_dataset, cfg = initialize_model_dataset(experiment_type, architecture, cfg)
+    base_model, base_dataset, cfg = initialize_model_dataset(experiment_type, architecture, cfg, train=False)
     base_dataset.reset_train_dl(shuffle=False)
     
     strategy = cfg['strategy']
     
+    # Load weights while removing classifier head's weights from the state dict for CLIP
+    mix_weights = OrderedDict(
+    (k, v) for k, v in torch.load(
+        outputs_dir.joinpath(f"mix/weights/ft_weights.pth"),
+        map_location='cpu'
+    ).items() if "classifier_heads" not in k)
+    
+    print(mix_weights['image_encoder.model.logit_scale'])
+    exit()
     
     dataset_clean = copy.deepcopy(base_dataset)
     dataset_corrupted = copy.deepcopy(base_dataset)
@@ -814,7 +841,7 @@ def apply_potion(experiment_type:str, architecture:str, outputs_dir: Path, resul
     # Load weights while removing classifier head's weights from the state dict for CLIP
     mix_weights = OrderedDict(
     (k, v) for k, v in torch.load(
-        outputs_dir.joinpath(f"mix/weights/weights.pth"),
+        outputs_dir.joinpath(f"mix/weights/ft_weights.pth"),
         map_location='cpu'
     ).items() if "classifier_heads" not in k)
     
