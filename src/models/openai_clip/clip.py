@@ -1,3 +1,8 @@
+"""
+    Code from https://github.com/openai/CLIP/blob/main/clip/clip.py
+    with small modifications
+"""
+
 import hashlib
 import os
 import urllib
