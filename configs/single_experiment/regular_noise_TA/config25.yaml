@@ -55,7 +55,7 @@ trainer:
       betas: [0.9, 0.999]
     lr_schedule_cfg:
       type: 'cosann'
-      T_max: *max_epochs
+      T_max: 150
       eta_min: 5.0e-6
     early_stopping: False
     validation_freq: -1
@@ -75,7 +75,7 @@ trainer:
       betas: [0.9, 0.999]
     lr_schedule_cfg:
       type: 'cosann'
-      T_max: *max_epochs
+      T_max: 150
       eta_min: 5.0e-6
     early_stopping: False
     validation_freq: -1
