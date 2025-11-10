@@ -3,6 +3,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 from . import BaseModel
 
+from collections import OrderedDict
+
+from .sap_utils import auto_get_activations, auto_project_weights
 
 class FC1(BaseModel):
     
@@ -44,6 +47,34 @@ class FC1(BaseModel):
         return f"fc1|h{self.hidden_dim}|p{self._count_trainable_parameters()}"
     
     
+    def get_activations(self, x, prev_recur_proj_mat=None):
+        """
+        Collects activations around the hidden linear (h1) and the output linear (out).
+        Keys will be: 'h1' and 'out' under act['pre'] / act['post'].
+        """
+        act = {"pre": OrderedDict(), "post": OrderedDict()}
+
+        # Hidden layer
+        act, z = auto_get_activations(x, self.h1, "h1", prev_recur_proj_mat, act)
+        z = F.relu(z)
+
+        # Classifier head
+        act, _ = auto_get_activations(z, self.out, "out", prev_recur_proj_mat, act)
+
+        return act
+
+    def project_weights(self, projection_mat_dict, proj_classifier=False):
+        """
+        Applies the learned projection matrices to the two Linear layers.
+        If proj_classifier=False, the helper will avoid projecting the output space
+        of the final classifier (mirrors your ResNet behavior).
+        """
+        # Project hidden layer
+        auto_project_weights(self.h1, "h1", projection_mat_dict)
+
+        # Project classifier (optionally skip output-space projection)
+        auto_project_weights(self.out, "out", projection_mat_dict, proj_classifier=proj_classifier)
+        return
 
     def freeze_classification_head(self):
         """
