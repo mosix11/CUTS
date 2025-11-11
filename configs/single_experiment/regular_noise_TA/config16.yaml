@@ -109,7 +109,7 @@ trainer:
     comet_project_name: 'regular-noise-TA'
     seed: *training_seed
 
-  finetuning_cf:
+  CF:
     max_epochs: 30
     optimizer_cfg: 
       type: "adamw"
