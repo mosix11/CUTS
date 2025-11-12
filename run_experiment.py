@@ -481,77 +481,77 @@ def apply_tv(experiment_type:str, architecture:str, outputs_dir: Path, results_d
     # print('Oracle', {'test_results': oracle_test_results, 'train_results': oracle_train_results})
     # print('CF', {'test_results': CF_test_results, 'train_results': CF_train_results})
     
-    results_dict = OrderedDict()
-    with open(results_dir / "metrics.json", "r") as json_file:
-        results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
-    alphas = tqdm(np.round(np.linspace(-2.05, -4.0, 40), 2))
+    # results_dict = OrderedDict()
+    # with open(results_dir / "metrics.json", "r") as json_file:
+    #     results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
+    # alphas = tqdm(np.round(np.linspace(-2.05, -4.0, 40), 2))
     
-    for alpha in alphas:
-        model.load_state_dict(mix_weights, strict=False)
-        task_vectors['Proxy'].apply_to(model, scaling_coef=alpha, strict=False)
-        tv_test_results, _, _ = evaluate_model(model, dataset_clean.get_test_dataloader(), gpu)
-        tv_train_results = eval_model_on_clean_corrupted_splits(model, None, dataset_corrupted, gpu)
+    # for alpha in alphas:
+    #     model.load_state_dict(mix_weights, strict=False)
+    #     task_vectors['Proxy'].apply_to(model, scaling_coef=alpha, strict=False)
+    #     tv_test_results, _, _ = evaluate_model(model, dataset_clean.get_test_dataloader(), gpu)
+    #     tv_train_results = eval_model_on_clean_corrupted_splits(model, None, dataset_corrupted, gpu)
         
-        if experiment_type == 'poison':
-            tv_ho_resutls, _, _ = evaluate_model(model, dataset_corrupted.get_heldout_dataloader(), gpu)
-            results_dict[alpha] = {'test_results': tv_test_results, 'ho_results': tv_ho_resutls, 'train_results': tv_train_results}
-        elif experiment_type == 'IC':
-            tv_ho_resutls, _, _ = evaluate_model(model, dataset_clean.get_heldout_dataloader(), gpu)
-            results_dict[alpha] = {'test_results': tv_test_results, 'ho_results': tv_ho_resutls, 'train_results': tv_train_results}
-        else:
-            results_dict[alpha] = {'test_results': tv_test_results, 'train_results': tv_train_results}
-    with open(results_dir / 'metrics.json' , 'w') as json_file:
-        json.dump(results_dict, json_file, indent=4)
+    #     if experiment_type == 'poison':
+    #         tv_ho_resutls, _, _ = evaluate_model(model, dataset_corrupted.get_heldout_dataloader(), gpu)
+    #         results_dict[alpha] = {'test_results': tv_test_results, 'ho_results': tv_ho_resutls, 'train_results': tv_train_results}
+    #     elif experiment_type == 'IC':
+    #         tv_ho_resutls, _, _ = evaluate_model(model, dataset_clean.get_heldout_dataloader(), gpu)
+    #         results_dict[alpha] = {'test_results': tv_test_results, 'ho_results': tv_ho_resutls, 'train_results': tv_train_results}
+    #     else:
+    #         results_dict[alpha] = {'test_results': tv_test_results, 'train_results': tv_train_results}
+    # with open(results_dir / 'metrics.json' , 'w') as json_file:
+    #     json.dump(results_dict, json_file, indent=4)
 
     # exit()
 
-    # results_dict = OrderedDict()
-    # if not results_dir.joinpath('metrics.json').exists():
+    results_dict = OrderedDict()
+    if not results_dir.joinpath('metrics.json').exists():
 
-    #     model.load_state_dict(mix_weights, strict=False)
-    #     mix_test_results, _, _ = evaluate_model(model, dataset_clean.get_test_dataloader(), gpu)
-    #     mix_train_results = eval_model_on_clean_corrupted_splits(model, None, dataset_corrupted, gpu)
+        model.load_state_dict(mix_weights, strict=False)
+        mix_test_results, _, _ = evaluate_model(model, dataset_clean.get_test_dataloader(), gpu)
+        mix_train_results = eval_model_on_clean_corrupted_splits(model, None, dataset_corrupted, gpu)
         
         
-    #     model.load_state_dict(oracle_weights, strict=False)
-    #     oracle_test_results, _, _ = evaluate_model(model, dataset_clean.get_test_dataloader(), gpu)
-    #     oracle_train_results = eval_model_on_clean_corrupted_splits(model, None, dataset_corrupted, gpu)
+        model.load_state_dict(oracle_weights, strict=False)
+        oracle_test_results, _, _ = evaluate_model(model, dataset_clean.get_test_dataloader(), gpu)
+        oracle_train_results = eval_model_on_clean_corrupted_splits(model, None, dataset_corrupted, gpu)
         
-    #     model.load_state_dict(CF_weights, strict=False)
-    #     CF_test_results, _, _ = evaluate_model(model, dataset_clean.get_test_dataloader(), gpu)
-    #     CF_train_results = eval_model_on_clean_corrupted_splits(model, None, dataset_corrupted, gpu)
+        model.load_state_dict(CF_weights, strict=False)
+        CF_test_results, _, _ = evaluate_model(model, dataset_clean.get_test_dataloader(), gpu)
+        CF_train_results = eval_model_on_clean_corrupted_splits(model, None, dataset_corrupted, gpu)
         
-    #     results_dict['Mix'] = {'test_results': mix_test_results, 'train_results': mix_train_results}
-    #     results_dict['Oracle'] = {'test_results': oracle_test_results, 'train_results': oracle_train_results}
-    #     results_dict['CF'] = {'test_results': CF_test_results, 'train_results': CF_train_results}
+        results_dict['Mix'] = {'test_results': mix_test_results, 'train_results': mix_train_results}
+        results_dict['Oracle'] = {'test_results': oracle_test_results, 'train_results': oracle_train_results}
+        results_dict['CF'] = {'test_results': CF_test_results, 'train_results': CF_train_results}
         
         
-    #     if experiment_type == 'poison':
-    #         alphas = tqdm(np.round(np.linspace(-0.05, -3.0, 60), 2))
-    #     elif experiment_type == 'noise':
-    #         alphas = tqdm(np.round(np.linspace(-0.05, -3.0, 60), 2))
-    #     elif experiment_type == 'IC':
-    #         alphas = tqdm(np.round(np.linspace(-0.05, -1.5, 30), 2))
-    #     for alpha in alphas:
+        if experiment_type == 'poison':
+            alphas = tqdm(np.round(np.linspace(-0.05, -3.0, 60), 2))
+        elif experiment_type == 'noise':
+            alphas = tqdm(np.round(np.linspace(-0.05, -3.0, 60), 2))
+        elif experiment_type == 'IC':
+            alphas = tqdm(np.round(np.linspace(-0.05, -1.5, 30), 2))
+        for alpha in alphas:
             
-    #         model.load_state_dict(mix_weights, strict=False)
-    #         task_vectors['Proxy'].apply_to(model, scaling_coef=alpha, strict=False)
-    #         tv_test_results, _, _ = evaluate_model(model, dataset_clean.get_test_dataloader(), gpu)
-    #         tv_train_results = eval_model_on_clean_corrupted_splits(model, None, dataset_corrupted, gpu)
+            model.load_state_dict(mix_weights, strict=False)
+            task_vectors['Proxy'].apply_to(model, scaling_coef=alpha, strict=False)
+            tv_test_results, _, _ = evaluate_model(model, dataset_clean.get_test_dataloader(), gpu)
+            tv_train_results = eval_model_on_clean_corrupted_splits(model, None, dataset_corrupted, gpu)
             
-    #         if experiment_type == 'poison':
-    #             tv_ho_resutls, _, _ = evaluate_model(model, dataset_corrupted.get_heldout_dataloader(), gpu)
-    #             results_dict[alpha] = {'test_results': tv_test_results, 'ho_results': tv_ho_resutls, 'train_results': tv_train_results}
-    #         elif experiment_type == 'IC':
-    #             tv_ho_resutls, _, _ = evaluate_model(model, dataset_clean.get_heldout_dataloader(), gpu)
-    #             results_dict[alpha] = {'test_results': tv_test_results, 'ho_results': tv_ho_resutls, 'train_results': tv_train_results}
-    #         else:
-    #             results_dict[alpha] = {'test_results': tv_test_results, 'train_results': tv_train_results}
-    #     with open(results_dir / 'metrics.json' , 'w') as json_file:
-    #         json.dump(results_dict, json_file, indent=4)
-    # else:
-    #     with open(results_dir / "metrics.json", "r") as json_file:
-    #         results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
+            if experiment_type == 'poison':
+                tv_ho_resutls, _, _ = evaluate_model(model, dataset_corrupted.get_heldout_dataloader(), gpu)
+                results_dict[alpha] = {'test_results': tv_test_results, 'ho_results': tv_ho_resutls, 'train_results': tv_train_results}
+            elif experiment_type == 'IC':
+                tv_ho_resutls, _, _ = evaluate_model(model, dataset_clean.get_heldout_dataloader(), gpu)
+                results_dict[alpha] = {'test_results': tv_test_results, 'ho_results': tv_ho_resutls, 'train_results': tv_train_results}
+            else:
+                results_dict[alpha] = {'test_results': tv_test_results, 'train_results': tv_train_results}
+        with open(results_dir / 'metrics.json' , 'w') as json_file:
+            json.dump(results_dict, json_file, indent=4)
+    else:
+        with open(results_dir / "metrics.json", "r") as json_file:
+            results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
             
             
     
