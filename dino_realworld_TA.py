@@ -281,44 +281,42 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     else:
         task_vectors['Average'] = TaskVector.mean(task_vectors)
   
+    task_vectors['Random Vector'] = task_vectors['Average'].generate_random_vector_with_same_layer_norms(seed=20)
 
+    # results_dict = OrderedDict()
+    # if not results_dir.joinpath('metrics.json').exists():
 
-    results_dict = OrderedDict()
-    if not results_dir.joinpath('metrics.json').exists():
-
-        model.load_state_dict(mix_weights, strict=False)
-        mix_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-        # mix_train_results, _, _ = evaluate_model(model, dataset.get_train_dataloader(), gpu)
+    #     model.load_state_dict(mix_weights, strict=False)
+    #     mix_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+    #     # mix_train_results, _, _ = evaluate_model(model, dataset.get_train_dataloader(), gpu)
         
-        # results_dict['Mix'] = {'test_results': mix_test_results, 'train_results': mix_train_results}
-        results_dict['Mix'] = {'test_results': mix_test_results}
-        print('0.0', mix_test_results)
+    #     # results_dict['Mix'] = {'test_results': mix_test_results, 'train_results': mix_train_results}
+    #     results_dict['Mix'] = {'test_results': mix_test_results}
+    #     print('0.0', mix_test_results)
 
-        alphas = tqdm(np.round(np.linspace(-0.04, -2.0, 50), 3))
-        for alpha in alphas:
+    #     alphas = tqdm(np.round(np.linspace(-0.04, -2.0, 50), 3))
+    #     for alpha in alphas:
             
-            model.load_state_dict(mix_weights, strict=False)
-            task_vectors['Average'].apply_to(model, scaling_coef=alpha, strict=False)
-            tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
-            # tv_train_results,  _, _ = evaluate_model(model, dataset.get_train_dataloader(), gpu)
+    #         model.load_state_dict(mix_weights, strict=False)
+    #         task_vectors['Average'].apply_to(model, scaling_coef=alpha, strict=False)
+    #         tv_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+    #         # tv_train_results,  _, _ = evaluate_model(model, dataset.get_train_dataloader(), gpu)
 
-            # results_dict[alpha] = {'test_results': tv_test_results, 'train_results': tv_train_results}
-            print(alpha, tv_test_results)
-            results_dict[alpha] = {'test_results': tv_test_results,}
-        with open(results_dir / 'metrics.json' , 'w') as json_file:
-            json.dump(results_dict, json_file, indent=4)
-    else:
-        with open(results_dir / "metrics.json", "r") as json_file:
-            results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
+    #         # results_dict[alpha] = {'test_results': tv_test_results, 'train_results': tv_train_results}
+    #         print(alpha, tv_test_results)
+    #         results_dict[alpha] = {'test_results': tv_test_results,}
+    #     with open(results_dir / 'metrics.json' , 'w') as json_file:
+    #         json.dump(results_dict, json_file, indent=4)
+    # else:
+    #     with open(results_dir / "metrics.json", "r") as json_file:
+    #         results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
             
             
     
     # if 'alpha_KNN' not in results_dict:
     if dataset.dataset_name == 'Clothing1M':
         coverage_rate = 1.0
-    elif dataset.dataset_name == 'Food101':
-        coverage_rate = 0.95
-
+    
     # if strategy['noise']['finetuning'][0]['noise_type'] == 'asymmetric':
     #     if dataset.dataset_name == 'MNIST':
     #         num_clusters = 5
@@ -327,30 +325,36 @@ def apply_tv(outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
     #     else: num_clusters = dataset.get_num_classes()
     # else:
     #     num_clusters = dataset.get_num_classes()
-    num_clusters = dataset.get_num_classes()
-    alpha_est_support_dl = dataset.get_val_dataloader()
-    alpha_est_support_size = len(dataset.get_valset())
-    ideal_cluster_balance = alpha_est_support_size / num_clusters
-    num_neighbor_agr_check = math.floor(ideal_cluster_balance / 2)
-    print(ideal_cluster_balance)
-    print(num_neighbor_agr_check)
-    from estimate_alpha import select_alpha_by_knn_self_agreement
-    alpha_kNN = select_alpha_by_knn_self_agreement(
-        model=model,
-        feature_extractor=model.get_feature_extractor(),
-        classifier=model.get_classifier_head(),
-        state0=mix_weights,
-        taskvector=task_vectors['Average'],
-        unlabeled_loader=alpha_est_support_dl,
-        num_clusters=num_clusters,
-        k=20,
-        coverage_rate=coverage_rate,
-        alphas=np.round(np.linspace(-0.0, -2.0, 51), 2),
-        device=gpu
-    )
-    
+    # num_clusters = dataset.get_num_classes()
+    # alpha_est_support_dl = dataset.get_val_dataloader()
+    # alpha_est_support_size = len(dataset.get_valset())
+    # ideal_cluster_balance = alpha_est_support_size / num_clusters
+    # num_neighbor_agr_check = math.floor(ideal_cluster_balance / 2)
 
-    print(alpha_kNN)
+    # from estimate_alpha import select_alpha_by_knn_self_agreement
+    # alpha_kNN = select_alpha_by_knn_self_agreement(
+    #     model=model,
+    #     feature_extractor=model.get_feature_extractor(),
+    #     classifier=model.get_classifier_head(),
+    #     state0=mix_weights,
+    #     taskvector=task_vectors['Average'],
+    #     unlabeled_loader=alpha_est_support_dl,
+    #     num_clusters=num_clusters,
+    #     k=20,
+    #     coverage_rate=coverage_rate,
+    #     alphas=np.round(np.linspace(-0.0, -2.0, 51), 2),
+    #     device=gpu
+    # )
+    
+    # config 4 -0.2
+    # config 5 -0.12
+    # config 6 -0.12
+    # print(alpha_kNN)
+    alpha_hat = 0.4
+    model.load_state_dict(mix_weights, strict=False)
+    task_vectors['Random Vector'].apply_to(model, scaling_coef=alpha_hat, strict=False)
+    random_test_results, _, _ = evaluate_model(model, dataset.get_test_dataloader(), gpu)
+    print(random_test_results)
 
     
         # results_dict['alpha_KNN'] = alpha_kNN
