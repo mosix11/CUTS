@@ -884,7 +884,7 @@ def apply_potion(experiment_type:str, architecture:str, outputs_dir: Path, resul
         train_loader=dataset_corrupted.get_train_dataloader(),
         forget_loader=dataset_corrupted.get_heldout_dataloader(),
         frac_dl=0.01,
-        min_acc_val=0.005
+        min_acc_val=0.01
     )
     
     metrics, _, _ = evaluate_model(corrected_model, dataset_clean.get_test_dataloader(), gpu)
