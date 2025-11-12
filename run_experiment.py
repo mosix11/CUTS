@@ -817,13 +817,6 @@ def apply_potion(experiment_type:str, architecture:str, outputs_dir: Path, resul
     
     strategy = cfg['strategy']
     
-    # Load weights while removing classifier head's weights from the state dict for CLIP
-    mix_weights = OrderedDict(
-    (k, v) for k, v in torch.load(
-        outputs_dir.joinpath(f"mix/weights/ft_weights.pth"),
-        map_location='cpu'
-    ).items() if "classifier_heads" not in k)
-    
     
     dataset_clean = copy.deepcopy(base_dataset)
     dataset_corrupted = copy.deepcopy(base_dataset)
@@ -840,7 +833,7 @@ def apply_potion(experiment_type:str, architecture:str, outputs_dir: Path, resul
     # Load weights while removing classifier head's weights from the state dict for CLIP
     mix_weights = OrderedDict(
     (k, v) for k, v in torch.load(
-        outputs_dir.joinpath(f"mix/weights/ft_weights.pth"),
+        outputs_dir.joinpath(f"mix/weights/weights.pth"),
         map_location='cpu'
     ).items() if "classifier_heads" not in k)
     
@@ -868,7 +861,7 @@ def apply_potion(experiment_type:str, architecture:str, outputs_dir: Path, resul
     corrected_model = unlearner.unlearn(
         train_loader=dataset_corrupted.get_train_dataloader(),
         forget_loader=dataset_corrupted.get_heldout_dataloader(),
-        frac_dl=0.05,
+        frac_dl=0.1,
         min_acc_val=0.01
     )
     

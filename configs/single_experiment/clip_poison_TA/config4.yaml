@@ -7,7 +7,7 @@ strategy:
   corruption:
     mix:
       set: 'Train'
-      rate: 0.02
+      rate: 0.20
       target_class: 0
       trigger_percent: 0.03
       margin: [10,6]
@@ -24,7 +24,7 @@ strategy:
 
 dataset:
   name: "cifar10"
-  num_classes: &num_classes 10
+  num_classes: 10
   img_size: [224, 224]
   batch_size: 256
   heldout_conf: 0.02
@@ -33,71 +33,26 @@ dataset:
   seed: *dataset_seed
 
 
-
 model:
-  type: 'torchvision_resnet18'
-  num_classes: *num_classes
-  img_size: [224, 224]
-  grayscale: False
+  type: 'clip_multihead_ViT-B/16'
   loss_fn:
     type: 'CE'
   metrics: ['ACC', 'F1']
 
 
-
 trainer:
   mix:
-    max_epochs: 120
+    max_iterations: 6000
     optimizer_cfg: 
       type: "adamw"
-      lr: 1.0e-3
-      betas: [0.9, 0.999]
-    lr_schedule_cfg:
-      type: 'cosann'
-      T_max: 120
-      eta_min: 1.0e-6
-    early_stopping: False
-    validation_freq: -1
-    save_best_model: False
-    checkpoint_freq: -1
-    run_on_gpu: True
-    use_amp: True
-    log_comet: True
-    comet_project_name: 'regular-poison-TA'
-    seed: *training_seed
-
-  oracle:
-    max_epochs: 120
-    optimizer_cfg: 
-      type: "adamw"
-      lr: 1.0e-3
-      betas: [0.9, 0.999]
-    lr_schedule_cfg:
-      type: 'cosann'
-      T_max: 120
-      eta_min: 1.0e-6
-    early_stopping: False
-    validation_freq: -1
-    save_best_model: False
-    checkpoint_freq: -1
-    run_on_gpu: True
-    use_amp: True
-    log_comet: True
-    comet_project_name: 'regular-poison-TA'
-    seed: *training_seed
-  
-  proxy:
-    max_epochs: 200
-    optimizer_cfg: 
-      type: "adamw"
-      lr: 1.0e-4
+      lr: 1.0e-5
       betas: [0.9, 0.999]
     lr_schedule_cfg:
       type: 'cosann_warmup'
-      update_on: 'epoch'
-      warmup_steps: 30
-      hold_steps: 120
-      T_max: 200
+      update_on: 'gradient_step'
+      warmup_steps: 300
+      hold_steps: 2700
+      T_max: 6000
       eta_min: 0
     early_stopping: False
     validation_freq: -1
@@ -106,22 +61,65 @@ trainer:
     run_on_gpu: True
     use_amp: True
     log_comet: True
-    comet_project_name: 'regular-poison-TA'
+    comet_project_name: 'clip-poison-TA'
     seed: *training_seed
-
+  proxy:
+    max_iterations: 100
+    optimizer_cfg: 
+      type: "adamw"
+      lr: 1.0e-5
+      betas: [0.9, 0.999]
+    lr_schedule_cfg:
+      type: 'cosann_warmup'
+      update_on: 'gradient_step'
+      warmup_steps: 30
+      hold_steps: 20
+      T_max: 100
+      eta_min: 0
+    early_stopping: False
+    validation_freq: -1
+    save_best_model: False
+    checkpoint_freq: -1
+    run_on_gpu: True
+    use_amp: True
+    log_comet: True
+    comet_project_name: 'clip-poison-TA'
+    seed: *training_seed
+  oracle:
+    max_iterations: 3000
+    optimizer_cfg: 
+      type: "adamw"
+      lr: 1.0e-5
+      betas: [0.9, 0.999]
+    lr_schedule_cfg:
+      type: 'cosann_warmup'
+      update_on: 'gradient_step'
+      warmup_steps: 300
+      hold_steps: 700
+      T_max: 3000
+      eta_min: 0
+    early_stopping: False
+    validation_freq: -1
+    save_best_model: False
+    checkpoint_freq: -1
+    run_on_gpu: True
+    use_amp: True
+    log_comet: True
+    comet_project_name: 'clip-poison-TA'
+    seed: *training_seed
 
   CF:
-    max_epochs: 30
+    max_iterations: 100
     optimizer_cfg: 
       type: "adamw"
-      lr: 5.0e-5
+      lr: 1.0e-5
       betas: [0.9, 0.999]
     lr_schedule_cfg:
       type: 'cosann_warmup'
-      update_on: 'epoch'
-      warmup_steps: 10
-      hold_steps: 10
-      T_max: 30
+      update_on: 'gradient_step'
+      warmup_steps: 30
+      hold_steps: 30
+      T_max: 100
       eta_min: 0
     early_stopping: False
     validation_freq: -1
@@ -130,5 +128,28 @@ trainer:
     run_on_gpu: True
     use_amp: True
     log_comet: True
-    comet_project_name: 'regular-poison-TA'
+    comet_project_name: 'clip-poison-TA'
     seed: *training_seed
+
+  # gradient_ascent:
+  #   max_iterations: 1000
+  #   optimizer_cfg: 
+  #     type: "adamw"
+  #     lr: 1.0e-5
+  #     betas: [0.9, 0.999]
+  #   lr_schedule_cfg:
+  #     type: 'cosann_warmup'
+  #     update_on: 'gradient_step'
+  #     warmup_steps: 100
+  #     hold_steps: 0
+  #     T_max: 1000
+  #     eta_min: 1.0e-7
+  #   early_stopping: False
+  #   validation_freq: -1
+  #   save_best_model: False
+  #   checkpoint_freq: -1
+  #   run_on_gpu: True
+  #   use_amp: True
+  #   log_comet: True
+  #   comet_project_name: 'clip-noise-TA'
+  #   seed: *training_seed
