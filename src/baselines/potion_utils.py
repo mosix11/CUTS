@@ -199,12 +199,16 @@ class ParameterPerturber:
           fully_connected_layer_indices.append(idx + 1)
       all_relative_values = []
       with torch.no_grad():
-        for (_, p), (_, oimp), (_, fimp) in zip(
+        for (p_name, p), (_, oimp), (_, fimp) in zip(
             self.model.named_parameters(),
             original_importance.items(),
             forget_importance.items(),
         ):
           layer_size_cutoff = 0  # overrride to do all layers
+
+          if p.ndim == 0:
+            continue
+          
           if p.shape[0] >= layer_size_cutoff:  # only look at large layers
             divs_ = fimp.div(oimp)
             # select only the non nan values of divs_ to avoid errors
@@ -212,6 +216,7 @@ class ParameterPerturber:
             # remove inf
             divs_ = divs_[~torch.isinf(divs_)]
             all_relative_values.append(divs_.reshape(-1).cpu().numpy())
+
       all_relative_values = np.concatenate(
           all_relative_values
       )  # flatten the array
@@ -230,6 +235,8 @@ class ParameterPerturber:
             original_importance.items(),
             forget_importance.items(),
         ):
+          if p.ndim == 0:
+            continue
           # divs_ = fimp.div(oimp)
           # select only the non nan values of divs_
           # divs_ = divs_[~torch.isnan(divs_)]
