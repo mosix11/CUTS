@@ -25,7 +25,7 @@ from src.utils import nn_utils, misc_utils
 
 ITERATIVE_SEARCH = True
 STEP_MULT = 1.1
-MAX_TRY = 50  # easily enough
+MAX_TRY = 200  # easily enough
 MIN_ACC = "OVERRIDEN"
 
 # Specify the file names for the importances
