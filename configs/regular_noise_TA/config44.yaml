@@ -8,7 +8,7 @@ strategy:
   corruption:
     mix:
       set: 'Train'
-      noise_rate: 0.4
+      noise_rate: 0.2
       noise_type: 'asymmetric'
       seed: 8
     proxy:

@@ -968,7 +968,7 @@ def main():
     dotenv.load_dotenv(".env")
     
     
-    expr_arch = Path(f"single_experiment/{args.arch}_{args.experiment}_TA")
+    expr_arch = Path(f"{args.arch}_{args.experiment}_TA")
     
     
     cfg_path = Path("configs").absolute() / expr_arch / f"{args.config}.yaml"
