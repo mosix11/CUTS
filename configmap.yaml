@@ -1,3 +1,8 @@
+
+# Config Folders :
+#   noise: clip_noise_TA
+#   poison: clip_poison_TA
+
 clip_models:
   MNIST:
     ho_2:
@@ -7,7 +12,10 @@ clip_models:
         40: 'config39'
         60: 'config40'
         80: 'config41'
-      poison: 'config1'
+      poison: 
+        2: 'config1'
+        10: 'config8'
+        20: 'config9'
       ic:
         '1-7': 'config2' # numbers
     ho_10:
@@ -31,7 +39,10 @@ clip_models:
       asymmetric:
         20: 'config44'
         40: 'config42'
-      poison: 'config2'
+      poison: 
+        2: 'config2'
+        10: 'config6'
+        20: 'config4'
       ic:
         '3-5': 'config1' # cat dog
         '6-9': 'config4' # frog truck
@@ -58,7 +69,10 @@ clip_models:
       asymmetric:
         20: 'config45'
         40: 'config43'
-      poison: 'config3'
+      poison: 
+        2: 'config3'
+        10: 'config7'
+        20: 'config5'
       ic:
         '47-52': 'config3' # maple tre - oak tree
         '0-24': 'config5' # apple cockroach
@@ -73,6 +87,10 @@ clip_models:
       asymmetric:
         40: 'config19'
 
+
+# Config Folders :
+#   noise: dino_noise_TA
+#   poison: dino_poison_TA
 DINO:
   MNIST:
     ho_2:
@@ -98,6 +116,9 @@ DINO:
 
 
 
+# Config Folders :
+#   noise: regular_noise_TA
+#   poison: regular_poison_TA
 regular_models:
   MNIST:
     scratch:
@@ -111,10 +132,13 @@ regular_models:
             80: 'config20'
         asymmetric:
           fc1:
+            20: 'config45'
             40: 'config31'
         poison:
-          fc1: 'config1'
-          resnet18: 'config4'
+          resnet18:
+            2: 'config4'
+            10: 'config6'
+            20: 'config7'
 
 
   CIFAR10:
@@ -135,6 +159,7 @@ regular_models:
             40: 'config39'
         asymmetric:
           resnet18:
+            20: 'config44'
             40: 'config32'
           resnet34:
             40:
@@ -143,7 +168,10 @@ regular_models:
           resnet101:
             40:
         poison:
-          resnet18: 'config2'
+          resnet18: 
+            2: 'config2'
+            10: 'config8'
+            20: 'config9'
 
     pretrained:
       ho_2:
@@ -160,7 +188,16 @@ regular_models:
             40: 'config40'
           resnet101v2:
             40: 'config42'
+          vit:
+            10: 'config13'
+            20: 'config1'
+            40: 'config2'
+            60: 'config5'
+            80: 'config11'
         asymmetric:
+          vit:
+            20: 'config7'
+            40: 'config8'
           resnet18:
             40:
           resnet34:
@@ -169,6 +206,12 @@ regular_models:
             40:
           resnet101:
             40:
+
+        poison:
+          vit: 
+            2: 'config1'
+            10: 'config12'
+            20: 'config13'
 
   CIFAR100:
     scratch:
@@ -182,6 +225,29 @@ regular_models:
             80: 'config30'
         asymmetric:
           resnet18:
+            20: 'config43'
             40: 'config33'
         poison:
-          resnet18: 'config3'
+          resnet18: 
+            2: 'config3'
+            10: 'config10'
+            20: 'config11'
+    pretrained:
+      ho_2:
+        symmetric:
+          vit:
+            10: 'config14'
+            20: 'config3'
+            40: 'config4'
+            60: 'config6'
+            80: 'config12'
+        asymmetric:
+          vit:
+            20: 'config9'
+            40: 'config10'
+        
+        poison:
+          vit: 
+            2: 'config5'
+            10: 'config14'
+            20: 'config15'
