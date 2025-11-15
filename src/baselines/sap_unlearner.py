@@ -70,21 +70,50 @@ def evaluate_model(
     return metric_results, torch.tensor(all_preds), torch.tensor(all_targets) 
 
 
-def get_SVD (mat_dict, set_name = "SVD"):
-    feature_dict = {"pre":OrderedDict(), "post":OrderedDict()}
-    s_dict = {"pre":OrderedDict(), "post":OrderedDict()}
+# def get_SVD (mat_dict, set_name = "SVD"):
+#     feature_dict = {"pre":OrderedDict(), "post":OrderedDict()}
+#     s_dict = {"pre":OrderedDict(), "post":OrderedDict()}
+#     for loc in mat_dict.keys():
+#         for act in tqdm(mat_dict[loc].keys(), desc=f"{loc}layer - SVD for {set_name}"):
+#             activation = torch.Tensor(mat_dict[loc][act]).to("cuda")
+#             if torch.isnan(activation).any() or torch.isinf(activation).any():
+#                 raise ValueError("activation contains NaN or Inf values")
+#             U,S,Vh = torch.linalg.svd(activation, full_matrices=False)
+#             # U, S, Vh = torch.linalg.svd(activation.cpu(), full_matrices=False)
+#             U = U.cpu().numpy()
+#             S = S.cpu().numpy()            
+#             feature_dict[loc][act] = U
+#             s_dict[loc][act] = S
+#     return feature_dict,  s_dict
+
+
+def get_SVD(mat_dict, set_name="SVD", device="cuda"):
+    feature_dict = {"pre": OrderedDict(), "post": OrderedDict()}
+    s_dict = {"pre": OrderedDict(), "post": OrderedDict()}
+
     for loc in mat_dict.keys():
-        for act in tqdm(mat_dict[loc].keys(), desc=f"{loc}layer - SVD for {set_name}"):
-            activation = torch.Tensor(mat_dict[loc][act]).to("cuda")
+        for act in tqdm(mat_dict[loc].keys(), desc=f"{loc} layer - SVD for {set_name}"):
+
+            activation = torch.as_tensor(mat_dict[loc][act],
+                                         dtype=torch.float32,
+                                         device=device)
+
             if torch.isnan(activation).any() or torch.isinf(activation).any():
-                raise ValueError("activation contains NaN or Inf values")
-            # U,S,Vh = torch.linalg.svd(activation, full_matrices=False)
-            U, S, Vh = torch.linalg.svd(activation.cpu(), full_matrices=False)
+                raise ValueError(f"{loc} / {act}: activation contains NaN or Inf")
+
+            # Try a non-Jacobi driver on CUDA
+            U, S, Vh = torch.linalg.svd(
+                activation,
+                full_matrices=False,
+                driver="gesvd",   # or "gesdd"
+            )
+
             U = U.cpu().numpy()
-            S = S.cpu().numpy()            
+            S = S.cpu().numpy()
             feature_dict[loc][act] = U
             s_dict[loc][act] = S
-    return feature_dict,  s_dict
+
+    return feature_dict, s_dict
 
 
 def select_basis(feature_dict, full_s_dict, threshold):
