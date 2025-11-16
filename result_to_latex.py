@@ -2140,12 +2140,27 @@ if __name__ == "__main__":
     #     outputfile_path= Path("./visulaization_dir/regular_symmetric_noise_table.txt")
     #     )
     
+    # generate_noise_utlity_table(
+    #     regular_noise_results_dir,
+    #     regular_asymmetric_cfgs,
+    #     noise_levels=[20, 40],
+    #     outputfile_path= Path("./visulaization_dir/regular_asymmetric_noise_table.txt")
+    # )
+    
+    # generate_noise_utlity_table(
+    #     regular_noise_results_dir,
+    #     regular_symmetric_vit_cfgs,
+    #     dataset_order=['CIFAR10', 'CIFAR100'],
+    #     outputfile_path= Path("./visulaization_dir/regular_symmetric_noise_vit_table.txt")
+    #     )
+    
     generate_noise_utlity_table(
         regular_noise_results_dir,
-        regular_asymmetric_cfgs,
+        regular_asymmetric_vit_cfgs,
         noise_levels=[20, 40],
-        outputfile_path= Path("./visulaization_dir/regular_asymmetric_noise_table.txt")
-    )
+        dataset_order=['CIFAR10', 'CIFAR100'],
+        outputfile_path= Path("./visulaization_dir/regular_asymmetric_noise_vit_table.txt")
+        )
     
     # plot_noise_alpha_interplay_dual(
     #     regular_noise_results_dir,
