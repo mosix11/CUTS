@@ -34,7 +34,7 @@ dataset:
   seed: *dataset_seed
 
 model:
-  type: 'torchvision_resnet18'
+  type: 'torchvisionsap_resnet18'
   num_classes: *num_classes
   img_size: [224, 224]
   grayscale: False

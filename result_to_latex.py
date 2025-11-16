@@ -29,6 +29,17 @@ def _load_metrics(config_dir: Path) -> Optional[Dict[str, Any]]:
         
     return None
 
+def _load_metrics_sap(config_dir: Path) -> Optional[Dict[str, Any]]:
+    fpath = config_dir / 'metrics_sap.json'
+    if fpath.exists():
+        try:
+            with open(fpath, "r") as json_file:
+                return json.load(json_file, object_pairs_hook=OrderedDict)
+        except Exception:
+            return None
+        
+    return None
+
 def _get_test_acc(block: Dict[str, Any]) -> Optional[float]:
 
     return float(block["test_results"]["ACC"])
@@ -80,7 +91,7 @@ def _collect_alpha_metrics(metrics: Dict[str, Any]) -> Dict[float, Dict]:
     return OrderedDict(sorted_items)
 
 
-def _collect_baseline_metrics(metrics: Dict[str, Any]) -> Dict[float, Dict]:
+def _collect_baseline_metrics(metrics: Dict[str, Any]) -> Dict[str, Dict]:
     baseline_metrics: Dict[float, Dict] = OrderedDict()
     
     baseline_metrics['mix'] = OrderedDict()
@@ -100,26 +111,26 @@ def _collect_baseline_metrics(metrics: Dict[str, Any]) -> Dict[float, Dict]:
     metrics.pop("Mix")
     
     
-    baseline_metrics['clean']['utility'] = _get_test_acc(metrics['Gold'])
+    baseline_metrics['clean']['utility'] = _get_test_acc(metrics['Oracle'])
     # baseline_metrics['clean']['forget_rate'] = _get_train_noisy_forget_rate(metrics['Gold'])
     # baseline_metrics['clean']['destruction_rate'] = _get_train_clean_destruction_rate(metrics['Gold'])
     # baseline_metrics['clean']['healing_rate'] = _get_train_noisy_healing_acc(metrics['Gold'])
-    if 'ho_results' in metrics['Gold']:
-        ho_utility = _get_ho_acc(metrics['Gold'])
+    if 'ho_results' in metrics['Oracle']:
+        ho_utility = _get_ho_acc(metrics['Oracle'])
         baseline_metrics['clean']['ho_utility'] = ho_utility
         baseline_metrics['clean']['ho_forget_rate'] = 1 - ho_utility
-    metrics.pop("Gold")
+    metrics.pop("Oracle")
     
     
-    baseline_metrics['cf']['utility'] = _get_test_acc(metrics['FT HO Clean'])
-    baseline_metrics['cf']['forget_rate'] = _get_train_noisy_forget_rate(metrics['FT HO Clean'])
-    baseline_metrics['cf']['destruction_rate'] = _get_train_clean_destruction_rate(metrics['FT HO Clean'])
-    baseline_metrics['cf']['healing_rate'] = _get_train_noisy_healing_acc(metrics['FT HO Clean'])
-    if 'ho_results' in metrics['FT HO Clean']:
-        ho_utility = _get_ho_acc(metrics['FT HO Clean'])
+    baseline_metrics['cf']['utility'] = _get_test_acc(metrics['CF'])
+    baseline_metrics['cf']['forget_rate'] = _get_train_noisy_forget_rate(metrics['CF'])
+    baseline_metrics['cf']['destruction_rate'] = _get_train_clean_destruction_rate(metrics['CF'])
+    baseline_metrics['cf']['healing_rate'] = _get_train_noisy_healing_acc(metrics['CF'])
+    if 'ho_results' in metrics['CF']:
+        ho_utility = _get_ho_acc(metrics['CF'])
         baseline_metrics['cf']['ho_utility'] = ho_utility
         baseline_metrics['cf']['ho_forget_rate'] = 1 - ho_utility
-    metrics.pop("FT HO Clean")
+    metrics.pop("CF")
     
     
     baseline_metrics['rnd']['utility'] = _get_test_acc(metrics['Random Vector'])
@@ -134,6 +145,20 @@ def _collect_baseline_metrics(metrics: Dict[str, Any]) -> Dict[float, Dict]:
 
     return baseline_metrics
 
+
+def _collect_sap_metrics(metrics: Dict[str, Any]) -> Dict[str, float]:
+    best_alpha = metrics.get("Best Alpha", None)
+    key = str(best_alpha)
+    entry = metrics.get(key, None)
+    
+    collected_metrics = OrderedDict()
+    collected_metrics['utility'] = entry['Test']['ACC']
+    # collected_metrics['forget_rate'] = _get_train_noisy_forget_rate(entry)
+    # collected_metrics['destruction_rate'] = _get_train_clean_destruction_rate(entry)
+    # collected_metrics['healing_rate'] = _get_train_noisy_healing_acc(entry)
+    
+
+    return collected_metrics
 
 def _get_alpha_star_utility(alpha_metrics: Dict[float, Dict]) -> float:
     best_alpha = None
@@ -172,11 +197,11 @@ def _get_alpha_max_healing(alpha_metrics: Dict[float, Dict]) -> float:
 
 def _get_recovery_rate(util, baseline_metrics:OrderedDict):
     nom_r = util - baseline_metrics['mix']['utility']
-    if nom_r < 0:
-        recovery = 'Fail'
-    else:
-        recovery = nom_r/(baseline_metrics['clean']['utility'] - baseline_metrics['mix']['utility'])
-        recovery = _fmt_perct(recovery)
+    # if nom_r < 0:
+    #     recovery = 'Fail'
+    # else:
+    recovery = nom_r/(baseline_metrics['clean']['utility'] - baseline_metrics['mix']['utility'])
+    recovery = _fmt_perct(recovery)
     return recovery
 
 # format as percentage with 1 decimal place
@@ -186,15 +211,10 @@ def _fmt_perct(x: Optional[float]) -> str:
 def _fmt_metrics(metrics: Dict[str, Optional[float]]) -> Dict[str, str]:
     return {k: _fmt_perct(v) for k, v in metrics.items()}
 
-def generate_clip_noise_utlity_table(
+def generate_noise_utlity_table(
     results_dir:Path,
     cfgmap:OrderedDict,
     dataset_order:List[str] = ["MNIST", "CIFAR10", "CIFAR100"],
-    dataset_forget_trsh:Dict[str, float] ={
-        'MNIST': 0.99,
-        'CIFAR10': 0.99,
-        'CIFAR100': 0.99
-    },
     noise_levels:List[int] = [10, 20, 40, 60, 80],
     outputfile_path:Path = Path("./visulaization_dir/clip_symmetric_noise_table.txt")
     ):
@@ -202,13 +222,16 @@ def generate_clip_noise_utlity_table(
 
     row_theta_mix: Dict[str, List[str]]   = {ds: ["-"] * len(noise_levels) for ds in dataset_order}
     row_theta_clean: Dict[str, List[str]] = {ds: ["-"] * len(noise_levels) for ds in dataset_order}
-    row_alpha_star_u: Dict[str, List[str]]  = {ds: ["-"] * len(noise_levels) for ds in dataset_order}
-    row_alpha_star_fr: Dict[str, List[str]]  = {ds: ["-"] * len(noise_levels) for ds in dataset_order}
-    row_alpha_kNN: Dict[str, List['str']] = {ds: ["-"] * len(noise_levels) for ds in dataset_order}
     row_random_vec: Dict[str, List['str']] = {ds: ["-"] * len(noise_levels) for ds in dataset_order}
     row_cf: Dict[str, List['str']] = {ds: ["-"] * len(noise_levels) for ds in dataset_order}
+    row_sap: Dict[str, List[str]]  = {ds: ["-"] * len(noise_levels) for ds in dataset_order}
+    row_cuts: Dict[str, List[str]]  = {ds: ["-"] * len(noise_levels) for ds in dataset_order}
+    
+    row_recovery_rnd: Dict[str, List['str']] = {ds: ["-"] * len(noise_levels) for ds in dataset_order}
+    row_recovery_sap: Dict[str, List['str']] = {ds: ["-"] * len(noise_levels) for ds in dataset_order}
     row_recovery_cf: Dict[str, List['str']] = {ds: ["-"] * len(noise_levels) for ds in dataset_order}
-    row_recovery_kNN: Dict[str, List['str']] = {ds: ["-"] * len(noise_levels) for ds in dataset_order}
+    row_recovery_cuts: Dict[str, List['str']] = {ds: ["-"] * len(noise_levels) for ds in dataset_order}
+    
 
     
     # ---------- fill data ----------
@@ -219,39 +242,42 @@ def generate_clip_noise_utlity_table(
             config = cfgmap[ds].get(eta)
 
             metrics = _load_metrics(results_dir/config)
+            metrics_sap = _load_metrics_sap(results_dir/config)
             
             # metrics.pop('FT HO Clean', None)
             metrics.pop('alpha_s4', None)
-            alpha_KNN = metrics.pop('alpha_KNN')
+            alpha_hat = metrics.pop('alpha_hat')
 
             baseline_metrics = _collect_baseline_metrics(metrics)
             alpha_metrics = _collect_alpha_metrics(metrics)
             
-            alpha_star_utility = _get_alpha_star_utility(alpha_metrics)
-            alpha_star_forgetting = _get_alpha_star_forgetting(alpha_metrics, dataset_forget_trsh[ds])
-            recovery_kNN = _get_recovery_rate(alpha_metrics[alpha_KNN]['utility'])
+            sap_metrics = _collect_sap_metrics(metrics_sap)
             
-            recovery_cf = _get_recovery_rate(baseline_metrics['cf']['utility'])
+            recovery_cuts = _get_recovery_rate(alpha_metrics[alpha_hat]['utility'], baseline_metrics)
+            recovery_rnd = _get_recovery_rate(baseline_metrics['rnd']['utility'], baseline_metrics)
+            recovery_cf = _get_recovery_rate(baseline_metrics['cf']['utility'], baseline_metrics)
+            recovery_sap = _get_recovery_rate(sap_metrics['utility'], baseline_metrics)
             
             mix_metrics  = _fmt_metrics(baseline_metrics['mix'])
             clean_metrics = _fmt_metrics(baseline_metrics['clean'])
             cf_metrics = _fmt_metrics(baseline_metrics['cf'])
             rnd_metrics = _fmt_metrics(baseline_metrics['rnd'])
             
-            alpha_KNN_metrics = _fmt_metrics(alpha_metrics[alpha_KNN])
-            alpha_star_utility_metrics = _fmt_metrics(alpha_metrics[alpha_star_utility])
-            alpha_star_forgetting_metrics = _fmt_metrics(alpha_metrics[alpha_star_forgetting])
+            alpha_hat_metrics = _fmt_metrics(alpha_metrics[alpha_hat])
+            sap_metrics = _fmt_metrics(sap_metrics)
             
             row_theta_mix[ds][j] = mix_metrics['utility']
             row_theta_clean[ds][j] = clean_metrics['utility']
-            row_alpha_star_u[ds][j] = alpha_star_utility_metrics['utility']
-            row_alpha_star_fr[ds][j] = alpha_star_forgetting_metrics['utility']
-            row_alpha_kNN[ds][j] = alpha_KNN_metrics['utility']
+            
+            row_cuts[ds][j] = alpha_hat_metrics['utility']
             row_random_vec[ds][j] = rnd_metrics['utility']
+            row_sap[ds][j] = sap_metrics["utility"]
             row_cf[ds][j] = cf_metrics['utility']
-            row_recovery_kNN[ds][j] = recovery_kNN
+            
+            row_recovery_cuts[ds][j] = recovery_cuts
             row_recovery_cf[ds][j] = recovery_cf
-    
+            row_recovery_rnd[ds][j] = recovery_rnd
+            row_recovery_sap[ds][j] = recovery_sap
             
 
     # ---------- render LaTeX ----------
@@ -266,19 +292,18 @@ def generate_clip_noise_utlity_table(
 """
 
     body_lines = [
-        row_line(r"$\theta_{\text{mix}}$", row_theta_mix),
-        row_line(r"$\theta_{\text{clean}}$", row_theta_clean),
+        row_line(r"Mix", row_theta_mix),
+        row_line(r"Oracle", row_theta_clean),
         r"\cmidrule(lr){1-16}",
-        row_line(r"$\tau_{r}$", row_random_vec),
-        row_line(r"$\theta_{\text{CF}}$", row_cf),
-        r"\cmidrule(lr){1-16}",
-        row_line(r"$\alpha^\ast_a$", row_alpha_star_u),
-        row_line(r"$\alpha^\ast_f$", row_alpha_star_fr),
-        r"\cmidrule(lr){1-16}",
-        row_line(r"$\hat{\alpha}^\ast_{\text{kNN}}$", row_alpha_kNN),
+        row_line(r"$\text{Mix}{-}\tau_{r}$", row_random_vec),
+        row_line(r"SAP", row_sap),
+        row_line(r"CF", row_cf),
+        row_line(r"CUTS", row_cuts),
         r"\bottomrule",
-        row_line(r"\rowcolor{gray!25} RR($\theta_{\text{CF}}$)", row_recovery_cf),
-        row_line(r"\rowcolor{gray!25} RR($\hat{\alpha}^\ast_{\text{knn}}$)", row_recovery_kNN),
+        row_line(r"\rowcolor{gray!25} RR($\text{Mix}{-}\tau_{r}$)", row_recovery_rnd),
+        row_line(r"\rowcolor{gray!25} RR(SAP)", row_recovery_sap),
+        row_line(r"\rowcolor{gray!25} RR(CF)", row_recovery_cf),
+        row_line(r"\rowcolor{gray!25} RR(CUTS)", row_recovery_cuts),
         
     ]
 
@@ -1296,8 +1321,8 @@ def plot_alpha_noise_and_poison_interplay_dual(
 ) -> Path:
     """
     Make a 1x2 figure of UT/FR/HR/DR vs α for two experiments of DIFFERENT types:
-      - Left (A): NOISE experiment (expects 'alpha_KNN') → annotate kNN alpha
-      - Right (B): POISON experiment (expects 'alpha_psn') → annotate poison alpha
+      - Left (A): NOISE experiment (expects 'alpha_hat') → annotate kNN alpha
+      - Right (B): POISON experiment (expects 'alpha_hat') → annotate poison alpha
 
     Shared behavior:
       - Preferred x-ordering: alphas <= 0 only, with 0 at left and more negative to the right.
@@ -1315,7 +1340,6 @@ def plot_alpha_noise_and_poison_interplay_dual(
         config_rel_path: str,
         dataset_name: str,
         forget_threshold: float,
-        alpha_key: str,  # 'alpha_KNN' OR 'alpha_psn'
     ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         """Load metrics, inject mix@0, compute alphas, choose ordering, return plotting payload + meta."""
         metrics = _load_metrics(results_dir / config_rel_path)
@@ -1325,7 +1349,7 @@ def plot_alpha_noise_and_poison_interplay_dual(
         # Clean out non-alpha extras; extract alpha_key
         metrics.pop("alpha_s4", None)
 
-        alpha_raw = metrics.pop(alpha_key, None)
+        alpha_raw = metrics.pop('alpha_hat', None)
         try:
             alpha_special = None if alpha_raw is None else round(float(alpha_raw), 2)
         except Exception:
@@ -1387,15 +1411,15 @@ def plot_alpha_noise_and_poison_interplay_dual(
             ann_x=_ann_x,
             use_abs_mode=use_abs_mode,
         )
-        meta = dict(alpha_key=alpha_key)
+        meta = dict(alpha_key='alpha_hat')
         return payload, meta
 
     # Prepare A (noise, alpha_KNN) and B (poison, alpha_psn)
     payloadA, metaA = _prepare_one(
-        results_dir_noise, config_rel_path_noise, dataset_name_noise, forget_threshold_noise, alpha_key="alpha_KNN"
+        results_dir_noise, config_rel_path_noise, dataset_name_noise, forget_threshold_noise
     )
     payloadB, metaB = _prepare_one(
-        results_dir_poison, config_rel_path_poison, dataset_name_poison, forget_threshold_poison, alpha_key="alpha_psn"
+        results_dir_poison, config_rel_path_poison, dataset_name_poison, forget_threshold_poison
     )
 
     # ---------- plotting ----------
@@ -1464,7 +1488,7 @@ def plot_alpha_noise_and_poison_interplay_dual(
         axes[0],
         payloadA,
         title=f"{payloadA['dataset_name']}",
-        special_label=r"$\hat{\alpha}^\ast_{\mathrm{knn}}$",
+        special_label=r"$\hat{\alpha}^\ast$",
         add_legend=True,
     )
     # Right panel (POISON): annotate poison alpha
@@ -1472,7 +1496,7 @@ def plot_alpha_noise_and_poison_interplay_dual(
         axes[1],
         payloadB,
         title=f"{payloadB['dataset_name']}",
-        special_label=r"$\hat{\alpha}^\ast_{\mathrm{psn}}$",
+        special_label=r"$\hat{\alpha}^\ast$",
         add_legend=False,
     )
 
@@ -1532,11 +1556,11 @@ def generate_regular_symmetric_comp_40pct_table(
     row_clean = _mkrow()
     row_tau_r = _mkrow()
     row_cf    = _mkrow()
-    row_a_a   = _mkrow()
-    row_a_f   = _mkrow()
-    row_knn   = _mkrow()
-    row_rra    = _mkrow()
+    row_cuts   = _mkrow()
+    row_rrcuts    = _mkrow()
     row_rrcf    = _mkrow()
+    row_rrtr    = _mkrow()
+    row_rrsap = _mkrow()
 
     cifar10_block = comp_cfgs.get("CIFAR10", OrderedDict())
 
@@ -1565,22 +1589,19 @@ def generate_regular_symmetric_comp_40pct_table(
             if not metrics:
                 continue
 
-            # Clean up extra keys and extract alpha_KNN
+            # Clean up extra keys and extract alpha_hat
             
             metrics.pop("alpha_s4", None)
-            alpha_knn = metrics.pop("alpha_KNN", None)
+            alpha_hat = metrics.pop("alpha_hat", None)
             try:
-                alpha_knn = None if alpha_knn is None else round(float(alpha_knn), 2)
+                alpha_hat = None if alpha_hat is None else round(float(alpha_hat), 2)
             except Exception:
-                alpha_knn = None
+                alpha_hat = None
 
             # Baselines (pops Mix/Gold/RV) and alpha grid
             baseline = _collect_baseline_metrics(metrics)
             alpha_grid = _collect_alpha_metrics(metrics)
 
-            # Resolve α*_a and α*_f
-            alpha_a = _get_alpha_star_utility(alpha_grid)
-            alpha_f = _get_alpha_star_forgetting(alpha_grid, forget_threshold)
 
             # Format helpers
             mix_fmt   = _fmt_metrics(baseline["mix"])
@@ -1593,28 +1614,24 @@ def generate_regular_symmetric_comp_40pct_table(
             row_cf[col_idx] = cf_fmt.get("utility", "-")
             row_tau_r[col_idx] = rnd_fmt.get("utility", "-")
 
-            if alpha_a in alpha_grid:
-                row_a_a[col_idx] = _fmt_metrics(alpha_grid[alpha_a]).get("utility", "-")
-            if alpha_f in alpha_grid:
-                row_a_f[col_idx] = _fmt_metrics(alpha_grid[alpha_f]).get("utility", "-")
                 
             
 
             # α̂*_knn UT + recovery RR
             rr_a_val: Optional[float] = None
             rr_cf_val: Optional[float] = None
-            if alpha_knn == 0.0:
-                row_knn[col_idx] = mix_fmt.get("utility", "-")
+            if alpha_hat == 0.0:
+                row_cuts[col_idx] = mix_fmt.get("utility", "-")
                 rr_a_val = 0.0
             else:
-                knn_ut = alpha_grid[alpha_knn].get("utility")
+                cuts_ut = alpha_grid[alpha_hat].get("utility")
                 cf_ut = baseline["cf"].get("utility")
-                row_knn[col_idx] = _fmt_metrics(alpha_grid[alpha_knn]).get("utility", "-")
-                rr_a_val = _get_recovery_rate(knn_ut, baseline)
+                row_cuts[col_idx] = _fmt_metrics(alpha_grid[alpha_hat]).get("utility", "-")
+                rr_a_val = _get_recovery_rate(cuts_ut, baseline)
                 rr_cf_val = _get_recovery_rate(cf_ut, baseline)
 
 
-            row_rra[col_idx] = rr_a_val
+            row_rrcuts[col_idx] = rr_a_val
             row_rrcf[col_idx] = rr_cf_val
             
             col_idx += 1
@@ -1636,19 +1653,17 @@ Model  & RND & INv1 & RND & INv1 & RND & INv1 & INv2 & RND & INv1 $ INv2 \\
 """
 
     body_lines = [
-        row_line(r"$\theta_{\text{mix}}$",   row_mix),
-        row_line(r"$\theta_{\text{clean}}$", row_clean),
+        row_line(r"Mix",   row_mix),
+        row_line(r"Oracle", row_clean),
         r"\cmidrule(lr){1-11}",
-        row_line(r"$\tau_{r}$",              row_tau_r),
-        row_line(r"$\theta_{\text{CF}}$", row_cf),
-        r"\cmidrule(lr){1-11}",
-        row_line(r"$\alpha^\ast_a$",         row_a_a),
-        row_line(r"$\alpha^\ast_f$",         row_a_f),
-        r"\cmidrule(lr){1-11}",
-        row_line(r"$\hat{\alpha}^\ast_{\text{knn}}$", row_knn),
+        row_line(r"$\text{Mix}{-}\tau_{r}$",              row_tau_r),
+        row_line(r"CF", row_cf),
+        row_line(r"CUTS", row_cuts),
         r"\bottomrule",
-        row_line(r"\rowcolor{gray!25} RR($\theta_{\text{CF}}$)", row_rrcf),
-        row_line(r"\rowcolor{gray!25} RR($\hat{\alpha}^\ast_{\text{knn}}$)", row_rra),
+        row_line(r"\rowcolor{gray!25} RR($\text{Mix}{-}\tau_{r}$)", row_rrtr),
+        row_line(r"\rowcolor{gray!25} RR(SAP)", row_rrsap),
+        row_line(r"\rowcolor{gray!25} RR(CF)", row_rrcf),
+        row_line(r"\rowcolor{gray!25} RR(CUTS)", row_rrcuts),
     ]
 
     footer = r"""
@@ -1908,9 +1923,9 @@ if __name__ == "__main__":
     # ------------------- CLIP -------------------
     
     clip_models_cfgs = configmap['clip_models']
-    clip_noise_results_dir = Path('results/single_experiment/clip_noise_TA')
-    clip_ic_results_dir = Path('results/single_experiment/clip_IC_TA')
-    clip_poison_results_dir = Path('results/single_experiment/clip_poison_TA')
+    clip_noise_results_dir = Path('results/clip_noise_TA')
+    clip_ic_results_dir = Path('results/clip_IC_TA')
+    clip_poison_results_dir = Path('results/clip_poison_TA')
     
     
     clip_symmetric_cfgs = OrderedDict()
@@ -1935,8 +1950,8 @@ if __name__ == "__main__":
     
     # ------------------- DINO -------------------
     dino_models_cfgs = configmap['DINO']
-    dino_noise_results_dir = Path('results/single_experiment/dino_noise_TA')
-    dino_poison_results_dir = Path('results/single_experiment/dino_poison_TA')
+    dino_noise_results_dir = Path('results/dino_noise_TA')
+    dino_poison_results_dir = Path('results/dino_poison_TA')
     
     dino_symmetric_cfgs = OrderedDict()
     dino_symmetric_cfgs['MNIST'] = dino_models_cfgs['MNIST']['ho_2']['symmetric']
@@ -1955,8 +1970,8 @@ if __name__ == "__main__":
     
     # ------------------- regular models -------------------
     regular_models_cfgs = configmap['regular_models']
-    regular_noise_results_dir = Path('results/single_experiment/regular_noise_TA')
-    regular_poison_results_dir = Path('results/single_experiment/regular_poison_TA')
+    regular_noise_results_dir = Path('results/regular_noise_TA')
+    regular_poison_results_dir = Path('results/regular_poison_TA')
     
     regular_symmetric_cfgs = OrderedDict()
     regular_symmetric_cfgs['MNIST'] = regular_models_cfgs['MNIST']['scratch']['ho_2']['symmetric']['fc1']
@@ -1969,11 +1984,24 @@ if __name__ == "__main__":
     regular_asymmetric_cfgs['CIFAR10'] = regular_models_cfgs['CIFAR10']['scratch']['ho_2']['asymmetric']['resnet18']
     regular_asymmetric_cfgs['CIFAR100'] = regular_models_cfgs['CIFAR100']['scratch']['ho_2']['asymmetric']['resnet18']
     
+    regular_symmetric_vit_cfgs = OrderedDict()
+    regular_symmetric_vit_cfgs['CIFAR10'] = regular_models_cfgs['CIFAR10']['pretrained']['ho_2']['symmetric']['vit']
+    regular_symmetric_vit_cfgs['CIFAR100'] = regular_models_cfgs['CIFAR100']['pretrained']['ho_2']['symmetric']['vit']
+    
+    regular_asymmetric_vit_cfgs = OrderedDict()
+    regular_asymmetric_vit_cfgs['CIFAR10'] = regular_models_cfgs['CIFAR10']['pretrained']['ho_2']['asymmetric']['vit']
+    regular_asymmetric_vit_cfgs['CIFAR100'] = regular_models_cfgs['CIFAR100']['pretrained']['ho_2']['asymmetric']['vit']
+    
     
     regular_poison_cfgs = OrderedDict()
     regular_poison_cfgs['MNIST'] = regular_models_cfgs['MNIST']['scratch']['ho_2']['poison']['resnet18']
     regular_poison_cfgs['CIFAR10'] = regular_models_cfgs['CIFAR10']['scratch']['ho_2']['poison']['resnet18']
     regular_poison_cfgs['CIFAR100'] = regular_models_cfgs['CIFAR100']['scratch']['ho_2']['poison']['resnet18']
+    
+    regular_poison_vit_cfgs = OrderedDict()
+    regular_poison_vit_cfgs['CIFAR10'] = regular_models_cfgs['CIFAR10']['pretrained']['ho_2']['poison']['vit']
+    regular_poison_vit_cfgs['CIFAR100'] = regular_models_cfgs['CIFAR100']['pretrained']['ho_2']['poison']['vit']
+    
     
     
     regular_symmetric_comp_cfgs = OrderedDict()
@@ -2106,11 +2134,18 @@ if __name__ == "__main__":
     #################################################################################
     #########                        Regular models                         #########
     
-    # generate_clip_noise_utlity_table(
+    # generate_noise_utlity_table(
     #     regular_noise_results_dir,
     #     regular_symmetric_cfgs,
     #     outputfile_path= Path("./visulaization_dir/regular_symmetric_noise_table.txt")
     #     )
+    
+    generate_noise_utlity_table(
+        regular_noise_results_dir,
+        regular_asymmetric_cfgs,
+        noise_levels=[20, 40],
+        outputfile_path= Path("./visulaization_dir/regular_asymmetric_noise_table.txt")
+    )
     
     # plot_noise_alpha_interplay_dual(
     #     regular_noise_results_dir,
@@ -2143,8 +2178,8 @@ if __name__ == "__main__":
     #     outputfile_path= Path("./visulaization_dir/regular_symmetric_noise_comp_pt_rnd_table.txt")
     # )
     
-    plot_recovery_bars_40pct(
-        regular_noise_results_dir,
-        regular_symmetric_comp_cfgs,
-        save_path=Path("./visulaization_dir/regular_symmetric_40_comp_bars_paper.png")
-    )
+    # plot_recovery_bars_40pct(
+    #     regular_noise_results_dir,
+    #     regular_symmetric_comp_cfgs,
+    #     save_path=Path("./visulaization_dir/regular_symmetric_40_comp_bars_paper.png")
+    # )
