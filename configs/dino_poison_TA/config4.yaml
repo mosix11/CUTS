@@ -7,7 +7,7 @@ strategy:
   corruption:
     mix:
       set: 'Train'
-      rate: 0.02
+      rate: 0.20
       target_class: 0
       trigger_percent: 0.03
       margin: [10,6]
@@ -23,8 +23,8 @@ strategy:
 
 
 dataset:
-  name: "cifar100"
-  num_classes: &num_classes 100
+  name: "cifar10"
+  num_classes: &num_classes 10
   img_size: [224, 224]
   batch_size: 256
   heldout_conf: 0.02
@@ -108,7 +108,6 @@ trainer:
     log_comet: True
     comet_project_name: 'dino-poison-TA'
     seed: *training_seed
-
   CF:
     max_iterations: 100
     optimizer_cfg: 

@@ -7,7 +7,7 @@ strategy:
   corruption:
     mix:
       set: 'Train'
-      rate: 0.02
+      rate: 0.10
       target_class: 0
       trigger_percent: 0.03
       margin: [10,6]
