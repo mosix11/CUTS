@@ -140,8 +140,8 @@ regular_models:
         poison:
           resnet18:
             2: 'config4'
-            10: 'config6' # todo
-            20: 'config7' # todo
+            10: 'config6' 
+            20: 'config7' 
 
 
   CIFAR10:
@@ -173,8 +173,8 @@ regular_models:
         poison:
           resnet18: 
             2: 'config2'
-            10: 'config8' # todo
-            20: 'config9' # todo
+            10: 'config8' 
+            20: 'config9'
 
     pretrained:
       ho_2:
