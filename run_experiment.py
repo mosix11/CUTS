@@ -527,9 +527,9 @@ def apply_tv(experiment_type:str, architecture:str, outputs_dir: Path, results_d
         
         
         if experiment_type == 'poison':
-            alphas = tqdm(np.round(np.linspace(-0.05, -3.0, 60), 2))
+            alphas = tqdm(np.round(np.linspace(-0.05, -4.0, 80), 2))
         elif experiment_type == 'noise':
-            alphas = tqdm(np.round(np.linspace(-0.05, -3.0, 60), 2))
+            alphas = tqdm(np.round(np.linspace(-0.05, -4.0, 80), 2))
         elif experiment_type == 'IC':
             alphas = tqdm(np.round(np.linspace(-0.05, -1.5, 30), 2))
         for alpha in alphas:
@@ -537,7 +537,9 @@ def apply_tv(experiment_type:str, architecture:str, outputs_dir: Path, results_d
             model.load_state_dict(mix_weights, strict=False)
             task_vectors['Proxy'].apply_to(model, scaling_coef=alpha, strict=False)
             tv_test_results, _, _ = evaluate_model(model, dataset_clean.get_test_dataloader(), gpu)
-            tv_train_results = eval_model_on_clean_corrupted_splits(model, None, dataset_corrupted, gpu)
+            
+            # tv_train_results = eval_model_on_clean_corrupted_splits(model, None, dataset_corrupted, gpu)
+            tv_train_results = {}
             
             if experiment_type == 'poison':
                 tv_ho_resutls, _, _ = evaluate_model(model, dataset_corrupted.get_heldout_dataloader(), gpu)
@@ -887,14 +889,22 @@ def apply_potion(experiment_type:str, architecture:str, outputs_dir: Path, resul
         min_acc_val=0.01
     )
     
-    metrics, _, _ = evaluate_model(corrected_model, dataset_clean.get_test_dataloader(), gpu)
-    print(metrics)
+    results_dict = OrderedDict()
+    metrics_test, _, _ = evaluate_model(corrected_model, dataset_clean.get_test_dataloader(), gpu)
+    print(metrics_test)
     
-    metrics, _, _ = evaluate_model(corrected_model, dataset_corrupted.get_heldout_dataloader(), gpu)
-    print(metrics)
+    metrics_ho, _, _ = evaluate_model(corrected_model, dataset_corrupted.get_heldout_dataloader(), gpu)
+    print(metrics_ho)
     
-    metrics = eval_model_on_clean_corrupted_splits(corrected_model, None, dataset_corrupted, gpu)
-    print(metrics)
+    metrics_train = eval_model_on_clean_corrupted_splits(corrected_model, None, dataset_corrupted, gpu)
+    print(metrics_train)
+    
+    results_dict['test'] = metrics_test
+    results_dict['ho'] = metrics_ho
+    results_dict['train'] = metrics_train
+    
+    with open(results_dir / 'metrics_poiton.json' , 'w') as json_file:
+        json.dump(results_dict, json_file, indent=4)
 
 
 from torch.distributed.elastic.multiprocessing.errors import record
