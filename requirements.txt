@@ -2,12 +2,12 @@ numpy==1.26.4
 matplotlib==3.10.3
 scipy==1.15.2
 torch==2.8.0
-torchvision==0.22
+torchvision==0.23
 torchdr==0.3
 transformers==4.56.1
 torchmetrics==1.8.2
-tqdm==4.67.1
-requests==2.32.5
+tqdm
+requests
 colorama==0.4.6
 comet_ml==3.52.1
 python-dotenv==1.1.1
@@ -16,4 +16,4 @@ seaborn==0.13.2
 einops==0.8.1
 openxlab==0.1.2
 open_clip_torch==3.1.0
-datamapplot==0.6.4
+# datamapplot
