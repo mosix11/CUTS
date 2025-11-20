@@ -27,6 +27,7 @@ testdir
 
 # Project Specific files #
 ######################
+dino_realworld_TA.py
 clip_data_cleaning.py
 consistency_score_check.py
 corruption_transferability.py
