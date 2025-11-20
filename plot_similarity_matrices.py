@@ -244,21 +244,21 @@ def plot_tv_similarity_grid_2x3(
     plt.close(fig)
 
 
-# pickle_paths_pois = [
-#     '/home/mosix11/Projects/TaskVectors/files/results/single_experiment/clip_poison_TA/config1/confusion_mats/tv_sim.pkl',
-#     # '/home/mosix11/Projects/TaskVectors/files/results/single_experiment/clip_poison_TA/config2/confusion_mats/tv_sim.pkl',
-#     '/home/mosix11/Projects/TaskVectors/files/results/single_experiment/clip_poison_TA/config3/confusion_mats/tv_sim.pkl',
-#     '/home/mosix11/Projects/TaskVectors/files/results/single_experiment/dino_poison_TA/config1/confusion_mats/tv_sim.pkl',
-#     '/home/mosix11/Projects/TaskVectors/files/results/single_experiment/clip_poison_TA/config2/confusion_mats/tv_sim.pkl'
-# ]
-
-pickle_paths_asym = [
-    '/home/mosix11/Projects/TaskVectors/files/results/single_experiment/clip_noise_TA/config42/confusion_mats/tv_sim.pkl',
+pickle_paths_pois = [
+    '/home/mosix11/Projects/TaskVectors/files/results/single_experiment/clip_poison_TA/config1/confusion_mats/tv_sim.pkl',
     # '/home/mosix11/Projects/TaskVectors/files/results/single_experiment/clip_poison_TA/config2/confusion_mats/tv_sim.pkl',
-    '/home/mosix11/Projects/TaskVectors/files/results/single_experiment/clip_noise_TA/config43/confusion_mats/tv_sim.pkl',
-    '/home/mosix11/Projects/TaskVectors/files/results/single_experiment/dino_noise_TA/config4/confusion_mats/tv_sim.pkl',
-    '/home/mosix11/Projects/TaskVectors/files/results/single_experiment/dino_noise_TA/config5/confusion_mats/tv_sim.pkl'
+    '/home/mosix11/Projects/TaskVectors/files/results/single_experiment/clip_poison_TA/config3/confusion_mats/tv_sim.pkl',
+    '/home/mosix11/Projects/TaskVectors/files/results/single_experiment/dino_poison_TA/config1/confusion_mats/tv_sim.pkl',
+    '/home/mosix11/Projects/TaskVectors/files/results/single_experiment/clip_poison_TA/config2/confusion_mats/tv_sim.pkl'
 ]
+
+# pickle_paths_asym = [
+#     '/home/mosix11/Projects/TaskVectors/files/results/single_experiment/clip_noise_TA/config42/confusion_mats/tv_sim.pkl',
+#     # '/home/mosix11/Projects/TaskVectors/files/results/single_experiment/clip_poison_TA/config2/confusion_mats/tv_sim.pkl',
+#     '/home/mosix11/Projects/TaskVectors/files/results/single_experiment/clip_noise_TA/config43/confusion_mats/tv_sim.pkl',
+#     '/home/mosix11/Projects/TaskVectors/files/results/single_experiment/dino_noise_TA/config4/confusion_mats/tv_sim.pkl',
+#     '/home/mosix11/Projects/TaskVectors/files/results/single_experiment/dino_noise_TA/config5/confusion_mats/tv_sim.pkl'
+# ]
 
 tv_names = [r"$\tau_p$", r"$\tau_\text{CF}$", r"$\tau_r$", r"$\tau_\text{mix}$"]
 # subtitles_pois = ['CLIP—MNIST', 'CLIP—CIFAR-100', 'DINO—CIFAR-10', 'DINO—CIFAR-100']

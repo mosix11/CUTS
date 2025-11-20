@@ -40,6 +40,15 @@ def _load_metrics_sap(config_dir: Path) -> Optional[Dict[str, Any]]:
         
     return None
 
+def _load_metrics_potion(config_dir: Path) -> Optional[Dict[str, Any]]:
+    fpath = config_dir / 'metrics_poiton.json'
+    try:
+        with open(fpath, "r") as json_file:
+            return json.load(json_file, object_pairs_hook=OrderedDict)
+    except Exception as e:
+        return None
+    return None
+
 def _get_test_acc(block: Dict[str, Any]) -> Optional[float]:
 
     return float(block["test_results"]["ACC"])
@@ -77,9 +86,10 @@ def _collect_alpha_metrics(metrics: Dict[str, Any]) -> Dict[float, Dict]:
         alpha_metrics[alpha] = OrderedDict()
         
         alpha_metrics[alpha]['utility'] = _get_test_acc(v)
-        alpha_metrics[alpha]['forget_rate'] = _get_train_noisy_forget_rate(v)
-        alpha_metrics[alpha]['destruction_rate'] = _get_train_clean_destruction_rate(v)
-        alpha_metrics[alpha]['healing_rate'] = _get_train_noisy_healing_acc(v)
+        if 'train_results' in v and len(v['train_results']) != 0:
+            alpha_metrics[alpha]['forget_rate'] = _get_train_noisy_forget_rate(v)
+            alpha_metrics[alpha]['destruction_rate'] = _get_train_clean_destruction_rate(v)
+            alpha_metrics[alpha]['healing_rate'] = _get_train_noisy_healing_acc(v)
         
         if 'ho_results' in v:
             ho_utility = _get_ho_acc(v)
@@ -100,7 +110,7 @@ def _collect_baseline_metrics(metrics: Dict[str, Any]) -> Dict[str, Dict]:
     baseline_metrics['rnd'] = OrderedDict()
     
     baseline_metrics['mix']['utility'] = _get_test_acc(metrics['Mix'])
-    # baseline_metrics['mix']['forget_rate'] = _get_train_noisy_forget_rate(metrics['Mix'])
+    baseline_metrics['mix']['forget_rate'] = 0.0
     # baseline_metrics['mix']['destruction_rate'] = _get_train_clean_destruction_rate(metrics['Mix'])
     # baseline_metrics['mix']['healing_rate'] = _get_train_noisy_healing_acc(metrics['Mix'])
     
@@ -112,7 +122,7 @@ def _collect_baseline_metrics(metrics: Dict[str, Any]) -> Dict[str, Dict]:
     
     
     baseline_metrics['clean']['utility'] = _get_test_acc(metrics['Oracle'])
-    # baseline_metrics['clean']['forget_rate'] = _get_train_noisy_forget_rate(metrics['Gold'])
+    baseline_metrics['clean']['forget_rate'] = 1.0
     # baseline_metrics['clean']['destruction_rate'] = _get_train_clean_destruction_rate(metrics['Gold'])
     # baseline_metrics['clean']['healing_rate'] = _get_train_noisy_healing_acc(metrics['Gold'])
     if 'ho_results' in metrics['Oracle']:
@@ -156,6 +166,18 @@ def _collect_sap_metrics(metrics: Dict[str, Any]) -> Dict[str, float]:
     # collected_metrics['forget_rate'] = _get_train_noisy_forget_rate(entry)
     # collected_metrics['destruction_rate'] = _get_train_clean_destruction_rate(entry)
     # collected_metrics['healing_rate'] = _get_train_noisy_healing_acc(entry)
+    
+
+    return collected_metrics
+
+
+def _collect_potion_metrics(metrics: Dict[str, Any]) -> Dict[str, float]:
+    
+    collected_metrics = OrderedDict()
+    collected_metrics['utility'] = metrics['test']['ACC']
+    collected_metrics['forget_rate'] = 1 - metrics['train']['noisy_set']['ACC']
+    # collected_metrics['destruction_rate'] = _get_train_clean_destruction_rate(entry)
+    collected_metrics['healing_rate'] = metrics['train']['healing_noise']['ACC']
     
 
     return collected_metrics
@@ -204,9 +226,18 @@ def _get_recovery_rate(util, baseline_metrics:OrderedDict):
     recovery = _fmt_perct(recovery)
     return recovery
 
+
+def _get_poison_unlearning_score(util, asr):
+    pus = util * (1 - asr)
+    return pus
+
+
 # format as percentage with 1 decimal place
 def _fmt_perct(x: Optional[float]) -> str:
     return "-" if x is None else f"{100.0 * round(x, 3):.1f}"
+
+def _fmt_perct_2_decim(x: Optional[float]) -> str:
+    return "-" if x is None else f"{100.0 * round(x, 4):.2f}"
 
 def _fmt_metrics(metrics: Dict[str, Optional[float]]) -> Dict[str, str]:
     return {k: _fmt_perct(v) for k, v in metrics.items()}
@@ -316,6 +347,167 @@ def generate_noise_utlity_table(
 
     outputfile_path.write_text(table_tex)
     return outputfile_path
+
+
+
+
+def generate_poison_table(
+    results_dir:Path,
+    cfgmap:OrderedDict,
+    dataset_order:List[str] = ["MNIST", "CIFAR10", "CIFAR100"],
+    # model_dataset_order:List[str] = [("fc1", "MNIST"), ("resnet18", "CIFAR10"), ("resnet18", "CIFAR100"), ("vit", "CIFAR10"), ("vit", "CIFAR100"), ("dino", "CIFAR10"), ("dino", "CIFAR100")],
+    etas:List[int] = [2, 10, 20],
+    outputfile_path:Path = Path("./visulaization_dir/poison_table.txt")
+    ):
+
+
+    row_theta_mix: Dict[str, List[str]]   = {ds: ["-"] * len(etas) * 2 for ds in dataset_order}
+    row_theta_clean: Dict[str, List[str]] = {ds: ["-"] * len(etas) * 2 for ds in dataset_order}
+    row_random_vec: Dict[str, List['str']] = {ds: ["-"] * len(etas) * 2 for ds in dataset_order}
+    row_cf: Dict[str, List['str']] = {ds: ["-"] * len(etas) * 2 for ds in dataset_order}
+    row_potion: Dict[str, List[str]]  = {ds: ["-"] * len(etas) * 2 for ds in dataset_order}
+    row_cuts: Dict[str, List[str]]  = {ds: ["-"] * len(etas) * 2 for ds in dataset_order}
+    
+    row_pus_oracle: Dict[str, List['str']] = {ds: ["-"] * len(etas) for ds in dataset_order}
+    row_pus_rnd: Dict[str, List['str']] = {ds: ["-"] * len(etas) for ds in dataset_order}
+    row_pus_potion: Dict[str, List['str']] = {ds: ["-"] * len(etas) for ds in dataset_order}
+    row_pus_cf: Dict[str, List['str']] = {ds: ["-"] * len(etas) for ds in dataset_order}
+    row_pus_cuts: Dict[str, List['str']] = {ds: ["-"] * len(etas) for ds in dataset_order}
+    
+    avg_pus_oracle = 0.0
+    avg_pus_rnd = 0.0
+    avg_pus_potion = 0.0
+    avg_pus_cf = 0.0
+    avg_pus_cuts = 0.0
+    
+    # ---------- fill data ----------
+    for i, ds in enumerate(dataset_order):
+        if ds not in cfgmap:
+            raise ValueError(f"Dataset {ds} is not in the config map.")
+        for j, eta in enumerate(etas):
+            config = cfgmap[ds].get(eta)
+
+            metrics = _load_metrics(results_dir/config)
+            metrics_potion = _load_metrics_potion(results_dir/config)
+            print(config)
+            alpha_hat = metrics.pop('alpha_hat')
+
+            baseline_metrics = _collect_baseline_metrics(metrics)
+            alpha_metrics = _collect_alpha_metrics(metrics)
+            
+            
+            potion_metrics = _collect_potion_metrics(metrics_potion)
+            
+            
+            baseline_metrics['mix']['asr'] = 1 - baseline_metrics['mix']['forget_rate']
+            baseline_metrics['clean']['asr'] = 1 - baseline_metrics['clean']['forget_rate']
+            baseline_metrics['rnd']['asr'] = 1 - baseline_metrics['rnd']['forget_rate']
+            baseline_metrics['cf']['asr'] = 1 - baseline_metrics['cf']['forget_rate']
+            potion_metrics['asr'] = 1 - potion_metrics['forget_rate']
+            alpha_metrics[alpha_hat]['asr'] = 1 -  alpha_metrics[alpha_hat]['forget_rate']
+             
+            pus_oracle = _get_poison_unlearning_score(baseline_metrics['clean']['utility'], baseline_metrics['clean']['asr'])
+            pus_rnd = _get_poison_unlearning_score(baseline_metrics['rnd']['utility'], baseline_metrics['rnd']['asr'])
+            pus_cf = _get_poison_unlearning_score(baseline_metrics['cf']['utility'], baseline_metrics['cf']['asr'])
+            pus_potion = _get_poison_unlearning_score(potion_metrics['utility'], potion_metrics['asr'])
+            pus_cuts = _get_poison_unlearning_score(alpha_metrics[alpha_hat]['utility'], alpha_metrics[alpha_hat]['asr'])
+            
+            
+            n_prev = i * len(etas) + j
+
+            avg_pus_oracle = (avg_pus_oracle * n_prev + pus_oracle) / (n_prev + 1)
+            avg_pus_rnd    = (avg_pus_rnd    * n_prev + pus_rnd)    / (n_prev + 1)
+            avg_pus_potion = (avg_pus_potion * n_prev + pus_potion) / (n_prev + 1)
+            avg_pus_cf     = (avg_pus_cf     * n_prev + pus_cf)     / (n_prev + 1)
+            avg_pus_cuts   = (avg_pus_cuts   * n_prev + pus_cuts)   / (n_prev + 1)
+
+            
+            mix_metrics  = _fmt_metrics(baseline_metrics['mix'])
+            clean_metrics = _fmt_metrics(baseline_metrics['clean'])
+            cf_metrics = _fmt_metrics(baseline_metrics['cf'])
+            rnd_metrics = _fmt_metrics(baseline_metrics['rnd'])
+            
+            alpha_hat_metrics = _fmt_metrics(alpha_metrics[alpha_hat])
+            potion_metrics = _fmt_metrics(potion_metrics)
+            
+            row_theta_mix[ds][j*2] = mix_metrics['utility']
+            row_theta_mix[ds][j*2+1] = mix_metrics['asr']
+            row_theta_clean[ds][j*2] = clean_metrics['utility']
+            row_theta_clean[ds][j*2+1] = clean_metrics['asr']
+            
+            row_cuts[ds][j*2] = alpha_hat_metrics['utility']
+            row_cuts[ds][j*2+1] = alpha_hat_metrics['asr']
+            
+            row_random_vec[ds][j*2] = rnd_metrics['utility']
+            row_random_vec[ds][j*2+1] = rnd_metrics['asr']
+            
+            row_potion[ds][j*2] = potion_metrics["utility"]
+            row_potion[ds][j*2+1] = potion_metrics["asr"]
+            
+            row_cf[ds][j*2] = cf_metrics['utility']
+            row_cf[ds][j*2+1] = cf_metrics['asr']
+            
+            row_pus_oracle[ds][j] = _fmt_perct(pus_oracle)
+            row_pus_cuts[ds][j] = _fmt_perct(pus_cuts)
+            row_pus_rnd[ds][j] = _fmt_perct(pus_rnd)
+            row_pus_cf[ds][j] = _fmt_perct(pus_cf)
+            row_pus_potion[ds][j] = _fmt_perct(pus_potion)
+            
+            
+            
+    avg_pus_oracle_str = _fmt_perct_2_decim(avg_pus_oracle)
+    avg_pus_rnd_str    = _fmt_perct_2_decim(avg_pus_rnd)
+    avg_pus_potion_str = _fmt_perct_2_decim(avg_pus_potion)
+    avg_pus_cf_str     = _fmt_perct_2_decim(avg_pus_cf)
+    avg_pus_cuts_str   = _fmt_perct_2_decim(avg_pus_cuts)
+            
+
+    # ---------- render LaTeX ----------
+    def row_line(label: str, values_by_ds: Dict[str, List[str]]) -> str:
+        cells = []
+        for ds in dataset_order:
+            cells.extend(values_by_ds[ds])
+        return f"{label} & " + " & ".join(cells) + r" \\"
+
+    header = r"""
+\midrule
+"""
+
+    body_lines = [
+        row_line(r"Mix", row_theta_mix),
+        row_line(r"Oracle", row_theta_clean),
+        r"\cmidrule(lr){1-16}",
+        row_line(r"$\text{Mix}{-}\tau_{r}$", row_random_vec),
+        row_line(r"CF", row_cf),
+        row_line(r"Potion", row_potion),
+        row_line(r"CUTS", row_cuts),
+        r"\bottomrule",
+        row_line(r"\rowcolor{gray!25} RR(Oracle)", row_pus_oracle),
+        row_line(r"\rowcolor{gray!25} RR($\text{Mix}{-}\tau_{r}$)", row_pus_rnd),
+        row_line(r"\rowcolor{gray!25} RR(CF)", row_pus_cf),
+        row_line(r"\rowcolor{gray!25} RR(Potion)", row_pus_potion),
+        row_line(r"\rowcolor{gray!25} RR(CUTS)", row_pus_cuts),
+        f"Oracle PUS: {avg_pus_oracle_str}",
+        f"Rnd PUS: {avg_pus_rnd_str}",
+        f"CF PUS: {avg_pus_cf_str}",
+        f"Potion PUS: {avg_pus_potion_str}",
+        f"CUTS PUS: {avg_pus_cuts_str}",
+        
+    ]
+
+    footer = r"""
+\bottomrule
+
+
+
+"""
+
+    table_tex = header + "\n".join(body_lines) + footer
+
+    outputfile_path.write_text(table_tex)
+    return outputfile_path
+
+
 
 
 def generate_clip_noise_fr_dr_hr_table(
@@ -2131,6 +2323,15 @@ if __name__ == "__main__":
     
     
     
+    generate_poison_table(
+        dino_poison_results_dir,
+        cfgmap=dino_poison_cfgs,
+        dataset_order=['CIFAR10', 'CIFAR100'],
+        etas=[2, 10, 20],
+        outputfile_path= Path("./visulaization_dir/dino_poison_table.txt")
+    )
+    
+    
     #################################################################################
     #########                        Regular models                         #########
     
@@ -2147,12 +2348,30 @@ if __name__ == "__main__":
     #     outputfile_path= Path("./visulaization_dir/regular_asymmetric_noise_table.txt")
     # )
     
-    generate_noise_utlity_table(
-        regular_noise_results_dir,
-        regular_symmetric_vit_cfgs,
-        dataset_order=['CIFAR10', 'CIFAR100'],
-        outputfile_path= Path("./visulaization_dir/regular_symmetric_noise_vit_table.txt")
-        )
+    # generate_noise_utlity_table(
+    #     regular_noise_results_dir,
+    #     regular_symmetric_vit_cfgs,
+    #     dataset_order=['CIFAR10', 'CIFAR100'],
+    #     outputfile_path= Path("./visulaization_dir/regular_symmetric_noise_vit_table.txt")
+    #     )
+    
+    
+    # generate_poison_table(
+    #     regular_poison_results_dir,
+    #     cfgmap=regular_poison_cfgs,
+    #     dataset_order=['MNIST', 'CIFAR10', 'CIFAR100'],
+    #     etas=[2, 10, 20],
+    #     outputfile_path= Path("./visulaization_dir/regular_resnets_poison_table.txt")
+    # )
+    
+    
+    # generate_poison_table(
+    #     regular_poison_results_dir,
+    #     cfgmap=regular_poison_vit_cfgs,
+    #     dataset_order=['CIFAR10', 'CIFAR100'],
+    #     etas=[2, 10, 20],
+    #     outputfile_path= Path("./visulaization_dir/regular_vit_poison_table.txt")
+    # )
     
     # generate_noise_utlity_table(
     #     regular_noise_results_dir,

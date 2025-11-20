@@ -96,10 +96,10 @@ DINO:
     ho_2:
       symmetric:
         40: 'config3'
-      asymmetric: 
-        40: # todo
-      poison:
-        2: # todo
+      # asymmetric: 
+      #   40: 
+      # poison:
+      #   2:
   CIFAR10:
     ho_2:
       symmetric:
@@ -108,6 +108,8 @@ DINO:
         40: 'config4'
       poison: 
         2: 'config1'
+        10: 'config3'
+        20: 'config4'
   CIFAR100:
     ho_2:
       symmetric:
@@ -116,6 +118,8 @@ DINO:
         40: 'config5'
       poison:
         2: 'config2'
+        10: 'config5'
+        20: 'config6'
 
 
 
@@ -164,12 +168,6 @@ regular_models:
           resnet18:
             20: 'config44'
             40: 'config32'
-          resnet34:
-            40:
-          resnet50:
-            40:
-          resnet101:
-            40:
         poison:
           resnet18: 
             2: 'config2'
@@ -201,14 +199,6 @@ regular_models:
           vit:
             20: 'config7'
             40: 'config8'
-          resnet18:
-            40:
-          resnet34:
-            40:
-          resnet50:
-            40:
-          resnet101:
-            40:
 
         poison:
           vit: 

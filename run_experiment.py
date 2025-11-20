@@ -285,7 +285,7 @@ def finetune_models(experiment_type:str, architecture:str, outputs_dir: Path, cf
 
 
 
-def apply_tv(experiment_type:str, architecture:str, outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
+def apply_tv(experiment_type:str, architecture:str, outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str, do_full_grid_results:bool=False):
     training_seed = cfg['training_seed']
     dataset_seed = cfg['dataset_seed']
     if training_seed:
@@ -424,8 +424,8 @@ def apply_tv(experiment_type:str, architecture:str, outputs_dir: Path, results_d
     
     task_vectors['Random Vector'] = task_vectors['Proxy'].generate_random_vector_with_same_layer_norms(seed=20)
     task_vectors['Mix'] = TaskVector(pt_weights, mix_weights)
-    task_vectors['Oracle'] = TaskVector(pt_weights, oracle_weights)
-
+    # task_vectors['Oracle'] = TaskVector(pt_weights, oracle_weights)
+    task_vectors['-TauC'] = TaskVector(mix_weights, oracle_weights)
 
     TV_norms = OrderedDict()
     for name, tv in task_vectors.items():
@@ -464,33 +464,22 @@ def apply_tv(experiment_type:str, architecture:str, outputs_dir: Path, results_d
         show=False
     )
     
-    # model.load_state_dict(mix_weights, strict=False)
-    # mix_test_results, _, _ = evaluate_model(model, dataset_clean.get_test_dataloader(), gpu)
-    # mix_train_results = eval_model_on_clean_corrupted_splits(model, None, dataset_corrupted, gpu)
-    
-    
-    # model.load_state_dict(oracle_weights, strict=False)
-    # oracle_test_results, _, _ = evaluate_model(model, dataset_clean.get_test_dataloader(), gpu)
-    # oracle_train_results = eval_model_on_clean_corrupted_splits(model, None, dataset_corrupted, gpu)
-    
-    # model.load_state_dict(CF_weights, strict=False)
-    # CF_test_results, _, _ = evaluate_model(model, dataset_clean.get_test_dataloader(), gpu)
-    # CF_train_results = eval_model_on_clean_corrupted_splits(model, None, dataset_corrupted, gpu)
-    
-    # print('Mix', {'test_results': mix_test_results, 'train_results': mix_train_results})
-    # print('Oracle', {'test_results': oracle_test_results, 'train_results': oracle_train_results})
-    # print('CF', {'test_results': CF_test_results, 'train_results': CF_train_results})
-    
     # results_dict = OrderedDict()
     # with open(results_dir / "metrics.json", "r") as json_file:
     #     results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
-    # alphas = tqdm(np.round(np.linspace(-2.05, -4.0, 40), 2))
-    
+    # if experiment_type == 'poison':
+    #     alphas = tqdm(np.round(np.linspace(-2.05, -3.0, 20), 2))
+        
     # for alpha in alphas:
+        
     #     model.load_state_dict(mix_weights, strict=False)
     #     task_vectors['Proxy'].apply_to(model, scaling_coef=alpha, strict=False)
     #     tv_test_results, _, _ = evaluate_model(model, dataset_clean.get_test_dataloader(), gpu)
-    #     tv_train_results = eval_model_on_clean_corrupted_splits(model, None, dataset_corrupted, gpu)
+        
+    #     if do_full_grid_results:
+    #         tv_train_results = eval_model_on_clean_corrupted_splits(model, None, dataset_corrupted, gpu)
+    #     else:
+    #         tv_train_results = {}
         
     #     if experiment_type == 'poison':
     #         tv_ho_resutls, _, _ = evaluate_model(model, dataset_corrupted.get_heldout_dataloader(), gpu)
@@ -502,8 +491,6 @@ def apply_tv(experiment_type:str, architecture:str, outputs_dir: Path, results_d
     #         results_dict[alpha] = {'test_results': tv_test_results, 'train_results': tv_train_results}
     # with open(results_dir / 'metrics.json' , 'w') as json_file:
     #     json.dump(results_dict, json_file, indent=4)
-
-    # exit()
 
     results_dict = OrderedDict()
     if not results_dir.joinpath('metrics.json').exists():
@@ -527,9 +514,9 @@ def apply_tv(experiment_type:str, architecture:str, outputs_dir: Path, results_d
         
         
         if experiment_type == 'poison':
-            alphas = tqdm(np.round(np.linspace(-0.05, -4.0, 80), 2))
+            alphas = tqdm(np.round(np.linspace(-0.05, -5.0, 100), 2))
         elif experiment_type == 'noise':
-            alphas = tqdm(np.round(np.linspace(-0.05, -4.0, 80), 2))
+            alphas = tqdm(np.round(np.linspace(-0.05, -5.0, 100), 2))
         elif experiment_type == 'IC':
             alphas = tqdm(np.round(np.linspace(-0.05, -1.5, 30), 2))
         for alpha in alphas:
@@ -538,8 +525,10 @@ def apply_tv(experiment_type:str, architecture:str, outputs_dir: Path, results_d
             task_vectors['Proxy'].apply_to(model, scaling_coef=alpha, strict=False)
             tv_test_results, _, _ = evaluate_model(model, dataset_clean.get_test_dataloader(), gpu)
             
-            # tv_train_results = eval_model_on_clean_corrupted_splits(model, None, dataset_corrupted, gpu)
-            tv_train_results = {}
+            if do_full_grid_results:
+                tv_train_results = eval_model_on_clean_corrupted_splits(model, None, dataset_corrupted, gpu)
+            else:
+                tv_train_results = {}
             
             if experiment_type == 'poison':
                 tv_ho_resutls, _, _ = evaluate_model(model, dataset_corrupted.get_heldout_dataloader(), gpu)
@@ -563,16 +552,8 @@ def apply_tv(experiment_type:str, architecture:str, outputs_dir: Path, results_d
             proxy_conf = strategy['corruption']['proxy'][0]
             if dataset_clean.dataset_name == 'MNIST':
                 coverage_rate = 1.0
-                # if proxy_conf['noise_type'] == 'asymmetric':
-                #     coverage_rate = 0.5
-                # else:
-                #     coverage_rate = 1.0
             elif dataset_clean.dataset_name == 'CIFAR10':
                 coverage_rate = 1.0
-                # if proxy_conf['noise_type'] == 'asymmetric':
-                #     coverage_rate = 0.5
-                # else:
-                #     coverage_rate = 1.0
             elif dataset_clean.dataset_name == 'CIFAR100':
                 coverage_rate = 0.95
             
@@ -605,7 +586,7 @@ def apply_tv(experiment_type:str, architecture:str, outputs_dir: Path, results_d
                 'CIFAR10': 0.01,
                 'CIFAR100': 0.01
             }
-            alphas = np.round(np.linspace(-0.05, -2.0, 40), 2)
+            alphas = np.round(np.linspace(-0.05, -6.0, 120), 2)
             alpha_hat = 0.0
             for alpha in alphas:
                 metrics = results_dict.get(alpha, None)
@@ -614,6 +595,14 @@ def apply_tv(experiment_type:str, architecture:str, outputs_dir: Path, results_d
                 if round(metrics['ho_results']['ACC'], 2) <= forget_rate_thrsh[dataset_clean.dataset_name]:
                     alpha_hat = alpha
                     break
+            if not do_full_grid_results:
+                model.load_state_dict(mix_weights, strict=False)
+                task_vectors['Proxy'].apply_to(model, scaling_coef=alpha_hat, strict=False)
+                tv_train_results = eval_model_on_clean_corrupted_splits(model, None, dataset_corrupted, gpu)
+                try:
+                    results_dict[float(alpha_hat)]['train_results'] = tv_train_results
+                except:
+                    results_dict[str(float(alpha_hat))]['train_results'] = tv_train_results
             results_dict['alpha_hat'] = alpha_hat
         
         
@@ -956,6 +945,11 @@ def main():
         action="store_true",
     )
     
+    parser.add_argument(
+        "--full-grid-results",
+        help="Output full results on train/test set. Note: this will evaulate the interpolated model on the full training set and test set for each alpha.",
+        action="store_true"
+    )
     
     parser.add_argument(
         "-s",
@@ -1000,7 +994,7 @@ def main():
         finetune_models(args.experiment, args.arch, outputs_dir, cfg, cfg_name=cfg_path.stem)
 
     if args.tv:
-        apply_tv(args.experiment, args.arch, outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)
+        apply_tv(args.experiment, args.arch, outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem, do_full_grid_results=args.full_grid_results)
     
     if args.sap:
         apply_SAP(args.experiment, args.arch, outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)

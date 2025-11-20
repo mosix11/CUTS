@@ -7,10 +7,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 from collections import deque
 import math
-from sklearn.neighbors import NearestNeighbors
-# -----------------------------
-# Batch prep + feature extraction
-# -----------------------------
+
 def prepare_batch(batch, device):
     return [t.to(device, non_blocking=True) for t in batch]
 
@@ -61,9 +58,8 @@ def logits_from_features(classifier: nn.Module, feats: torch.Tensor, bs: int = 4
         outs.append(classifier(fb).detach().float().cpu())
     return torch.cat(outs, dim=0)
 
-# -----------------------------
-# Unsupervised score (diversity-aware)
-# -----------------------------
+
+
 def _knn_indices(feats_np: np.ndarray, k: int):
     from sklearn.neighbors import NearestNeighbors
     k_eff = min(k + 1, len(feats_np))
@@ -141,7 +137,7 @@ def knn_self_agreement_diversity(
 def select_alpha_by_knn_self_agreement(
     model: nn.Module,
     state0: dict,
-    taskvector,   # must have .apply_to(model, scaling_coef=alpha, strict=False)
+    taskvector,   
     unlabeled_loader: DataLoader,
     feature_extractor: nn.Module,
     classifier: nn.Module,
@@ -199,15 +195,13 @@ def select_alpha_by_knn_self_agreement(
         )
         
         print(f'Alpha={a}, Aggregate Score={score}')
-        # track best
         if score > best_score:
             best_score = score
             best_alpha = float(a)
 
-        # update window and check early-stop
+        # check early-stop
         window.append(score)
         if len(window) == window.maxlen:
-            # strictly decreasing if all diffs < 0
             if np.all(np.diff(np.array(window)) < 0):
                 break
 
