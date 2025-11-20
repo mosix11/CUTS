@@ -25,6 +25,18 @@ temp.py
 notes.txt
 testdir
 
+# Project Specific files #
+######################
+clip_data_cleaning.py
+consistency_score_check.py
+corruption_transferability.py
+download_datasets.sh
+plot_mix_interpolation.py
+plot_pca_evol.py
+result_to_latex.py
+plot_similarity_matrices.py
+consistency_scores/
+
 # Compiled source #
 ###################
 *.com
@@ -62,3 +74,5 @@ testdir
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+

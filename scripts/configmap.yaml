@@ -16,8 +16,6 @@ clip_models:
         2: 'config1'
         10: 'config8'
         20: 'config9'
-      ic:
-        '1-7': 'config2' # numbers
     ho_10:
       symmetric:
         10: 'config25'
@@ -43,9 +41,6 @@ clip_models:
         2: 'config2'
         10: 'config6'
         20: 'config4'
-      ic:
-        '3-5': 'config1' # cat dog
-        '6-9': 'config4' # frog truck
 
 
     ho_10:
@@ -73,9 +68,6 @@ clip_models:
         2: 'config3'
         10: 'config7'
         20: 'config5'
-      ic:
-        '47-52': 'config3' # maple tre - oak tree
-        '0-24': 'config5' # apple cockroach
 
     ho_10:
       symmetric:
@@ -187,7 +179,7 @@ regular_models:
             40: 'config41'
           resnet101:
             40: 'config40'
-          resnet101v2:
+          resnet101v2: # ImagenetV2
             40: 'config42'
           vit:
             10: 'config13'

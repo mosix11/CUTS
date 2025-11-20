@@ -96,8 +96,6 @@ def inject_corruption(experiment_type:str, base_dataset, cfg: dict):
     strategy = cfg['strategy']
     if experiment_type == 'noise':
         base_dataset.inject_noise(**strategy['corruption']['mix'])
-    elif experiment_type == 'IC':
-        base_dataset.inject_noise(**strategy['corruption']['mix'])
     elif experiment_type == 'poison':
         base_dataset.inject_poison(**strategy['corruption']['mix'])
     
@@ -183,7 +181,7 @@ def finetune_models(experiment_type:str, architecture:str, outputs_dir: Path, cf
         plots_dir.mkdir(exist_ok=True, parents=True)
         
         
-        # For asymmetric label noise and IC we only finetune on samples that actually are corrupted with corruption kernel
+        # For asymmetric label noise we only finetune on samples that actually are corrupted with corruption kernel
         # using their clean labels.
         if experiment_type == 'poison':
             proxy_conf = copy.deepcopy(strategy['corruption']['proxy'][0])
@@ -202,14 +200,6 @@ def finetune_models(experiment_type:str, architecture:str, outputs_dir: Path, cf
                 hs_clean, hs_noisy = dataset.get_clean_noisy_subsets(set='Heldout')
                 dataset.switch_labels_to_clean(hs_noisy)
                 dataset.set_trainset(hs_noisy, shuffle=True)
-                 
-        elif experiment_type == 'IC':
-            proxy_conf = strategy['corruption']['proxy'][0]
-            proxy_conf['set'] = 'Heldout'
-            dataset.inject_noise(**proxy_conf)
-            hs_clean, hs_noisy = dataset.get_clean_noisy_subsets(set='Heldout')
-            dataset.switch_labels_to_clean(hs_noisy)
-            dataset.set_trainset(hs_noisy, shuffle=True)
         
         
         
@@ -263,13 +253,6 @@ def finetune_models(experiment_type:str, architecture:str, outputs_dir: Path, cf
                     hs_clean, hs_noisy = dataset.get_clean_noisy_subsets(set='Heldout')
                     dataset.set_trainset(hs_noisy, shuffle=True)
                     
-            elif experiment_type == 'IC':
-                # For IC, we only consider the noisy samples (only the pair of classes swapped.)
-                proxy_conf['set'] = 'Heldout'
-                dataset.inject_noise(**proxy_conf)
-                hs_clean, hs_noisy = dataset.get_clean_noisy_subsets(set='Heldout')
-                dataset.set_trainset(hs_noisy, shuffle=True)
-                
 
                 
             trainer = StandardTrainer(
@@ -344,30 +327,8 @@ def apply_tv(experiment_type:str, architecture:str, outputs_dir: Path, results_d
         proxy_conf = strategy['corruption']['proxy'][0]
         proxy_conf['set'] = 'Heldout'
         dataset_corrupted.inject_noise(**proxy_conf)
-        # if proxy_conf['noise_type'] == 'symmetric':
-        #     dataset_corrupted.inject_noise(**proxy_conf)
-        # elif proxy_conf['noise_type'] == 'asymmetric':
-        #     dataset_corrupted.inject_noise(**proxy_conf)
-        #     hs_clean, hs_noisy = dataset_corrupted.get_clean_noisy_subsets(set='Heldout')
-        #     dataset_corrupted.switch_labels_to_clean(hs_noisy)
-        #     dataset_clean.set_heldoutset(copy.deepcopy(hs_noisy), shuffle=False)
-        #     dataset_corrupted.switch_labels_to_noisy(hs_noisy)
-        #     dataset_corrupted.set_heldoutset(hs_noisy, shuffle=False)
+        
                 
-    elif experiment_type == 'IC':
-        dataset_clean = copy.deepcopy(base_dataset)
-        dataset_corrupted = copy.deepcopy(base_dataset)
-        dataset_corrupted.inject_noise(**strategy['corruption']['mix'])
-        
-        proxy_conf = strategy['corruption']['proxy'][0]
-        proxy_conf['set'] = 'Heldout'
-        
-        dataset_corrupted.inject_noise(**proxy_conf)
-        hs_clean, hs_noisy = dataset_corrupted.get_clean_noisy_subsets(set='Heldout')
-        dataset_corrupted.switch_labels_to_clean(hs_noisy)
-        dataset_clean.set_heldoutset(copy.deepcopy(hs_noisy), shuffle=False)
-        dataset_corrupted.switch_labels_to_noisy(hs_noisy)
-        dataset_corrupted.set_heldoutset(hs_noisy, shuffle=False)
         
         
 
@@ -484,9 +445,6 @@ def apply_tv(experiment_type:str, architecture:str, outputs_dir: Path, results_d
     #     if experiment_type == 'poison':
     #         tv_ho_resutls, _, _ = evaluate_model(model, dataset_corrupted.get_heldout_dataloader(), gpu)
     #         results_dict[alpha] = {'test_results': tv_test_results, 'ho_results': tv_ho_resutls, 'train_results': tv_train_results}
-    #     elif experiment_type == 'IC':
-    #         tv_ho_resutls, _, _ = evaluate_model(model, dataset_clean.get_heldout_dataloader(), gpu)
-    #         results_dict[alpha] = {'test_results': tv_test_results, 'ho_results': tv_ho_resutls, 'train_results': tv_train_results}
     #     else:
     #         results_dict[alpha] = {'test_results': tv_test_results, 'train_results': tv_train_results}
     # with open(results_dir / 'metrics.json' , 'w') as json_file:
@@ -517,8 +475,6 @@ def apply_tv(experiment_type:str, architecture:str, outputs_dir: Path, results_d
             alphas = tqdm(np.round(np.linspace(-0.05, -5.0, 100), 2))
         elif experiment_type == 'noise':
             alphas = tqdm(np.round(np.linspace(-0.05, -5.0, 100), 2))
-        elif experiment_type == 'IC':
-            alphas = tqdm(np.round(np.linspace(-0.05, -1.5, 30), 2))
         for alpha in alphas:
             
             model.load_state_dict(mix_weights, strict=False)
@@ -532,9 +488,6 @@ def apply_tv(experiment_type:str, architecture:str, outputs_dir: Path, results_d
             
             if experiment_type == 'poison':
                 tv_ho_resutls, _, _ = evaluate_model(model, dataset_corrupted.get_heldout_dataloader(), gpu)
-                results_dict[alpha] = {'test_results': tv_test_results, 'ho_results': tv_ho_resutls, 'train_results': tv_train_results}
-            elif experiment_type == 'IC':
-                tv_ho_resutls, _, _ = evaluate_model(model, dataset_clean.get_heldout_dataloader(), gpu)
                 results_dict[alpha] = {'test_results': tv_test_results, 'ho_results': tv_ho_resutls, 'train_results': tv_train_results}
             else:
                 results_dict[alpha] = {'test_results': tv_test_results, 'train_results': tv_train_results}
@@ -606,19 +559,6 @@ def apply_tv(experiment_type:str, architecture:str, outputs_dir: Path, results_d
             results_dict['alpha_hat'] = alpha_hat
         
         
-        elif experiment_type == 'IC':
-            alphas = np.round(np.linspace(-0.05, -1.5, 30), 2)
-            base_IC_acc = results_dict['Mix']['ho_results']['ACC']
-            alpha_hat = 0.0
-            for alpha in alphas:
-                metrics = results_dict.get(alpha, None)
-                if not metrics: metrics = results_dict.get(str(alpha), None)
-                if not metrics: print('alpha not found', alpha)
-                if metrics['ho_results']['ACC'] >= base_IC_acc:
-                    alpha_hat = alpha
-                    base_IC_acc = metrics['ho_results']['ACC'] 
-            
-            results_dict['alpha_hat'] = alpha_hat
         
         with open(results_dir / 'metrics.json' , 'w') as json_file:
             json.dump(results_dict, json_file, indent=4)
@@ -633,9 +573,6 @@ def apply_tv(experiment_type:str, architecture:str, outputs_dir: Path, results_d
         
         if experiment_type == 'poison':
             random_ho_resutls, _, _ = evaluate_model(model, dataset_corrupted.get_heldout_dataloader(), gpu)
-            results_dict['Random Vector'] = {'test_results': random_test_results, 'ho_results': random_ho_resutls, 'train_results': random_train_results}
-        elif experiment_type == 'IC':
-            random_ho_resutls, _, _ = evaluate_model(model, dataset_clean.get_heldout_dataloader(), gpu)
             results_dict['Random Vector'] = {'test_results': random_test_results, 'ho_results': random_ho_resutls, 'train_results': random_train_results}
         else:
             results_dict['Random Vector'] = {'test_results': random_test_results, 'train_results': random_train_results}
@@ -665,6 +602,8 @@ def apply_tv(experiment_type:str, architecture:str, outputs_dir: Path, results_d
 
 # SAP only works for label noise and fails for poison trigger
 def apply_SAP(experiment_type:str, architecture:str, outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
+    print('SAP Called')
+    exit()
     training_seed = cfg['training_seed']
     dataset_seed = cfg['dataset_seed']
     if training_seed:
@@ -718,30 +657,8 @@ def apply_SAP(experiment_type:str, architecture:str, outputs_dir: Path, results_
         proxy_conf = strategy['corruption']['proxy'][0]
         proxy_conf['set'] = 'Heldout'
         dataset_corrupted.inject_noise(**proxy_conf)
-        # if proxy_conf['noise_type'] == 'symmetric':
-        #     dataset_corrupted.inject_noise(**proxy_conf)
-        # elif proxy_conf['noise_type'] == 'asymmetric':
-        #     dataset_corrupted.inject_noise(**proxy_conf)
-        #     hs_clean, hs_noisy = dataset_corrupted.get_clean_noisy_subsets(set='Heldout')
-        #     dataset_corrupted.switch_labels_to_clean(hs_noisy)
-        #     dataset_clean.set_heldoutset(copy.deepcopy(hs_noisy), shuffle=False)
-        #     dataset_corrupted.switch_labels_to_noisy(hs_noisy)
-        #     dataset_corrupted.set_heldoutset(hs_noisy, shuffle=False)
+        
                 
-    elif experiment_type == 'IC':
-        dataset_clean = copy.deepcopy(base_dataset)
-        dataset_corrupted = copy.deepcopy(base_dataset)
-        dataset_corrupted.inject_noise(**strategy['corruption']['mix'])
-        
-        proxy_conf = strategy['corruption']['proxy'][0]
-        proxy_conf['set'] = 'Heldout'
-        
-        dataset_corrupted.inject_noise(**proxy_conf)
-        hs_clean, hs_noisy = dataset_corrupted.get_clean_noisy_subsets(set='Heldout')
-        dataset_corrupted.switch_labels_to_clean(hs_noisy)
-        dataset_clean.set_heldoutset(copy.deepcopy(hs_noisy), shuffle=False)
-        dataset_corrupted.switch_labels_to_noisy(hs_noisy)
-        dataset_corrupted.set_heldoutset(hs_noisy, shuffle=False)
     
     
     
@@ -910,7 +827,7 @@ def main():
         "--experiment",
         help="Which experiment to run.",
         type=str,
-        choices=['noise', 'IC', 'poison']
+        choices=['noise', 'poison']
     )
     
     parser.add_argument(
