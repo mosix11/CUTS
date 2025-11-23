@@ -80,12 +80,34 @@ def initialize_model_dataset(experiment_type:str, architecture:str, cfg: dict, t
             # ]
         elif cfg['dataset']['name'] == 'mnist':
             pass
+        elif cfg['dataset']['name'] == 'clothing1M':
+            augmentations = [
+                transformsv2.RandomCrop(224, padding=4),
+            ]
+            
         base_dataset, num_classes = dataset_factory.create_dataset(cfg['dataset'], augmentations)
         base_model = model_factory.create_model(cfg['model'], num_classes)
+    
+    if cfg['dataset']['name'] == 'clothing1M':
+        strategy = cfg['strategy']
+        if strategy['proxy_set'] == 'Val':
+            base_dataset.set_heldoutset(base_dataset.get_valset(), shuffle=True)
+        elif strategy['proxy_set'] == 'Val+Subset':
+            valset = base_dataset.get_valset()
+            def random_subset(ds, k, seed: int):
+                k = min(k, len(ds))
+                g = torch.Generator().manual_seed(seed)
+                idx = torch.randperm(len(ds), generator=g)[:k].tolist()
+                return Subset(ds, idx)
+            valset_subset = random_subset(valset, strategy['subset_size'], cfg['dataset_seed'])
+            base_dataset.set_heldoutset(valset_subset, shuffle=True)
+            
+            
 
 
     cfg['trainer']['mix']['comet_api_key'] = os.getenv("COMET_API_KEY")
-    cfg['trainer']['oracle']['comet_api_key'] = os.getenv("COMET_API_KEY")
+    if 'oracle' in cfg['trainer']:
+        cfg['trainer']['oracle']['comet_api_key'] = os.getenv("COMET_API_KEY")
     cfg['trainer']['proxy']['comet_api_key'] = os.getenv("COMET_API_KEY")
     cfg['trainer']['CF']['comet_api_key'] = os.getenv("COMET_API_KEY")
 
@@ -102,12 +124,13 @@ def inject_corruption(experiment_type:str, base_dataset, cfg: dict):
     
     return base_dataset
     
-def finetune_models(experiment_type:str, architecture:str, outputs_dir: Path, cfg: dict, cfg_name:str):
+def finetune_models(experiment_type:str, architecture:str, outputs_dir: Path, cfg: dict, cfg_name:str, is_real_world:bool=False):
     
     base_model, base_dataset, cfg = initialize_model_dataset(experiment_type, architecture, cfg, train=True)
     
     strategy = cfg['strategy']
-    base_dataset = inject_corruption(experiment_type, base_dataset, cfg)
+    if not is_real_world:
+        base_dataset = inject_corruption(experiment_type, base_dataset, cfg)
     
 
     
@@ -136,7 +159,7 @@ def finetune_models(experiment_type:str, architecture:str, outputs_dir: Path, cf
         torch.save(model.state_dict(), weights_dir / Path("weights.pth"))
         
       
-    if not outputs_dir.joinpath(f"{cfg_name}/oracle/weights/weights.pth").exists():
+    if not outputs_dir.joinpath(f"{cfg_name}/oracle/weights/weights.pth").exists() and not is_real_world:
         dataset = copy.deepcopy(base_dataset)
         model = copy.deepcopy(base_model)
         
@@ -387,7 +410,7 @@ def apply_tv(experiment_type:str, architecture:str, outputs_dir: Path, results_d
     task_vectors['Random Vector'] = task_vectors['Proxy'].generate_random_vector_with_same_layer_norms(seed=20)
     task_vectors['Mix'] = TaskVector(pt_weights, mix_weights)
     # task_vectors['Oracle'] = TaskVector(pt_weights, oracle_weights)
-    task_vectors['-TauC'] = TaskVector(mix_weights, oracle_weights)
+    # task_vectors['-TauC'] = TaskVector(mix_weights, oracle_weights)
 
     TV_norms = OrderedDict()
     for name, tv in task_vectors.items():
@@ -426,30 +449,7 @@ def apply_tv(experiment_type:str, architecture:str, outputs_dir: Path, results_d
         show=False
     )
     
-    # results_dict = OrderedDict()
-    # with open(results_dir / "metrics.json", "r") as json_file:
-    #     results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
-    # if experiment_type == 'poison':
-    #     alphas = tqdm(np.round(np.linspace(-2.05, -3.0, 20), 2))
-        
-    # for alpha in alphas:
-        
-    #     model.load_state_dict(mix_weights, strict=False)
-    #     task_vectors['Proxy'].apply_to(model, scaling_coef=alpha, strict=False)
-    #     tv_test_results, _, _ = evaluate_model(model, dataset_clean.get_test_dataloader(), gpu)
-        
-    #     if do_full_grid_results:
-    #         tv_train_results = eval_model_on_clean_corrupted_splits(model, None, dataset_corrupted, gpu)
-    #     else:
-    #         tv_train_results = {}
-        
-    #     if experiment_type == 'poison':
-    #         tv_ho_resutls, _, _ = evaluate_model(model, dataset_corrupted.get_heldout_dataloader(), gpu)
-    #         results_dict[alpha] = {'test_results': tv_test_results, 'ho_results': tv_ho_resutls, 'train_results': tv_train_results}
-    #     else:
-    #         results_dict[alpha] = {'test_results': tv_test_results, 'train_results': tv_train_results}
-    # with open(results_dir / 'metrics.json' , 'w') as json_file:
-    #     json.dump(results_dict, json_file, indent=4)
+
 
     results_dict = OrderedDict()
     if not results_dir.joinpath('metrics.json').exists():
@@ -599,12 +599,274 @@ def apply_tv(experiment_type:str, architecture:str, outputs_dir: Path, results_d
     
 
 
+def apply_tv_realworld(experiment_type:str, architecture:str, outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str, do_full_grid_results:bool=False):
+    training_seed = cfg['training_seed']
+    dataset_seed = cfg['dataset_seed']
+    if training_seed:
+        random.seed(training_seed)
+        np.random.seed(training_seed)
+        torch.manual_seed(training_seed)
+        torch.cuda.manual_seed_all(training_seed)
+    
+    cpu = trainer_utils.get_cpu_device()
+    gpu = trainer_utils.get_gpu_device()
+    
+    
+    outputs_dir = outputs_dir / cfg_name
+    
+    results_dir = results_dir / cfg_name
+    results_dir.mkdir(exist_ok=True, parents=True)
+    
+
+    
+    results_dirs = {}
+    results_dirs['cms'] = results_dir / 'confusion_mats'
+    results_dirs['Ts'] = results_dir / 'transition_mats'
+    results_dirs['W_norms'] = results_dir / 'weight_norms'
+    results_dirs['TV_norms'] = results_dir / 'TV_norms'
+    results_dirs['embed_plots'] = results_dir / 'embedding_plots'
+    results_dirs['metrics'] = results_dir / 'metrics'
+    for dir in results_dirs.values():
+        dir.mkdir(exist_ok=True, parents=True)
+    
+    
+    model, base_dataset, cfg = initialize_model_dataset(experiment_type, architecture, cfg, train=False)
+    base_dataset.reset_train_dl(shuffle=False)
+    
+    strategy = cfg['strategy']
+    
+
+    
+    
+    if experiment_type == 'poison':
+        dataset_corrupted_proxy = copy.deepcopy(base_dataset)
+        
+        proxy_conf = strategy['corruption']['proxy'][0]
+        proxy_conf['set'] = 'Heldout'
+        dataset_corrupted_proxy.inject_poison(**proxy_conf)
+        # Exclude clean samples from target class
+        clean_ho_ds, poinsoned_ho_ds = dataset_corrupted_proxy.get_clean_noisy_subsets('Heldout')
+        dataset_corrupted_proxy.set_heldoutset(poinsoned_ho_ds)
+        
+    elif experiment_type == 'noise':
+        dataset_corrupted_proxy = copy.deepcopy(base_dataset)
+        
+        proxy_conf = strategy['corruption']['proxy'][0]
+        proxy_conf['set'] = 'Heldout'
+        dataset_corrupted_proxy.inject_noise(**proxy_conf)
+        
+                
+        
+        
+
+    pt_weights = copy.deepcopy(model.state_dict())
+    pt_weights = OrderedDict((k, v) for k, v in pt_weights.items() if "classifier_heads" not in k)
+    
+
+    # Load weights while removing classifier head's weights from the state dict for CLIP
+    mix_weights = OrderedDict(
+    (k, v) for k, v in torch.load(
+        outputs_dir.joinpath(f"mix/weights/weights.pth"),
+        map_location='cpu'
+    ).items() if "classifier_heads" not in k)
+    
+
+    CF_weights = OrderedDict(
+    (k, v) for k, v in torch.load(
+        outputs_dir.joinpath(f"CF/weights/weights.pth"),
+        map_location='cpu'
+    ).items() if "classifier_heads" not in k)
+    
+    
+    proxy_weights = OrderedDict()
+    
+    for proxy_conf in strategy['corruption']['proxy']:
+        ft_expr_dir = outputs_dir / f"proxy_{proxy_conf['seed']}"
+        n_weights = OrderedDict(
+        (k, v) for k, v in torch.load(
+            ft_expr_dir.joinpath(f"weights/weights.pth"),
+            map_location='cpu'
+        ).items() if "classifier_heads" not in k)
+        proxy_weights[f"Proxy Seed {proxy_conf['seed']}"] = n_weights
+    
+            
+    task_vectors = OrderedDict()
+    for task_name, finetuend_weights in proxy_weights.items():
+        task_vectors[task_name] = TaskVector(mix_weights, finetuend_weights)
+        
+    if len(task_vectors) == 1:
+        only_tv = task_vectors.popitem(last=False)[1]
+        task_vectors['Proxy'] = only_tv
+    else:
+        task_vectors['Proxy'] = TaskVector.mean(task_vectors)
+        
+    
+    task_vectors['CF'] = TaskVector(mix_weights, CF_weights)
+    
+    
+    task_vectors['Random Vector'] = task_vectors['Proxy'].generate_random_vector_with_same_layer_norms(seed=20)
+    task_vectors['Mix'] = TaskVector(pt_weights, mix_weights)
+
+
+    TV_norms = OrderedDict()
+    for name, tv in task_vectors.items():
+        TV_norms[name] = tv.norm().item()
+    with open(results_dirs['TV_norms'] / 'norms.json' , 'w') as json_file:
+        json.dump(TV_norms, json_file, indent=4)
+    
+    ft_tvs_list = list(task_vectors.values())
+    tv_names = list(task_vectors.keys())
+
+    task_sim = []
+    for i in range(len(ft_tvs_list)):
+        anchor_tv = ft_tvs_list[i]
+        task_sim.append([])
+        for j in range(len(ft_tvs_list)):
+            other_tv = ft_tvs_list[j]
+            cos_sim = anchor_tv.cosine_similarity_flatten(other_tv)
+            task_sim[i].append(cos_sim)
+    task_sim = np.array(task_sim)
+    
+    with open(results_dirs['cms'] / "tv_sim.pkl", "wb") as f:
+        pickle.dump(task_sim, f)
+    
+    misc_utils.plot_confusion_matrix(
+        title='Task Vector Similarity Matrix',
+        cm=task_sim,
+        class_names=tv_names,
+        color_map='vlag',
+        color_bar=True,
+        vmin= -1.0,
+        vmax= 1.0,
+        x_label='Task Vectors',
+        y_label='Task Vectors',
+        tick_label_font_size=6,
+        filepath=results_dir / 'task_similarities.png',
+        show=False
+    )
+    
+
+
+    results_dict = OrderedDict()
+    if not results_dir.joinpath('metrics.json').exists():
+
+        model.load_state_dict(mix_weights, strict=False)
+        mix_test_results, _, _ = evaluate_model(model, base_dataset.get_test_dataloader(), gpu)
+        
+        
+        model.load_state_dict(CF_weights, strict=False)
+        CF_test_results, _, _ = evaluate_model(model, base_dataset.get_test_dataloader(), gpu)
+
+        
+        results_dict['Mix'] = {'test_results': mix_test_results}
+
+        results_dict['CF'] = {'test_results': CF_test_results}
+        
+        
+        if experiment_type == 'poison':
+            alphas = tqdm(np.round(np.linspace(-0.04, -3.0, 75), 2))
+        elif experiment_type == 'noise':
+            alphas = tqdm(np.round(np.linspace(-0.04, -3.0, 75), 2))
+        for alpha in alphas:
+            
+            model.load_state_dict(mix_weights, strict=False)
+            task_vectors['Proxy'].apply_to(model, scaling_coef=alpha, strict=False)
+            tv_test_results, _, _ = evaluate_model(model, base_dataset.get_test_dataloader(), gpu)
+            
+            if experiment_type == 'poison':
+                tv_ho_resutls, _, _ = evaluate_model(model, dataset_corrupted_proxy.get_heldout_dataloader(), gpu)
+                results_dict[alpha] = {'test_results': tv_test_results, 'ho_results': tv_ho_resutls}
+            else:
+                results_dict[alpha] = {'test_results': tv_test_results}
+        with open(results_dir / 'metrics.json' , 'w') as json_file:
+            json.dump(results_dict, json_file, indent=4)
+    else:
+        with open(results_dir / "metrics.json", "r") as json_file:
+            results_dict = json.load(json_file, object_pairs_hook=OrderedDict)
+            
+            
+    
+            
+    if 'alpha_hat' not in results_dict: 
+        if experiment_type == 'noise':  
+            proxy_conf = strategy['corruption']['proxy'][0]
+            if base_dataset.dataset_name == 'Clothing1M':
+                coverage_rate = 1.0
+            
+            num_clusters = base_dataset.get_num_classes()
+            alpha_est_support_dl = base_dataset.get_heldout_dataloader()
+            alpha_est_support_size = len(base_dataset.get_heldoutset())
+            ideal_cluster_balance = alpha_est_support_size / num_clusters
+            num_neighbor_agr_check = math.floor(ideal_cluster_balance / 2)
+            
+
+            from estimate_alpha import select_alpha_by_knn_self_agreement
+            alpha_hat = select_alpha_by_knn_self_agreement(
+                model=model,
+                feature_extractor=model.get_feature_extractor(),
+                classifier=model.get_active_head() if architecture == 'clip' else model.get_classifier_head(),
+                state0=mix_weights,
+                taskvector=task_vectors['Proxy'],
+                unlabeled_loader=alpha_est_support_dl,
+                num_clusters=num_clusters,
+                k=num_neighbor_agr_check,
+                coverage_rate=coverage_rate,
+                alphas=np.round(np.linspace(-0.0, -3.0, 75), 2),
+                device=gpu
+            )
+            results_dict['alpha_hat'] = alpha_hat
+            
+        elif experiment_type == 'poison':
+            pass
+            # forget_rate_thrsh = {
+            #     'Clothing1M': 0.01,
+            # }
+            # alphas = np.round(np.linspace(-0.05, -6.0, 120), 2)
+            # alpha_hat = 0.0
+            # for alpha in alphas:
+            #     metrics = results_dict.get(alpha, None)
+            #     if not metrics: metrics = results_dict.get(str(alpha), None)
+            #     if not metrics: print('alpha not found', alpha)
+            #     if round(metrics['ho_results']['ACC'], 2) <= forget_rate_thrsh[dataset_clean.dataset_name]:
+            #         alpha_hat = alpha
+            #         break
+            # if not do_full_grid_results:
+            #     model.load_state_dict(mix_weights, strict=False)
+            #     task_vectors['Proxy'].apply_to(model, scaling_coef=alpha_hat, strict=False)
+            #     tv_train_results = eval_model_on_clean_corrupted_splits(model, None, dataset_corrupted, gpu)
+            #     try:
+            #         results_dict[float(alpha_hat)]['train_results'] = tv_train_results
+            #     except:
+            #         results_dict[str(float(alpha_hat))]['train_results'] = tv_train_results
+            # results_dict['alpha_hat'] = alpha_hat
+        
+        
+        
+        with open(results_dir / 'metrics.json' , 'w') as json_file:
+            json.dump(results_dict, json_file, indent=4)
+        
+
+    if 'Random Vector' not in results_dict:
+        model.load_state_dict(mix_weights, strict=False)
+        alpha_hat = results_dict['alpha_hat']
+        task_vectors['Random Vector'].apply_to(model, scaling_coef=alpha_hat, strict=False)
+        random_test_results, _, _ = evaluate_model(model, base_dataset.get_test_dataloader(), gpu)
+        
+        if experiment_type == 'poison':
+            random_ho_resutls, _, _ = evaluate_model(model, dataset_corrupted_proxy.get_heldout_dataloader(), gpu)
+            results_dict['Random Vector'] = {'test_results': random_test_results, 'ho_results': random_ho_resutls}
+        else:
+            results_dict['Random Vector'] = {'test_results': random_test_results}
+        
+        with open(results_dir / 'metrics.json' , 'w') as json_file:
+            json.dump(results_dict, json_file, indent=4)
+
 
 
 # SAP only works for label noise and fails for poison trigger
 def apply_SAP(experiment_type:str, architecture:str, outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
-    print('SAP Called')
-    exit()
+    if architecture == 'dino':
+        raise ValueError('SAP is not implemented for DINOv3 architecture.')
     training_seed = cfg['training_seed']
     dataset_seed = cfg['dataset_seed']
     if training_seed:
@@ -715,6 +977,7 @@ def apply_SAP(experiment_type:str, architecture:str, outputs_dir: Path, results_
 
 # Potion only works for poison triggers and fails for label noise
 def apply_potion(experiment_type:str, architecture:str, outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
+    
     training_seed = cfg['training_seed']
     dataset_seed = cfg['dataset_seed']
     if training_seed:
@@ -840,6 +1103,13 @@ def main():
     )
     
     parser.add_argument(
+        "-r",
+        "--real-world",
+        help="Whether using a real-world corrupted dataset or not in the configuration file. If set, no synthetic corruption will be injected to the training dataset.",
+        action="store_true",
+    )
+    
+    parser.add_argument(
         "-c",
         "--config",
         help="Configuration to used for model.",
@@ -890,8 +1160,10 @@ def main():
     dotenv.load_dotenv(".env")
     
     
-    expr_arch = Path(f"{args.arch}_{args.experiment}_TA")
-    
+    if args.real_world:
+        expr_arch = Path(f"{args.arch}_realworld_TA")
+    else:
+        expr_arch = Path(f"{args.arch}_{args.experiment}_TA")
     
     cfg_path = Path("configs").absolute() / expr_arch / f"{args.config}.yaml"
     
@@ -909,10 +1181,13 @@ def main():
 
         
     if args.finetune:
-        finetune_models(args.experiment, args.arch, outputs_dir, cfg, cfg_name=cfg_path.stem)
+        finetune_models(args.experiment, args.arch, outputs_dir, cfg, cfg_name=cfg_path.stem, is_real_world=args.real_world)
 
     if args.tv:
-        apply_tv(args.experiment, args.arch, outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem, do_full_grid_results=args.full_grid_results)
+        if args.real_world:
+            apply_tv_realworld(args.experiment, args.arch, outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem, do_full_grid_results=args.full_grid_results)
+        else:
+            apply_tv(args.experiment, args.arch, outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem, do_full_grid_results=args.full_grid_results)
     
     if args.sap:
         apply_SAP(args.experiment, args.arch, outputs_dir, results_dir, cfg, cfg_name=cfg_path.stem)

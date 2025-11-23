@@ -117,12 +117,14 @@ class BaseClassificationTrainer(ABC):
         self.log_comet = log_comet
         self.comet_api_key = comet_api_key
         if log_comet and not comet_api_key:
-            raise ValueError('When `log_comet` is set to `True`, `comet_api_key` should be provided.\n Please put your comet api key in a file called `.env` in the root directory of the project with the variable name `COMET_API_KEY`')
+            print('When `log_comet` is set to `True`, `comet_api_key` should be provided.\n Please put your comet api key in a file called `.env` in the root directory of the project with the variable name `COMET_API_KEY`')
+            self.log_comet = False
         self.comet_project_name = comet_project_name
         self.exp_name = exp_name
         self.exp_tags = exp_tags
         if log_comet and comet_project_name is None:
-            raise RuntimeError('When CometML logging is active, the `comet_project_name` must be specified.')
+            print('When CometML logging is active, the `comet_project_name` must be specified.')
+            self.log_comet = False
         self.model_log_call = model_log_call
           
           
