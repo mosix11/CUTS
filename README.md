@@ -20,23 +20,22 @@ the effect of label noise and backdoor triggers from trained models.
 </div> -->
 
 <div align="center" style="margin-top: 16px; margin-bottom: 8px;">
-  <p><b>PCA evolution of the penultimate features during CUTS correction.</p>
+  <p><b>PCA evolution of the penultimate features during CUTS correction.</b></p>
   <img src="media/pca_evol.gif" width="800" alt="Merged GIF"/>
 </div>
 
-<table align="center" style="width: 800px; table-layout: fixed; text-align: center; margin-bottom: 16px;">
+<table align="center" width="800">
   <tr>
-    <td><b>(a) CIFAR10</b></td>
-    <td><b>(b) MNIST</b></td>
-    <td><b>(c) CIFAR10</b></td>
+    <td align="center"><b>(a) CIFAR10</b></td>
+    <td align="center"><b>(b) MNIST</b></td>
+    <td align="center"><b>(c) CIFAR10</b></td>
   </tr>
   <tr>
-    <td style="font-size: 14px;">60% Symmetric Noise</td>
-    <td style="font-size: 14px;">40% Symmetric Noise</td>
-    <td style="font-size: 14px;">Poison Trigger</td>
+    <td align="center">60% Symmetric Noise</td>
+    <td align="center">40% Symmetric Noise</td>
+    <td align="center">Poison Trigger</td>
   </tr>
 </table>
-
 
 
 ## Repository structure
