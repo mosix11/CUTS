@@ -6,10 +6,10 @@ corrective machine unlearning method that uses task arithmetic to remove
 the effect of label noise and backdoor triggers from trained models.
 
 <!-- <img src="media/pca_evol.gif" width="600"/> -->
-<div align="center" style="margin: 16px 0;">
+<!-- <div align="center" style="margin: 16px 0;"> -->
   <!-- <p><b>Figure 3.</b> Three-way comparison.</p> -->
 
-  <div style="width: 800px;">
+  <!-- <div style="width: 800px;">
     <img src="media/pca_evol.gif" width="900" alt="Merged GIF"/>
     <div style="display: flex; justify-content: space-between; font-size: 14px; margin-top: 6px;">
       <div style="width: 33%; text-align: center;"><b>CIFAR10</b><br/>60% Symmetric Noise</div>
@@ -17,7 +17,26 @@ the effect of label noise and backdoor triggers from trained models.
       <div style="width: 33%; text-align: center;"><b>CIFAR10</b><br/>Poison Trigger</div>
     </div>
   </div>
+</div> -->
+
+<div align="center" style="margin-top: 16px; margin-bottom: 8px;">
+  <p><b>PCA evolution of the penultimate features during CUTS correction.</p>
+  <img src="media/pca_evol.gif" width="800" alt="Merged GIF"/>
 </div>
+
+<table align="center" style="width: 800px; table-layout: fixed; text-align: center; margin-bottom: 16px;">
+  <tr>
+    <td><b>(a) CIFAR10</b></td>
+    <td><b>(b) MNIST</b></td>
+    <td><b>(c) CIFAR10</b></td>
+  </tr>
+  <tr>
+    <td style="font-size: 14px;">60% Symmetric Noise</td>
+    <td style="font-size: 14px;">40% Symmetric Noise</td>
+    <td style="font-size: 14px;">Poison Trigger</td>
+  </tr>
+</table>
+
 
 
 ## Repository structure
