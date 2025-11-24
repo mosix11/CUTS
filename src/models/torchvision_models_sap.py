@@ -41,6 +41,8 @@ class TorchvisionModelsSAP(BaseModel):
             model_func = resnet50
         elif model_type.startswith('resnet101'):
             model_func = resnet101
+        elif model_type.startswith('resnet152'):
+            model_func = resnet152
         elif model_type.startswith('vit_b_16'):
             model_func = vit_b_16
         elif model_type.startswith('vit_b_32'):

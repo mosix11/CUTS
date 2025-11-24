@@ -38,6 +38,8 @@ class TorchvisionModels(BaseModel):
             model_func = torchvision.models.resnet50
         elif model_type.startswith('resnet101'):
             model_func = torchvision.models.resnet101
+        elif model_type.startswith('resnet152'):
+            model_func = torchvision.models.resnet152
         elif model_type.startswith('vit_b_16'):
             model_func = torchvision.models.vit_b_16
         elif model_type.startswith('vit_b_32'):

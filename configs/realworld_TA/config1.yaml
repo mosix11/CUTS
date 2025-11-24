@@ -11,47 +11,53 @@ strategy:
       - set: 'Train'
         noise_rate: 1.0
         noise_type: 'symmetric'
-        seed: 13
+        seed: 12
       - set: 'Train'
         noise_rate: 1.0
         noise_type: 'symmetric'
-        seed: 17
+        seed: 10
 
 
 dataset:
   name: "clothing1M"
   num_classes: &num_classes 14
   img_size: [224, 224]
-  batch_size: 64
+  batch_size: 256
   valset_ratio: 0.0
   num_workers: 12
   seed: *dataset_seed
 
 
+# model:
+#   type: 'dinov3'
+#   num_classes: *num_classes
+#   pt_weights: 'facebook/dinov3-vitb16-pretrain-lvd1689m'
+#   loss_fn:
+#     type: 'CE'
+#   metrics: ['ACC', 'F1']
+
 model:
-  type: 'dinov3'
+  type: 'torchvisionsap_resnet101'
+  pt_weights: 'IMAGENET1K_V2'
   num_classes: *num_classes
-  pt_weights: 'facebook/dinov3-vitb16-pretrain-lvd1689m'
+  img_size: [224, 224]
+  grayscale: False
   loss_fn:
     type: 'CE'
   metrics: ['ACC', 'F1']
 
 
-
 trainer:
 
   mix:
-    max_iterations: 20
+    max_iterations: 400
     optimizer_cfg: 
       type: "adamw"
-      lr: 1.0e-5
+      lr: 5.0e-4
       betas: [0.9, 0.999]
     lr_schedule_cfg:
-      type: 'cosann_warmup'
-      update_on: 'gradient_step'
-      warmup_steps: 2
-      hold_steps: 2
-      T_max: 20
+      type: 'cosann'
+      T_max: 120
       eta_min: 0
     early_stopping: False
     validation_freq: -1
@@ -60,20 +66,19 @@ trainer:
     run_on_gpu: True
     use_amp: True
     log_comet: True
-    comet_project_name: 'dino-realworld-TA'
+    comet_project_name: 'realworld-TA'
     seed: *training_seed
   proxy:
-    max_iterations: 20
+    max_epochs: 60
     optimizer_cfg: 
       type: "adamw"
-      lr: 1.0e-5
+      lr: 1.0e-4
       betas: [0.9, 0.999]
     lr_schedule_cfg:
       type: 'cosann_warmup'
-      update_on: 'gradient_step'
-      warmup_steps: 2
-      hold_steps: 2
-      T_max: 20
+      warmup_steps: 10
+      hold_steps: 20
+      T_max: 60
       eta_min: 0
     early_stopping: False
     validation_freq: -1
@@ -82,22 +87,21 @@ trainer:
     run_on_gpu: True
     use_amp: True
     log_comet: True
-    comet_project_name: 'dino-realworld-TA'
+    comet_project_name: 'realworld-TA'
     seed: *training_seed
 
 
   CF:
-    max_iterations: 20
+    max_epochs: 60
     optimizer_cfg: 
-      type: "adamw" 
-      lr: 1.0e-5
+      type: "adamw"
+      lr: 1.0e-4
       betas: [0.9, 0.999]
     lr_schedule_cfg:
       type: 'cosann_warmup'
-      update_on: 'gradient_step'
-      warmup_steps: 2
-      hold_steps: 2
-      T_max: 20
+      warmup_steps: 10
+      hold_steps: 20
+      T_max: 60
       eta_min: 0
     early_stopping: False
     validation_freq: -1
@@ -106,5 +110,5 @@ trainer:
     run_on_gpu: True
     use_amp: True
     log_comet: True
-    comet_project_name: 'dino-realworld-TA'
+    comet_project_name: 'realworld-TA'
     seed: *training_seed
