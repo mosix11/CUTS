@@ -106,24 +106,6 @@ class Clothing1M(BaseClassificationDataset):
             **kwargs,  
         )
         
-    def is_distributed(self):
-        return dist.is_available() and dist.is_initialized()
-    
-    def is_main(self):
-        return (not self.is_distributed()) or (dist.get_rank() == 0)
-
-    def get_rank(self):
-        return dist.get_rank()
-    
-    def get_local_rank(self) -> int:
-        return int(os.environ.get("LOCAL_RANK", "0"))
-    
-    def is_node_leader(self):
-        if not self.is_distributed():
-            return True
-        local_world_size = torch.cuda.device_count()
-        return dist.get_rank() % local_world_size == 0
-    
 
 
     def load_train_set(self):

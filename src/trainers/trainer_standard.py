@@ -126,7 +126,7 @@ class StandardTrainer(BaseClassificationTrainer):
             raise ValueError("Invalid set specified. Choose 'Train', 'Val', or 'Test'.")
         
         
-        cm_metric = MulticlassConfusionMatrix(num_classes=num_classes, sync_on_compute=self._is_distributed())
+        cm_metric = MulticlassConfusionMatrix(num_classes=num_classes, sync_on_compute=self.is_distributed())
         cm_metric.to(self.device)
         
         for i, batch in enumerate(dataloader):
