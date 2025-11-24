@@ -50,7 +50,7 @@ model:
 trainer:
 
   mix:
-    max_iterations: 400
+    max_epochs: 400
     optimizer_cfg: 
       type: "adamw"
       lr: 5.0e-4
