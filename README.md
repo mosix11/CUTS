@@ -33,7 +33,7 @@ the effect of label noise and backdoor triggers from trained models.
   <tr>
     <td align="center">60% Symmetric Noise</td>
     <td align="center">40% Symmetric Noise</td>
-    <td align="center">Poison Trigger</td>
+    <td align="center">2% Poison Trigger</td>
   </tr>
 </table>
 
@@ -82,7 +82,7 @@ python run_experiment.py --experiment <noise or poison> --arch <clip or dino or 
 
 if you are running for a real-world dataset like `Clothing1M`, use with `--real-world` and to run with Pytorch DDP
 ```bash
-CUDA_VISIBLE_DEVICES=<gpu IDs> torchrun --nproc_per_node=<num processes> run_experiment.py -e noise -a dino --real-world -c <config name> -f -t
+CUDA_VISIBLE_DEVICES=<gpu IDs> torchrun --nproc_per_node=<num processes> run_experiment.py -e noise -a <clip or dino or regular> --real-world -c <config name> -f -t
 ```
 
 

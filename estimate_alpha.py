@@ -79,50 +79,44 @@ def knn_self_agreement_diversity(
     hard_min_per_class: int | None = None,
     random_state: int = 0,
 ) -> float:
-    """
-    Chance-corrected kNN self-agreement + coverage-aware diversity constraints.
 
-    - Requires only ceil(coverage_rate * num_clusters) classes to have >= hard_min_per_class support.
-    - Penalizes (i) effective class shortfall vs required and (ii) coverage shortfall.
-    - Optional NMI bonus aligns predictions with k-means(num_clusters=required) clusters.
-    """
     eps = 1e-8
     N, K = probs.shape
     feats_np = feats.numpy()
     probs_np = probs.numpy()
     yhat = probs_np.argmax(axis=1)
 
-    # --- class support counts
+
     counts = np.bincount(yhat, minlength=K)
     if hard_min_per_class is None:
         hard_min_per_class = min(k + 1, max(3, k))
     num_supported = int((counts >= hard_min_per_class).sum())
 
-    # coverage requirement (SOFT)
+
     required = max(2, min(K, math.ceil(coverage_rate * num_clusters)))
 
-    # degenerate: <2 supported classes → untrustworthy local agreement
+
     if num_supported < 2:
         return -1e6 - float(2 - num_supported)
 
-    # --- neighbors
+
     idx = _knn_indices(feats_np, k=k)
 
-    # --- hard agreement + chance correction
-    nn_labels = yhat[idx]                           # (N, k)
+
+    nn_labels = yhat[idx]                           
     SA = float((nn_labels == yhat[:, None]).mean())
-    mean_p = probs_np.mean(axis=0)                  # predicted marginal
-    P_match = float((mean_p ** 2).sum())            # chance match under marginal
+    mean_p = probs_np.mean(axis=0)                  
+    P_match = float((mean_p ** 2).sum())           
     SA_adj = (SA - P_match) / max(eps, 1.0 - P_match)
     # SA_adj = SA
 
-    # --- effective-class penalty (weight fixed to 1.0)
-    effective_classes = 1.0 / max(eps, P_match)     # Hill number (q=2)
+
+    effective_classes = 1.0 / max(eps, P_match)    
     target_for_penalty = max(2.0, float(required))
     shortfall = max(0.0, target_for_penalty - effective_classes) / target_for_penalty
-    penalty_eff = shortfall  # weight = 1.0
+    penalty_eff = shortfall  
 
-    # --- coverage penalty
+    # coverage penalty
     coverage_shortfall = max(0.0, float(required - num_supported)) / float(required)
     penalty_cov = cov_penalty_weight * coverage_shortfall
 
@@ -130,9 +124,7 @@ def knn_self_agreement_diversity(
     print(f'\nSA={SA}, SA_adj={SA_adj}, penalty_eff={-penalty_eff}, penalty_cov={-penalty_cov}')
     return SA_adj - (penalty_eff + penalty_cov)
 
-# -----------------------------
-# Alpha selection with early stop
-# -----------------------------
+
 
 def select_alpha_by_knn_self_agreement(
     model: nn.Module,
@@ -153,24 +145,18 @@ def select_alpha_by_knn_self_agreement(
     random_state: int = 0,
     decrease_patience: int = 10,
 ) -> float:
-    """
-    Select alpha that maximizes the adjusted, coverage-aware kNN self-agreement.
 
-    Early stop if the score strictly decreases for `decrease_patience` consecutive
-    steps (i.e., a window of length decrease_patience+1 is strictly descending).
-    """
     best_alpha = None
     best_score = -float("inf")
 
-    # rolling window of recent scores; length = patience + 1
+
     window = deque(maxlen=decrease_patience + 1)
 
     for a in alphas:
-        # Reset -> apply correction
+
         model.load_state_dict(state0, strict=False)
         taskvector.apply_to(model, scaling_coef=a, strict=False)
 
-        # Features & logits on unlabeled proxy
         feats, _ = extract_features(
             feature_extractor=feature_extractor,
             dataloader=unlabeled_loader,
@@ -182,7 +168,6 @@ def select_alpha_by_knn_self_agreement(
         )
         probs = F.softmax(logits, dim=-1)
 
-        # Adjusted score with coverage constraints
         score = knn_self_agreement_diversity(
             feats=feats,
             probs=probs,
