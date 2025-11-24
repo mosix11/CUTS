@@ -20,7 +20,7 @@ the effect of label noise and backdoor triggers from trained models.
 </div> -->
 
 <div align="center" style="margin-top: 16px; margin-bottom: 8px;">
-  <p><b>PCA evolution of the penultimate features during CUTS correction.</b></p>
+  <p><b>PCA trajectory of the penultimate features during CUTS correction.</b></p>
   <img src="media/pca_evol.gif" width="800" alt="Merged GIF"/>
 </div>
 

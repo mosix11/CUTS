@@ -1161,7 +1161,7 @@ def main():
     
     
     if args.real_world:
-        expr_arch = Path(f"{args.arch}_realworld_TA")
+        expr_arch = Path(f"realworld_TA")
     else:
         expr_arch = Path(f"{args.arch}_{args.experiment}_TA")
     
