@@ -37,7 +37,7 @@ plot_pca_evol.py
 result_to_latex.py
 plot_similarity_matrices.py
 consistency_scores/
-src/utils/embedding_space_analysis.py
+# src/utils/embedding_space_analysis.py
 merge_gifs.py
 
 # Compiled source #
