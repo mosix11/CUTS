@@ -1,6 +1,6 @@
 global_seed: 11
 training_seed: &training_seed 11
-dataset_seed: &dataset_seed 15
+dataset_seed: &dataset_seed 5
 
 
 strategy:
@@ -11,11 +11,11 @@ strategy:
       - set: 'Train'
         noise_rate: 1.0
         noise_type: 'symmetric'
-        seed: 12
+        seed: 14
       - set: 'Train'
         noise_rate: 1.0
         noise_type: 'symmetric'
-        seed: 10
+        seed: 16
 
 
 dataset:
