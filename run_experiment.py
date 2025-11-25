@@ -864,7 +864,7 @@ def apply_tv_realworld(experiment_type:str, architecture:str, outputs_dir: Path,
 
 
 # SAP only works for label noise and fails for poison trigger
-def apply_SAP(experiment_type:str, architecture:str, outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str):
+def apply_SAP(experiment_type:str, architecture:str, outputs_dir: Path, results_dir: Path, cfg: dict, cfg_name:str, is_real_world:bool=False):
     if architecture == 'dino':
         raise ValueError('SAP is not implemented for DINOv3 architecture.')
     training_seed = cfg['training_seed']
@@ -903,7 +903,8 @@ def apply_SAP(experiment_type:str, architecture:str, outputs_dir: Path, results_
     if experiment_type == 'poison':
         dataset_clean = copy.deepcopy(base_dataset)
         dataset_corrupted = copy.deepcopy(base_dataset)
-        dataset_corrupted.inject_poison(**strategy['corruption']['mix'])
+        if not is_real_world:
+            dataset_corrupted.inject_poison(**strategy['corruption']['mix'])
         
         proxy_conf = strategy['corruption']['proxy'][0]
         proxy_conf['set'] = 'Heldout'
@@ -915,14 +916,15 @@ def apply_SAP(experiment_type:str, architecture:str, outputs_dir: Path, results_
     elif experiment_type == 'noise':
         dataset_clean = copy.deepcopy(base_dataset)
         dataset_corrupted = copy.deepcopy(base_dataset)
-        dataset_corrupted.inject_noise(**strategy['corruption']['mix'])
+        
+        if not is_real_world:
+            dataset_corrupted.inject_noise(**strategy['corruption']['mix'])
         
         proxy_conf = strategy['corruption']['proxy'][0]
         proxy_conf['set'] = 'Heldout'
         dataset_corrupted.inject_noise(**proxy_conf)
         
                 
-    
     
     
     
