@@ -8,7 +8,7 @@ from . import PostActResNet9, PostActResNet18, PostActResNet34, PostActResNet50,
 from . import TorchvisionModels, TorchvisionModelsSAP, DinoV3Classifier
 from . import CLIPMultiHeadImageClassifier, OpenClipMultiHeadImageClassifier
 
-from .loss_functions import SupervisedContrastiveLoss, CompoundLoss
+
 
 import os
 import copy
@@ -43,10 +43,7 @@ def create_model(cfg_orig, num_classes=None):
         cfg['loss_fn'] = torch.nn.CrossEntropyLoss(reduction='none')
     elif loss_fn_type == 'BCE':
         cfg['loss_fn'] = torch.nn.BCEWithLogitsLoss()
-    elif loss_fn_type == 'SCL':
-        cfg['loss_fn'] = SupervisedContrastiveLoss(
-            **loss_fn_cfg
-        )
+
         
     else: raise ValueError(f"Invalid loss function {cfg['loss_fn']['type']}.")
     
